@@ -965,13 +965,28 @@ tbody tr:hover {
   .settings-checks {
     grid-template-columns: 1fr;
   }
+  .panel-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .head-check {
+    white-space: normal;
+  }
   .bar-row {
-    grid-template-columns: 150px minmax(0, 1fr);
-    gap: 8px;
-    padding: 7px 10px;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 8px 10px;
+  }
+  .bar-model {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .bar-fill {
+    max-width: 52%;
   }
   .bar-note {
-    display: none;
+    font-size: 12px;
   }
   table:not(.plan-matrix) {
     font-size: 12.5px;
@@ -986,9 +1001,8 @@ tbody tr:hover {
   }
   table:not(.plan-matrix) td:nth-child(1) .model,
   table:not(.plan-matrix) td:nth-child(1) .plan {
-    max-width: 170px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
 }
