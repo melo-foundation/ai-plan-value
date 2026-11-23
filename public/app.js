@@ -288,7 +288,7 @@ function renderMeta() {
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  $("themeBtn").textContent = theme === "dark" ? "Light" : "Dark";
+  $("themeBtn").textContent = theme === "dark" ? "☀ Light" : "☽ Dark";
   localStorage.setItem("ai-plan-value-theme", theme);
   if (state.dataset) render();
 }
@@ -373,7 +373,7 @@ document.querySelectorAll("th[data-sort]").forEach((th) => {
 $("refreshBtn").addEventListener("click", async () => {
   const btn = $("refreshBtn");
   btn.disabled = true;
-  btn.textContent = "Refreshing…";
+  btn.textContent = "↻ Refreshing…";
   try {
     if (state.dataset?.server?.liveRefreshSupported) {
       const res = await fetch("/api/refresh", { method: "POST" });
@@ -388,7 +388,7 @@ $("refreshBtn").addEventListener("click", async () => {
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "Refresh";
+    btn.textContent = "↻ Refresh";
   }
 });
 
