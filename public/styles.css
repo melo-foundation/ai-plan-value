@@ -485,9 +485,13 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-tr.group-row,
+tr.group-row {
+  background: linear-gradient(to bottom, var(--panel-head-top), var(--panel-head-bot));
+  cursor: pointer;
+}
+
 tr.group-row:hover {
-  background: linear-gradient(to bottom, var(--panel-head-top), var(--panel-head-bot)) !important;
+  filter: brightness(1.03);
 }
 
 tr.group-row td {
@@ -503,13 +507,14 @@ tr.group-row:first-child td {
   border-top: 0;
 }
 
-.group-fee {
-  font-weight: normal;
-  color: var(--muted);
+.group-caret {
+  display: inline-block;
+  width: 14px;
+  user-select: none;
 }
 
 tr.grouped-item td:first-child {
-  padding-left: 22px;
+  padding-left: 24px;
 }
 
 .search-input {

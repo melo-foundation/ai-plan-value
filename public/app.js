@@ -69,6 +69,7 @@ const state = {
   extraCriteria: [], // [{ benchKey, minScore }]
   tableQuery: "",
   groupByPlan: false,
+  expandedTableGroups: new Set(),
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
   sortKey: "effectiveCost",
@@ -438,7 +439,7 @@ function renderTable(rows) {
   const isTokens = state.costMode === "tokens";
 
   const cols = [
-    { key: "model", label: state.groupByPlan ? "Model" : "Model & Plan", cls: "" },
+    { key: "model", label: state.groupByPlan ? "Plan / Model" : "Model & Plan", cls: "" },
     { key: "score", label: benchMeta.label, cls: "num-col" },
     ...state.extraCriteria.map((c) => ({
       key: `extra:${c.benchKey}`,
@@ -553,13 +554,62 @@ function renderTable(rows) {
     }
     const html = [];
     for (const [pName, g] of groups.entries()) {
-      const feePart = g.sample.isApi ? "" : ` <span class="group-fee">· ${esc(feeText(g.sample))}</span>`;
-      html.push(
-        `<tr class="group-row"><td colspan="${cols.length}">${renderLink(pName, g.sample.planUrl)}${feePart}</td></tr>`
-      );
-      for (const r of g.rows) html.push(renderRow(r, true));
+      const isOpen = state.expandedTableGroups.has(pName);
+      const maxScore = Math.max(...g.rows.map((r) => r.score ?? -Infinity));
+      const minCost = Math.min(...g.rows.map((r) => r.effectiveCost ?? Infinity));
+      const maxTasks = Math.max(...g.rows.map((r) => r.tasksPerMonth ?? -1));
+      const hasUnmetered = g.rows.some((r) => r.unmetered);
+      const hasEst = g.rows.some((r) => r.isPreliminary);
+      const finiteSubs = g.rows.map((r) => r.subsidy).filter((s) => Number.isFinite(s));
+      let subText = hasUnmetered ? "∞" : "—";
+      if (!hasUnmetered && finiteSubs.length) {
+        const lo = Math.min(...finiteSubs);
+        const hi = Math.max(...finiteSubs);
+        subText = Math.abs(hi - lo) < 0.05 ? fmtMult(hi) : `${fmtMult(lo)}–${fmtMult(hi)}`;
+      }
+      const groupEst = hasEst
+        ? `<span class="est-star" title="Contains estimated subsidy">*</span>`
+        : "";
+      const extraSummary = state.extraCriteria
+        .map((c) => {
+          const vals = g.rows.map((r) => getScore(r, c.benchKey)).filter((v) => v != null);
+          const bestVal = vals.length ? Math.max(...vals) : null;
+          return `<td class="num-col col-hide-sm">${fmtScore(bestVal, c.benchKey)}</td>`;
+        })
+        .join("");
+      const tasksText = hasUnmetered
+        ? "∞"
+        : maxTasks > 0
+          ? Math.round(maxTasks).toLocaleString()
+          : "—";
+
+      html.push(`
+        <tr class="group-row" data-group="${esc(pName)}">
+          <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}${groupEst}</td>
+          <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, state.benchKey)}</td>
+          ${extraSummary}
+          <td class="num-col">${feeText(g.sample)}</td>
+          <td class="num-col col-hide-sm">${subText}${groupEst}</td>
+          <td class="num-col col-hide-sm">—</td>
+          <td class="num-col real-cell">${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
+          <td class="num-col col-hide-sm">${tasksText}</td>
+        </tr>
+      `);
+      if (isOpen) {
+        for (const r of g.rows) html.push(renderRow(r, true));
+      }
     }
     tbody.innerHTML = html.join("");
+
+    tbody.querySelectorAll("tr.group-row").forEach((tr) => {
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
+        const name = tr.dataset.group;
+        if (state.expandedTableGroups.has(name)) state.expandedTableGroups.delete(name);
+        else state.expandedTableGroups.add(name);
+        render();
+      });
+    });
   } else {
     tbody.innerHTML = sorted.map((r) => renderRow(r, false)).join("");
   }
