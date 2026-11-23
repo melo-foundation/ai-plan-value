@@ -1,4 +1,4 @@
-// AI Plan Value — 2003 SaaS edition: Minimum intelligence, Monthly budget, optional Include API (off by default)
+// AI Plan Value — 2003 SaaS edition with Artificial Analysis domains/tests & official plan links
 
 const BUDGET_STOPS = [
   { label: "≤ $10/mo", max: 10 },
@@ -19,9 +19,31 @@ const COST_STOPS = [
   { label: "Any", max: Infinity },
 ];
 
+const BENCHMARKS = {
+  intelligenceIndex: { label: "Intelligence", unit: "", min: 0, max: 64, step: 1, def: 45 },
+  engineering: { label: "Engineering", unit: "", min: 20, max: 72, step: 1, def: 50 },
+  financeAndAccounting: { label: "Finance & Accounting", unit: "", min: 25, max: 65, step: 1, def: 48 },
+  strategyAndOps: { label: "Strategy & Ops", unit: "", min: 20, max: 67, step: 1, def: 50 },
+  legal: { label: "Legal", unit: "", min: 25, max: 63, step: 1, def: 45 },
+  healthcareAndMedical: { label: "Healthcare & Medical", unit: "", min: 20, max: 65, step: 1, def: 45 },
+  economics: { label: "Economics", unit: "", min: 25, max: 66, step: 1, def: 48 },
+  frontierCode20: { label: "FrontierCode 2.0", unit: "%", min: 0, max: 48, step: 1, def: 25 },
+  terminalBench40: { label: "Terminal-Bench 4.0", unit: "%", min: 0, max: 67, step: 1, def: 35 },
+  terminalBenchScience: { label: "TB Science", unit: "%", min: 0, max: 78, step: 1, def: 40 },
+  hleDiamond: { label: "HLE-Diamond", unit: "%", min: 0, max: 80, step: 1, def: 40 },
+  critptAgenticHard: { label: "CritPt Hard", unit: "%", min: 0, max: 76, step: 1, def: 35 },
+  automationBench: { label: "AutomationBench", unit: "%", min: 0, max: 79, step: 1, def: 45 },
+  omniscienceAccuracy: { label: "Omniscience", unit: "%", min: 0, max: 79, step: 1, def: 45 },
+  gdpPdfAllPass: { label: "GDP PDF", unit: "%", min: 0, max: 32, step: 1, def: 15 },
+  lcr: { label: "AA-LCR", unit: "%", min: 65, max: 86, step: 1, def: 75 },
+  scicode: { label: "SciCode", unit: "%", min: 40, max: 67, step: 1, def: 50 },
+  gdpval: { label: "GDPval", unit: " Elo", min: 1150, max: 1860, step: 10, def: 1500 },
+};
+
 const state = {
   dataset: null,
-  minIntel: 45,
+  benchKey: "intelligenceIndex",
+  minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
   showApi: false,
@@ -45,6 +67,13 @@ function fmtMult(n) {
   return n >= 10 ? `${n.toFixed(1)}×` : `${n.toFixed(2)}×`;
 }
 
+function fmtScore(val, key) {
+  if (val == null || !Number.isFinite(val)) return "—";
+  const meta = BENCHMARKS[key] || BENCHMARKS.intelligenceIndex;
+  const num = key === "gdpval" ? Math.round(val) : val.toFixed(1);
+  return `${num}${meta.unit}`;
+}
+
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -61,6 +90,19 @@ function feeText(r) {
   return r.isApi ? "API" : `$${r.priceUsd >= 100 ? Math.round(r.priceUsd) : r.priceUsd}/mo`;
 }
 
+function getScore(entry, benchKey) {
+  const b = entry.benchmarks;
+  if (b && b[benchKey] != null) return b[benchKey];
+  if (benchKey === "intelligenceIndex") return entry.intelligenceIndex;
+  return null;
+}
+
+function renderLink(text, url) {
+  const safe = esc(text);
+  if (!url) return safe;
+  return `<a class="row-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
+}
+
 function getFilteredRows() {
   if (!state.dataset) return [];
   const raw = state.dataset.entries || [];
@@ -75,7 +117,8 @@ function getFilteredRows() {
   const out = [];
   for (const e of raw) {
     if (replaced.has(e.id)) continue;
-    if (e.intelligenceIndex < state.minIntel) continue;
+    const score = getScore(e, state.benchKey);
+    if (score == null || score < state.minScore) continue;
 
     const isApi = e.billing === "metered";
     if (isApi && !state.showApi) continue;
@@ -86,12 +129,13 @@ function getFilteredRows() {
     const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
     const effectiveCost = e.unmetered ? 0 : e.aaCostPerTaskUsd / (subsidy || 1);
     if (Number.isFinite(maxCost) && effectiveCost > maxCost) continue;
+
     const tasksPerMonth =
       !isApi && e.priceUsd && !e.unmetered && effectiveCost > 0
         ? e.priceUsd / effectiveCost
         : null;
 
-    out.push({ ...e, isApi, subsidy, effectiveCost, tasksPerMonth });
+    out.push({ ...e, isApi, score, subsidy, effectiveCost, tasksPerMonth });
   }
   return out;
 }
@@ -110,12 +154,13 @@ function renderBarChart(rows) {
   const bars = [...bestByModel.values()].sort((a, b) => a.effectiveCost - b.effectiveCost);
 
   if (!bars.length) {
-    host.innerHTML = `<div class="empty">No subscription plans match these limits.</div>`;
+    host.innerHTML = `<div class="empty">No plans match these limits.</div>`;
     return;
   }
 
   const maxCost = Math.max(...bars.map((b) => b.effectiveCost), 0.01);
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
 
   host.innerHTML = bars
     .map((r) => {
@@ -125,18 +170,19 @@ function renderBarChart(rows) {
           ? "#8fa3b8"
           : r.color || "#3a6ea5";
 
-      const note = `Intelligence ${r.intelligenceIndex.toFixed(1)}`;
+      const planText = `${cleanPlan(r)}${r.isApi ? "" : ` · ${feeText(r)}`}`;
+      const note = `${benchMeta.label} ${fmtScore(r.score, state.benchKey)}`;
 
       return `
-        <div class="bar-row" title="${esc(r.modelDisplay)} — ${esc(cleanPlan(r))} (${feeText(r)}): ${fmtUsd(r.effectiveCost)}/task">
+        <div class="bar-row">
           <div class="bar-label">
-            <div class="bar-model">${esc(r.modelDisplay)}</div>
-            <div class="bar-plan">${esc(cleanPlan(r))}${r.isApi ? "" : ` · ${feeText(r)}`}</div>
+            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
+            <div class="bar-plan">${renderLink(planText, r.planUrl)}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
             <span class="bar-val">${fmtUsd(r.effectiveCost)}</span>
-            <span class="bar-note">${note}</span>
+            <span class="bar-note">${esc(note)}</span>
           </div>
         </div>
       `;
@@ -152,7 +198,7 @@ function renderTable(rows) {
     }
     const val = (r) => {
       switch (state.sortKey) {
-        case "intelligence": return r.intelligenceIndex ?? -1;
+        case "score": return r.score ?? -1;
         case "fee": return r.isApi ? 0 : (r.priceUsd ?? 1e9);
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
         case "apiCost": return r.aaCostPerTaskUsd ?? 1e9;
@@ -162,6 +208,9 @@ function renderTable(rows) {
     };
     return dir * (val(a) - val(b));
   });
+
+  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  $("scoreColHead").textContent = benchMeta.label;
 
   document.querySelectorAll("th[data-sort]").forEach((th) => {
     th.classList.remove("active", "asc", "desc");
@@ -187,10 +236,10 @@ function renderTable(rows) {
       return `
         <tr>
           <td>
-            <div class="model">${esc(r.modelDisplay)}</div>
-            <div class="plan">${esc(cleanPlan(r))}</div>
+            <div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
+            <div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>
           </td>
-          <td class="num-col">${r.intelligenceIndex.toFixed(1)}</td>
+          <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
           <td class="num-col">${feeText(r)}</td>
           <td class="num-col">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
           <td class="num-col">${fmtUsd(r.aaCostPerTaskUsd)}</td>
@@ -202,8 +251,23 @@ function renderTable(rows) {
     .join("");
 }
 
+function syncBenchSlider(resetDefault = false) {
+  const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const slider = $("minScore");
+  slider.min = String(meta.min);
+  slider.max = String(meta.max);
+  slider.step = String(meta.step);
+  if (resetDefault) {
+    state.minScore = meta.def;
+  } else {
+    state.minScore = Math.max(meta.min, Math.min(meta.max, state.minScore));
+  }
+  slider.value = String(state.minScore);
+}
+
 function render() {
-  $("minIntelOut").textContent = String(state.minIntel);
+  const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  $("minScoreOut").textContent = `${state.minScore}${meta.unit}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostOut").textContent = COST_STOPS[state.maxCostIdx].label;
   const rows = getFilteredRows();
@@ -254,8 +318,14 @@ async function loadData() {
   render();
 }
 
-$("minIntel").addEventListener("input", (e) => {
-  state.minIntel = Number(e.target.value);
+$("benchSelect").addEventListener("change", (e) => {
+  state.benchKey = e.target.value;
+  syncBenchSlider(true);
+  render();
+});
+
+$("minScore").addEventListener("input", (e) => {
+  state.minScore = Number(e.target.value);
   render();
 });
 
@@ -293,7 +363,7 @@ document.querySelectorAll("th[data-sort]").forEach((th) => {
       state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
     } else {
       state.sortKey = key;
-      state.sortDir = ["intelligence", "subsidy", "tasksPerMonth"].includes(key) ? "desc" : "asc";
+      state.sortDir = ["score", "subsidy", "tasksPerMonth"].includes(key) ? "desc" : "asc";
     }
     render();
   });
@@ -321,5 +391,6 @@ $("refreshBtn").addEventListener("click", async () => {
   }
 });
 
+syncBenchSlider(true);
 initTheme();
 loadData();

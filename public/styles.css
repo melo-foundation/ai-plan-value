@@ -166,6 +166,8 @@ a {
 .filter-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -173,6 +175,37 @@ a {
 .filter-head strong {
   color: var(--fg);
   font-size: 14.5px;
+  white-space: nowrap;
+}
+
+.bench-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.select {
+  font: 12.5px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--shell-bg);
+  border-top: 1px solid var(--shell-border);
+  border-left: 1px solid var(--shell-border);
+  border-right: 1px solid var(--panel-border);
+  border-bottom: 1px solid var(--panel-border);
+  padding: 2px 4px;
+  max-width: 190px;
+  cursor: pointer;
+}
+
+.row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.row-link:hover {
+  color: var(--link);
+  text-decoration: underline;
 }
 
 input[type="range"] {

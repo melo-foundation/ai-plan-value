@@ -22,13 +22,41 @@
 
       <main class="workspace">
         <section class="filter-bar" aria-label="Filters">
-          <label class="filter-item">
+          <div class="filter-item">
             <span class="filter-head">
-              <span>Minimum intelligence:</span>
-              <strong id="minIntelOut" class="num">45</strong>
+              <span class="bench-pick">
+                <span>Min</span>
+                <select id="benchSelect" class="select" aria-label="Benchmark domain or test">
+                  <optgroup label="Overall">
+                    <option value="intelligenceIndex" selected>Intelligence Index</option>
+                  </optgroup>
+                  <optgroup label="Domains">
+                    <option value="engineering">Engineering</option>
+                    <option value="financeAndAccounting">Finance &amp; Accounting</option>
+                    <option value="strategyAndOps">Strategy &amp; Ops</option>
+                    <option value="legal">Legal</option>
+                    <option value="healthcareAndMedical">Healthcare &amp; Medical</option>
+                    <option value="economics">Economics</option>
+                  </optgroup>
+                  <optgroup label="Tests">
+                    <option value="frontierCode20">FrontierCode 2.0</option>
+                    <option value="terminalBench40">Terminal-Bench 4.0</option>
+                    <option value="terminalBenchScience">Terminal-Bench Science</option>
+                    <option value="hleDiamond">HLE-Diamond</option>
+                    <option value="critptAgenticHard">CritPt Hard</option>
+                    <option value="automationBench">AutomationBench</option>
+                    <option value="omniscienceAccuracy">Omniscience Accuracy</option>
+                    <option value="gdpPdfAllPass">GDP PDF</option>
+                    <option value="lcr">Long Context (AA-LCR)</option>
+                    <option value="scicode">SciCode</option>
+                    <option value="gdpval">GDPval (Elo)</option>
+                  </optgroup>
+                </select>
+              </span>
+              <strong id="minScoreOut" class="num">45</strong>
             </span>
-            <input id="minIntel" type="range" min="0" max="64" step="1" value="45" />
-          </label>
+            <input id="minScore" type="range" min="0" max="64" step="1" value="45" aria-label="Minimum benchmark score" />
+          </div>
 
           <label class="filter-item">
             <span class="filter-head">
@@ -70,7 +98,7 @@
               <thead>
                 <tr>
                   <th data-sort="model">Model &amp; Plan</th>
-                  <th data-sort="intelligence" class="num-col">Intelligence</th>
+                  <th id="scoreColHead" data-sort="score" class="num-col">Intelligence</th>
                   <th data-sort="fee" class="num-col">Fee</th>
                   <th data-sort="subsidy" class="num-col">Subsidy</th>
                   <th data-sort="apiCost" class="num-col">API $/task</th>
@@ -92,9 +120,9 @@
       </div>
       <div class="dialog-body">
         <p>
-          <strong>Intelligence &amp; API $/task</strong> come from
+          <strong>Benchmarks &amp; API $/task</strong> come from
           <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>,
-          which measures each model's Intelligence Index score and average API cost per benchmark task.
+          including the overall Intelligence Index, domain capability scores, individual tests, and average API cost per benchmark task.
         </p>
         <p>
           <strong>Plan subsidies</strong> come from

@@ -69,6 +69,77 @@ const VENDOR_COLORS = {
   "Ant Group": "#0284C7",
 };
 
+// Verified first-party subscription plan & API pricing URLs
+const PLAN_URL_PATTERNS = [
+  [/^claude\b/i, "https://claude.com/pricing"],
+  [/^chatgpt\b/i, "https://openai.com/chatgpt/pricing/"],
+  [/^google ai\b/i, "https://one.google.com/about/google-ai-plans/"],
+  [/^supergrok\b/i, "https://grok.com"],
+  [/^cursor\b/i, "https://cursor.com/pricing"],
+  [/^devin\b/i, "https://devin.ai/pricing"],
+  [/^droid\b/i, "https://factory.com/pricing"],
+  [/^opencode\b/i, "https://opencode.ai/go"],
+  [/^command code\b/i, "https://commandcode.ai/docs/pricing"],
+  [/^ollama\b/i, "https://ollama.com/pricing"],
+  [/^deeprelay\b/i, "https://deeprelay.ai/pricing"],
+  [/^mistral\b/i, "https://mistral.ai/pricing"],
+  [/^glm coding\b/i, "https://z.ai/subscribe"],
+  [/qwen token plan|alibaba|阿里云百炼/i, "https://www.aliyun.com/product/bailian"],
+  [/^minimax.*global/i, "https://platform.minimax.io/docs/pricing/overview"],
+  [/^minimax\b/i, "https://platform.minimaxi.com"],
+  [/^tencent token/i, "https://cloud.tencent.com/product/tokenhub"],
+  [/^mimo token/i, "https://platform.xiaomimimo.com"],
+  [/^step plan/i, "https://platform.stepfun.com/step-plan"],
+  [/^kimi\b/i, "https://kimi.ai"],
+];
+
+const API_URL_BY_VENDOR = {
+  anthropic: "https://platform.claude.com/docs/en/about-claude/pricing",
+  openai: "https://openai.com/api/pricing/",
+  google: "https://ai.google.dev/gemini-api/docs/pricing",
+  xai: "https://docs.x.ai/docs/models",
+  spacexai: "https://docs.x.ai/docs/models",
+  deepseek: "https://api-docs.deepseek.com/quick_start/pricing",
+  alibaba: "https://www.alibabacloud.com/help/en/model-studio/getting-started/model-inference-pricing",
+  qwen: "https://www.alibabacloud.com/help/en/model-studio/getting-started/model-inference-pricing",
+  moonshot: "https://platform.moonshot.ai/docs/pricing",
+  kimi: "https://platform.moonshot.ai/docs/pricing",
+  zhipu: "https://docs.z.ai",
+  "z-ai": "https://docs.z.ai",
+  "z ai": "https://docs.z.ai",
+  minimax: "https://platform.minimax.io/docs/pricing/overview",
+  mistral: "https://mistral.ai/pricing",
+  xiaomi: "https://platform.xiaomimimo.com",
+  tencent: "https://cloud.tencent.com/document/product/1729",
+  stepfun: "https://platform.stepfun.com/docs",
+  nvidia: "https://build.nvidia.com",
+  meta: "https://llama.com",
+};
+
+function resolvePlanUrl(planName, vendor, billing) {
+  if (billing === "metered") {
+    const key = normSlug(vendor);
+    return API_URL_BY_VENDOR[key] || API_URL_BY_VENDOR[String(vendor || "").toLowerCase()] || null;
+  }
+  const p = String(planName || "");
+  for (const [re, url] of PLAN_URL_PATTERNS) {
+    if (re.test(p)) return url;
+  }
+  const key = normSlug(vendor);
+  return API_URL_BY_VENDOR[key] || null;
+}
+
+function pctFromFraction(v) {
+  const n = toNum(v);
+  if (n === null) return null;
+  return Number((n <= 1.001 ? n * 100 : n).toFixed(1));
+}
+
+function round1(v) {
+  const n = toNum(v);
+  return n === null ? null : Number(n.toFixed(1));
+}
+
 function normSlug(value) {
   return String(value || "")
     .toLowerCase()
@@ -237,6 +308,7 @@ function parseAaModelsHtml(html) {
 function normalizeAaModel(m) {
   const cptCost = m.intelligenceIndexCostPerTask?.cost || null;
   const totalCost = m.intelligenceIndexCost || null;
+  const caps = m.capabilities && typeof m.capabilities === "object" ? m.capabilities : {};
   return {
     slug: m.slug,
     name: m.name || m.shortName || m.slug,
@@ -248,6 +320,26 @@ function normalizeAaModel(m) {
     isOpenWeights: Boolean(m.isOpenWeights),
     contextWindowTokens: toNum(m.contextWindowTokens),
     intelligenceIndex: toNum(m.intelligenceIndex),
+    benchmarks: {
+      intelligenceIndex: round1(m.intelligenceIndex),
+      engineering: round1(caps.engineering),
+      financeAndAccounting: round1(caps.financeAndAccounting),
+      strategyAndOps: round1(caps.strategyAndOps),
+      legal: round1(caps.legal),
+      healthcareAndMedical: round1(caps.healthcareAndMedical),
+      economics: round1(caps.economics),
+      frontierCode20: pctFromFraction(m.frontierCode20),
+      terminalBench40: pctFromFraction(m.terminalBench40),
+      terminalBenchScience: pctFromFraction(m.terminalBenchScience),
+      hleDiamond: pctFromFraction(m.hleDiamond),
+      critptAgenticHard: pctFromFraction(m.critptAgenticHard),
+      automationBench: pctFromFraction(m.automationBenchPartialScore),
+      omniscienceAccuracy: pctFromFraction(m.omniscienceAccuracy),
+      gdpPdfAllPass: pctFromFraction(m.gdpPdfAllPass),
+      lcr: pctFromFraction(m.lcr),
+      scicode: pctFromFraction(m.scicode),
+      gdpval: round1(m.gdpval),
+    },
     costPerTaskUsd: toNum(cptCost?.total),
     costPerTaskBreakdown: cptCost
       ? {
@@ -667,6 +759,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       color: vendorColor(aaModel?.creatorName || vendor, aaModel),
       plan: billing === "metered" ? "Pay-as-you-go API" : planName,
       planLocal: r.plan || planName,
+      planUrl: resolvePlanUrl(planName, aaModel?.creatorName || vendor, billing),
       isOffPeak,
       unmetered,
       modelId: aaSlug,
@@ -682,6 +775,17 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       listBlendedUsdPerMtok,
       subsidyMultiple: subsidyMultiple !== null ? Number(subsidyMultiple.toFixed(4)) : null,
       intelligenceIndex: Number(intelligenceIndex.toFixed(2)),
+      benchmarks: aaModel?.benchmarks
+        ? {
+            ...aaModel.benchmarks,
+            intelligenceIndex: round1(intelligenceIndex),
+            terminalBench40:
+              aaModel.benchmarks.terminalBench40 ?? round1(r.aa_terminal_bench_4__score),
+          }
+        : {
+            intelligenceIndex: round1(intelligenceIndex),
+            terminalBench40: round1(r.aa_terminal_bench_4__score),
+          },
       aaCostPerTaskUsd: Number(aaCostPerTaskUsd.toFixed(4)),
       aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || null,
       aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? null,
@@ -735,6 +839,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       color: vendorColor(creator, aaModel),
       plan: "Pay-as-you-go API",
       planLocal: "Pay-as-you-go API",
+      planUrl: resolvePlanUrl("Pay-as-you-go API", creator, "metered"),
       isOffPeak: false,
       unmetered: false,
       modelId: aaModel.slug,
@@ -751,6 +856,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         aaModel.pricing?.blended7to2to1Per1M ?? aaModel.pricing?.blended3to1Per1M ?? null,
       subsidyMultiple: 1,
       intelligenceIndex: Number(aaModel.intelligenceIndex.toFixed(2)),
+      benchmarks: aaModel.benchmarks || { intelligenceIndex: round1(aaModel.intelligenceIndex) },
       aaCostPerTaskUsd: Number(aaModel.costPerTaskUsd.toFixed(4)),
       aaCostPerTaskBreakdown: aaModel.costPerTaskBreakdown,
       aaTotalIndexCostUsd: aaModel.totalIndexCostUsd,
@@ -830,6 +936,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           color: vendorColor(aaModel.creatorName || seller.name, aaModel),
           plan: normalizedMpPlan,
           planLocal: plan.plan,
+          planUrl: resolvePlanUrl(normalizedMpPlan, seller.name, "subscription"),
           isOffPeak: /off-?peak/i.test(plan.plan),
           unmetered: false,
           modelId: aaSlug,
@@ -848,6 +955,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           listBlendedUsdPerMtok: aaModel.pricing?.blended7to2to1Per1M ?? null,
           subsidyMultiple: Number(m.multiple.toFixed(4)),
           intelligenceIndex: Number(aaModel.intelligenceIndex.toFixed(2)),
+          benchmarks: aaModel.benchmarks || { intelligenceIndex: round1(aaModel.intelligenceIndex) },
           aaCostPerTaskUsd: Number(aaModel.costPerTaskUsd.toFixed(4)),
           aaCostPerTaskBreakdown: aaModel.costPerTaskBreakdown,
           aaTotalIndexCostUsd: aaModel.totalIndexCostUsd,
