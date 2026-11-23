@@ -16,12 +16,15 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { refreshData } from "./scripts/refresh-data.mjs";
 
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_PATH = path.join(PUBLIC_DIR, "data", "combined.json");
+const REFRESH_SCRIPT = path.join(__dirname, "scripts", "refresh-data.mjs");
 
 const PORT = Number(process.env.PORT || 3456);
 const REFRESH_INTERVAL_HOURS = Number(process.env.REFRESH_INTERVAL_HOURS || 6);
@@ -46,8 +49,10 @@ async function triggerRefresh(reason = "manual") {
   refreshInFlight = (async () => {
     try {
       console.log(`[server] Starting ${reason} refresh...`);
-      const data = await refreshData();
+      await execFileAsync(process.execPath, [REFRESH_SCRIPT], { cwd: __dirname, timeout: 60000 });
       lastRefreshError = null;
+      const data = readCachedData();
+      if (!data) throw new Error("Refresh completed but combined.json could not be read");
       return data;
     } catch (err) {
       lastRefreshError = err.message;

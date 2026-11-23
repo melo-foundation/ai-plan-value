@@ -112,7 +112,7 @@
             </div>
             <label class="head-check">
               <input id="cheapestEffortOnly" type="checkbox" checked />
-              <span>Cheapest reasoning level only</span>
+              <span>Cheapest applicable reasoning level only</span>
             </label>
           </div>
           <div class="panel-body">
@@ -156,13 +156,13 @@
           including the overall Intelligence Index, domain capability scores, individual tests, and average API cost per benchmark task.
         </p>
         <p>
-          <strong>Plan subsidies</strong> come from
-          <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>,
-          <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a>,
+          <strong>Plan subsidies</strong> come primarily from upstream
+          <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>
           and first-party published credit pools (<a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a>,
           <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>),
-          measuring how many dollars of API usage a subscription provides per $1 of monthly fee at full usage.
-          Some recently released models use preliminary user reports or prior-generation quota estimates until measured directly.
+          with secondary backfill from
+          <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a>
+          for per-effort sub-tests and unmeasured recent releases. Subsidies measure how many dollars of API usage a subscription provides per $1 of monthly fee at full usage.
         </p>
         <p>
           <strong>Calculations:</strong><br />

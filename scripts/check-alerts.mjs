@@ -184,7 +184,6 @@ async function main() {
       const empty =
         (key === "fei2411" && !src.rowCount) ||
         (key === "priorsRepo" && !src.itemCount) ||
-        (key === "mypriors" && !src.sellerCount) ||
         (key === "artificialAnalysis" && !src.modelCount) ||
         (key === "githubCopilot" && !src.tierCount) ||
         (key === "ollamaCloud" && !src.tierCount);

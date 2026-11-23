@@ -23,9 +23,10 @@ const OUTPUT_PATH = path.join(ROOT_DIR, "public", "data", "combined.json");
 const SOURCES = {
   feiPointsCsv:
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/points.csv",
+  feiBenchConfigsCsv:
+    "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/benchmark-configurations.csv",
   priorsSnapshotGz:
     "https://raw.githubusercontent.com/adamholter/priors/main/data/snapshots/latest.json.gz",
-  mypriorsSubsidies: "https://mypriors.com/subsidies",
   aaModelsPage: "https://artificialanalysis.ai/models",
   aaApiV2: "https://artificialanalysis.ai/api/v2/data/llms/models",
   githubCopilotPlans: "https://github.com/features/copilot/plans",
@@ -715,15 +716,74 @@ function extractBalancedJsonObject(text, openBraceIdx) {
   throw new Error("Unbalanced JSON object");
 }
 
-function parseMyPriorsSubsidiesHtml(html) {
-  const rsc = extractNextRscText(html);
-  const idx = rsc.indexOf('"sellers":');
-  if (idx === -1) {
-    throw new Error("Could not locate sellers payload in mypriors.com/subsidies HTML");
+/**
+ * Parse multi-effort Artificial Analysis Intelligence Index + Cost per Task directly
+ * from upstream Fei2411/real-api-pricing (derived/benchmark-configurations.csv).
+ */
+function parseFeiBenchConfigs(csvText, aaByNorm) {
+  const rows = parseCsv(csvText);
+  const byBase = new Map(); // baseSlug -> Map<effort, variantObj>
+  let count = 0;
+
+  for (const r of rows) {
+    if (r.board !== "aa_intelligence_index") continue;
+    const score = toNum(r.score);
+    const cpt = toNum(r.mean_cost_usd_per_task);
+    if (score == null || cpt == null || cpt <= 0) continue;
+
+    const baseSlug = canonicalBaseSlug(r.model, aaByNorm);
+    const rawEff =
+      r.reasoning_effort ||
+      (/\(non-reasoning\)/i.test(r.variant || "") ? "none" : "default");
+    const effort = cleanEffort(rawEff);
+    const aaHeadline = resolveAaModel(r.model, aaByNorm);
+
+    let effMap = byBase.get(baseSlug);
+    if (!effMap) {
+      effMap = new Map();
+      byBase.set(baseSlug, effMap);
+    }
+
+    const effortSuffix = EFFORT_LABELS[effort];
+    const baseDisplay = (aaHeadline?.shortName || r.variant || r.model)
+      .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
+      .trim();
+    const displayName = effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay;
+
+    const isHeadlineEffort =
+      aaHeadline &&
+      aaHeadline.intelligenceIndex != null &&
+      Math.abs(aaHeadline.intelligenceIndex - score) < 0.35 &&
+      aaHeadline.costPerTaskUsd != null &&
+      Math.abs(aaHeadline.costPerTaskUsd - cpt) < 0.05;
+
+    effMap.set(effort, {
+      variantKey: effortSuffix ? `${baseSlug}--${effort}` : baseSlug,
+      baseSlug,
+      effort,
+      effortLabel: effortSuffix,
+      displayName,
+      baseDisplay,
+      creatorName: aaHeadline?.creatorName || null,
+      creatorColor: aaHeadline?.creatorColor || null,
+      intelligenceIndex: score,
+      costPerTaskUsd: cpt,
+      benchmarks: isHeadlineEffort
+        ? { ...aaHeadline.benchmarks, intelligenceIndex: round1(score) }
+        : { intelligenceIndex: round1(score) },
+      aaUrl: aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+      aaLive: Boolean(aaHeadline),
+      isHeadline: Boolean(isHeadlineEffort),
+      pricing: aaHeadline?.pricing || null,
+      costPerTaskBreakdown: isHeadlineEffort ? aaHeadline.costPerTaskBreakdown : null,
+      totalIndexCostUsd: isHeadlineEffort ? aaHeadline.totalIndexCostUsd : null,
+      speed: isHeadlineEffort ? aaHeadline.speed : null,
+      isOpenWeights: Boolean(aaHeadline?.isOpenWeights),
+      contextWindowTokens: aaHeadline?.contextWindowTokens ?? null,
+    });
+    count++;
   }
-  const openBrace = rsc.lastIndexOf("{", idx);
-  const payload = extractBalancedJsonObject(rsc, openBrace);
-  return Array.isArray(payload.sellers) ? payload.sellers : [];
+  return { count, byBase };
 }
 
 function extractCopilotAvailableModels(doc) {
@@ -898,21 +958,13 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       error: null,
     },
     priorsRepo: {
-      name: "adamholter/priors (latest.json.gz)",
+      name: "adamholter/priors (backfill only)",
       url: "https://github.com/adamholter/priors",
       rawUrl: SOURCES.priorsSnapshotGz,
       ok: false,
       fetchedAt: null,
       itemCount: 0,
       snapshotDate: null,
-      error: null,
-    },
-    mypriors: {
-      name: "mypriors.com/subsidies",
-      url: SOURCES.mypriorsSubsidies,
-      ok: false,
-      fetchedAt: null,
-      sellerCount: 0,
       error: null,
     },
     artificialAnalysis: {
@@ -943,8 +995,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   };
 
   let feiCsvText = null;
+  let feiBenchCsvText = null;
   let priorsGzBuf = null;
-  let mypriorsHtml = null;
   let aaHtml = null;
   let aaV2Json = null;
   let copilotHtml = null;
@@ -953,8 +1005,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   if (fromLocal) {
     log("Reading local fixture snapshots from /tmp ...");
     if (fs.existsSync("/tmp/fei_points.csv")) feiCsvText = fs.readFileSync("/tmp/fei_points.csv", "utf8");
+    if (fs.existsSync("/tmp/fei_bench_configs.csv")) feiBenchCsvText = fs.readFileSync("/tmp/fei_bench_configs.csv", "utf8");
     if (fs.existsSync("/tmp/priors_latest.json.gz")) priorsGzBuf = fs.readFileSync("/tmp/priors_latest.json.gz");
-    if (fs.existsSync("/tmp/mypriors_subsidies.html")) mypriorsHtml = fs.readFileSync("/tmp/mypriors_subsidies.html", "utf8");
     if (fs.existsSync("/tmp/aa_models.html")) aaHtml = fs.readFileSync("/tmp/aa_models.html", "utf8");
     if (fs.existsSync("/tmp/copilot_plans.html")) copilotHtml = fs.readFileSync("/tmp/copilot_plans.html", "utf8");
     if (fs.existsSync("/tmp/ollama_pricing.html")) ollamaHtml = fs.readFileSync("/tmp/ollama_pricing.html", "utf8");
@@ -963,12 +1015,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.feiPointsCsv)
         .then((t) => { feiCsvText = t; })
         .catch((err) => { sourceStatus.fei2411.error = err.message; }),
+      fetchText(SOURCES.feiBenchConfigsCsv)
+        .then((t) => { feiBenchCsvText = t; })
+        .catch((err) => { log("Fei benchmark-configurations fetch failed:", err.message); }),
       fetchBuffer(SOURCES.priorsSnapshotGz)
         .then((b) => { priorsGzBuf = b; })
         .catch((err) => { sourceStatus.priorsRepo.error = err.message; }),
-      fetchText(SOURCES.mypriorsSubsidies)
-        .then((t) => { mypriorsHtml = t; })
-        .catch((err) => { sourceStatus.mypriors.error = err.message; }),
       fetchText(SOURCES.aaModelsPage)
         .then((t) => { aaHtml = t; })
         .catch((err) => { sourceStatus.artificialAnalysis.error = err.message; }),
@@ -1036,7 +1088,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  // 3. Parse adamholter/priors raw-GitHub gzip snapshot
+  // 2b. Parse upstream multi-effort AA Intelligence & Cost/Task configs from Fei2411
+  let feiMultiEffort = { count: 0, byBase: new Map() };
+  if (feiBenchCsvText) {
+    try {
+      feiMultiEffort = parseFeiBenchConfigs(feiBenchCsvText, aaByNorm);
+      log(`Parsed ${feiMultiEffort.count} multi-effort AA configs from Fei2411/benchmark-configurations.csv`);
+    } catch (err) {
+      log("Fei benchmark-configurations parse error:", err.message);
+    }
+  }
+
+  // 3. Parse adamholter/priors raw-GitHub gzip snapshot ONLY as secondary backfill
+  //    (per-effort sub-test scores like HLE/FrontierCode + few unmeasured new-model carryovers)
   let priorsParsed = { date: null, items: [], aaVariantsByBase: new Map() };
   if (priorsGzBuf) {
     try {
@@ -1046,28 +1110,48 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceStatus.priorsRepo.fetchedAt = nowIso;
       sourceStatus.priorsRepo.itemCount = priorsParsed.items.length;
       sourceStatus.priorsRepo.snapshotDate = priorsParsed.date;
-      const totalVariants = [...priorsParsed.aaVariantsByBase.values()].reduce((s, m) => s + m.size, 0);
-      log(
-        `Parsed ${priorsParsed.items.length} plan×model entries and ${totalVariants} multi-effort AA variants from adamholter/priors (${priorsParsed.date})`
-      );
+      log(`Loaded optional backfill from adamholter/priors (${priorsParsed.date})`);
     } catch (err) {
       sourceStatus.priorsRepo.error = err.message;
       log("Priors snapshot parse error:", err.message);
     }
   }
 
-  // 3b. Parse mypriors.com/subsidies computed sellers (captures subscription.ts derived rows like Gemini 4 Hydrogen/Carbon, Fable 5.2 on Ultra, GPT-6.1 Terra/Sol)
-  let mypriorsSellers = [];
-  if (mypriorsHtml) {
-    try {
-      mypriorsSellers = parseMyPriorsSubsidiesHtml(mypriorsHtml);
-      sourceStatus.mypriors.ok = true;
-      sourceStatus.mypriors.fetchedAt = nowIso;
-      sourceStatus.mypriors.sellerCount = mypriorsSellers.length;
-      log(`Parsed ${mypriorsSellers.length} sellers from mypriors.com/subsidies`);
-    } catch (err) {
-      sourceStatus.mypriors.error = err.message;
-      log("MyPriors HTML parse error:", err.message);
+  // Merge multi-effort AA variants: upstream Fei2411 + live AA first, backfilled with Priors per-effort sub-tests
+  const aaVariantsByBase = new Map();
+  for (const [baseSlug, effMap] of priorsParsed.aaVariantsByBase.entries()) {
+    aaVariantsByBase.set(baseSlug, new Map(effMap));
+  }
+  for (const [baseSlug, effMap] of feiMultiEffort.byBase.entries()) {
+    let target = aaVariantsByBase.get(baseSlug);
+    if (!target) {
+      target = new Map();
+      aaVariantsByBase.set(baseSlug, target);
+    }
+    for (const [eff, fv] of effMap.entries()) {
+      let targetEff = eff;
+      if (eff === "default" && !target.has("default") && target.size > 0) {
+        for (const [existingEff, pv] of target.entries()) {
+          if (
+            Math.abs((pv.intelligenceIndex ?? 0) - fv.intelligenceIndex) < 0.35 &&
+            Math.abs((pv.costPerTaskUsd ?? 0) - fv.costPerTaskUsd) < 0.02
+          ) {
+            targetEff = existingEff;
+            break;
+          }
+        }
+      }
+      const pv = target.get(targetEff);
+      const effSuffix = EFFORT_LABELS[targetEff] || "";
+      target.set(targetEff, {
+        ...pv,
+        ...fv,
+        effort: targetEff,
+        effortLabel: effSuffix,
+        variantKey: effSuffix ? `${baseSlug}--${targetEff}` : baseSlug,
+        displayName: effSuffix ? `${fv.baseDisplay} (${effSuffix})` : fv.baseDisplay,
+        benchmarks: { ...(pv?.benchmarks || {}), ...(fv.benchmarks || {}) },
+      });
     }
   }
 
@@ -1124,7 +1208,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   function bestPriorsVariantFor(modelId) {
     const base = canonicalBaseSlug(modelId, aaByNorm);
-    const effMap = priorsParsed.aaVariantsByBase.get(base);
+    const effMap = aaVariantsByBase.get(base);
     if (!effMap || effMap.size === 0) return null;
     let best = null;
     for (const v of effMap.values()) {
@@ -1153,7 +1237,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const priceUsd = toNum(r.price_usd);
     const monthlyYi = toNum(r.monthly_yi);
     const realUsdPerMtok = toNum(r.real_usd_per_mtok);
-    const listBlendedUsdPerMtok = toNum(r.list_blended_usd_per_mtok);
+    const aaP = aaModel?.pricing;
+    const aaCodingBlended =
+      aaP && aaP.cacheHitPer1M != null && aaP.inputPer1M != null && aaP.outputPer1M != null
+        ? 0.97 * aaP.cacheHitPer1M + 0.025 * aaP.inputPer1M + 0.005 * aaP.outputPer1M
+        : null;
+    const listBlendedUsdPerMtok = toNum(r.list_blended_usd_per_mtok) ?? aaCodingBlended;
     const discountRatio = toNum(r.d);
 
     let subsidyMultiple = null;
@@ -1313,8 +1402,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     coveredMeteredAaSlugs.add(aaModel.slug);
   }
 
-  // Also ensure every Priors AA multi-effort model with AA Cost/Task has a Metered API (1x) baseline
-  for (const [baseSlug, effMap] of priorsParsed.aaVariantsByBase.entries()) {
+  // Also ensure every multi-effort AA model with AA Cost/Task has a Metered API (1x) baseline
+  for (const [baseSlug] of aaVariantsByBase.entries()) {
     if (coveredMeteredAaSlugs.has(baseSlug)) continue;
     const best = bestPriorsVariantFor(baseSlug);
     if (!best || best.intelligenceIndex == null || best.costPerTaskUsd == null || best.costPerTaskUsd <= 0) {
@@ -1458,89 +1547,6 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     });
   }
 
-  // Layer any computed plan×model pairs from mypriors.com/subsidies that weren't in Fei2411 or raw latest.json.gz
-  // (e.g. Google AI Ultra/Pro Gemini 4 Hydrogen & Carbon & 3.8 Flash, Claude Ultra Fable 5.2/5.1, ChatGPT GPT-6.1 Terra/Sol, GPT-6 Astra/Sol)
-  let mypriorsComputedCount = 0;
-  for (const seller of mypriorsSellers) {
-    for (const plan of seller.plans || []) {
-      const normPlan = normalizePlanName(plan.plan);
-      const planSlug = normSlug(normPlan);
-      const feeUsd = toNum(plan.feeUsd);
-      for (const m of plan.models || []) {
-        if (!m.multiple || m.multiple <= 0) continue;
-        const aaModel = resolveAaModel(m.id, aaByNorm);
-        const priorsVar = !aaModel ? bestPriorsVariantFor(m.id) : null;
-        const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(canonicalBaseSlug(m.id, aaByNorm)) : null;
-        const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-        const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
-        if (intel === null || cpt === null || cpt <= 0) continue;
-
-        const aaSlug = aaModel?.slug || priorsVar?.baseSlug || fallbackModel.modelId;
-        const dedupeKey = `${planSlug}::${aaSlug}`;
-        if (priorsSeen.has(dedupeKey)) continue;
-
-        const sellerVendor = vendorFromPlan(normPlan, seller.name);
-        const existingId =
-          feiSubIndex.get(dedupeKey) ||
-          (feeUsd !== null
-            ? feiVendorFeeModelIndex.get(`${normSlug(sellerVendor)}::${Math.round(feeUsd)}::${aaSlug}`)
-            : null);
-
-        const isPrelim = Boolean(m.preliminary);
-        const isAssumed = Boolean(m.assumed);
-        if (existingId && !isPrelim) continue;
-
-        priorsSeen.add(dedupeKey);
-        if (/^ollama\b/i.test(normPlan)) ollamaHostedSlugs.add(aaSlug);
-
-        mypriorsComputedCount++;
-        const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
-        const listBlend = aaModel?.pricing?.blended7to2to1Per1M ?? aaModel?.pricing?.blended3to1Per1M ?? null;
-
-        entries.push({
-          id: `mypriors-computed::${planSlug}::${aaSlug}`,
-          origin: isPrelim ? "priors-preliminary" : isAssumed ? "priors-assumed" : "priors-computed",
-          isPreliminary: isPrelim || isAssumed,
-          estimateType: isPrelim ? "preliminary" : isAssumed ? "assumed" : null,
-          replacesId: isPrelim ? existingId : null,
-          billing: "subscription",
-          vendor: sellerVendor,
-          modelCreator: creator,
-          color: vendorColor(creator, aaModel || priorsVar),
-          plan: normPlan,
-          planLocal: plan.plan,
-          planUrl: resolvePlanUrl(normPlan, sellerVendor, "subscription"),
-          isOffPeak: /off-?peak/i.test(plan.plan),
-          unmetered: false,
-          modelId: aaSlug,
-          modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || m.name,
-          aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
-          aaLive: Boolean(aaModel),
-          aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || "https://artificialanalysis.ai/models#price-cost",
-          isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
-          contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
-          priceUsd: feeUsd,
-          monthlyTokens: null,
-          realUsdPerMtok: listBlend != null ? listBlend / m.multiple : null,
-          listBlendedUsdPerMtok: listBlend,
-          subsidyMultiple: Number(m.multiple.toFixed(4)),
-          intelligenceIndex: Number(intel.toFixed(2)),
-          benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
-          aaCostPerTaskUsd: Number(cpt.toFixed(4)),
-          aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
-          aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
-          aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
-          aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
-          confidence: isPrelim || isAssumed ? "low" : "medium",
-          dataDate: priorsParsed.date || nowIso.slice(0, 10),
-          sourceNote: "mypriors.com/subsidies",
-          decisionNote: m.preliminary?.note || m.preliminary?.short || null,
-          preliminary: m.preliminary || null,
-        });
-      }
-    }
-  }
-
   // Layer live-verified first-party GitHub Copilot AI Credits tiers (respecting per-plan Available Models matrix)
   let copilotEntryCount = 0;
   for (const tier of copilotTiers) {
@@ -1662,7 +1668,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const expandedEntries = [];
   const seenExpandedIds = new Set();
   for (const baseEntry of entries) {
-    const effortMap = priorsParsed.aaVariantsByBase.get(baseEntry.modelId);
+    const effortMap = aaVariantsByBase.get(baseEntry.modelId);
     if (!effortMap || effortMap.size === 0) {
       const e = {
         ...baseEntry,
