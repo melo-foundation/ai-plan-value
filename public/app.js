@@ -107,7 +107,15 @@ function renderLink(text, url) {
 }
 
 const EFFORT_ORDER = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, default: 6 };
-const EFFORT_SHORT = { none: "non-r", low: "low", medium: "med", high: "high", xhigh: "xhigh", max: "max", default: "std" };
+const EFFORT_COL_TITLE = {
+  none: "Non-reasoning",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "XHigh",
+  max: "Max",
+  default: "Default",
+};
 
 function getAllEntriesResolved() {
   if (!state.dataset) return [];
@@ -153,57 +161,72 @@ function renderPlanDrawer(planName, allResolved) {
   const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
   const planEntries = allResolved.filter((e) => !e.isApi && cleanPlan(e) === planName);
 
-  // Group by base model, then sort efforts low -> max
+  // Collect effort columns actually present in this plan, ordered low -> max
+  const effortSet = new Set();
   const byModel = new Map();
   for (const e of planEntries) {
+    const eff = e.effort || "default";
+    effortSet.add(eff);
     const key = e.baseModelId || e.modelId;
     if (!byModel.has(key)) {
-      const baseName = String(e.modelDisplay || key).replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning)\)\s*$/i, "");
-      byModel.set(key, { baseName, aaUrl: e.aaUrl, efforts: [] });
+      const baseName = String(e.modelDisplay || key).replace(
+        /\s*\((?:max|xhigh|high|medium|low|non-reasoning)\)\s*$/i,
+        ""
+      );
+      byModel.set(key, { baseName, aaUrl: e.aaUrl, byEffort: new Map(), maxScore: -1 });
     }
-    byModel.get(key).efforts.push(e);
+    const m = byModel.get(key);
+    m.byEffort.set(eff, e);
+    const s = e.score ?? e.intelligenceIndex ?? 0;
+    if (s > m.maxScore) m.maxScore = s;
   }
 
-  const models = [...byModel.values()].sort((a, b) => {
-    const maxA = Math.max(...a.efforts.map((x) => x.score ?? x.intelligenceIndex ?? 0));
-    const maxB = Math.max(...b.efforts.map((x) => x.score ?? x.intelligenceIndex ?? 0));
-    return maxB - maxA;
-  });
+  const efforts = [...effortSet].sort((a, b) => (EFFORT_ORDER[a] ?? 9) - (EFFORT_ORDER[b] ?? 9));
+  const models = [...byModel.values()].sort((a, b) => b.maxScore - a.maxScore);
 
-  const rowsHtml = models
+  const headCols = efforts
+    .map((eff) => `<th class="num-col">${esc(EFFORT_COL_TITLE[eff] || eff)}</th>`)
+    .join("");
+
+  const bodyRows = models
     .map((m) => {
-      m.efforts.sort((a, b) => (EFFORT_ORDER[a.effort] ?? 9) - (EFFORT_ORDER[b.effort] ?? 9));
-      const chips = m.efforts
-        .map((e) => {
+      const cells = efforts
+        .map((eff) => {
+          const e = m.byEffort.get(eff);
+          if (!e) return `<td class="pm-cell empty-cell">—</td>`;
           const passes =
             e.score != null &&
             e.score >= state.minScore &&
             (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
-          const lbl = EFFORT_SHORT[e.effort] || e.effort;
-          const scoreStr = e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
-          return `<span class="eff-chip${passes ? "" : " dim"}"><span class="eff-lbl">${esc(lbl)}</span> <strong>${fmtUsd(e.effectiveCost)}</strong> (${esc(scoreStr)})</span>`;
+          const scoreStr =
+            e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
+          return `<td class="pm-cell${passes ? "" : " dim"}"><span class="pm-cost">${fmtUsd(e.effectiveCost)}</span><span class="pm-score">${esc(scoreStr)}</span></td>`;
         })
         .join("");
 
       return `
-        <div class="plan-model-row">
-          <div class="plan-model-name">${renderLink(m.baseName, m.aaUrl)}</div>
-          <div class="plan-efforts">${chips}</div>
-        </div>
+        <tr>
+          <td class="pm-model">${renderLink(m.baseName, m.aaUrl)}</td>
+          ${cells}
+        </tr>
       `;
     })
     .join("");
-
-  const sample = planEntries[0];
-  const headerRight = sample ? `${feeText(sample)} · ${benchMeta.label}` : benchMeta.label;
 
   return `
     <div class="plan-drawer">
       <div class="plan-drawer-head">
         <span>All models in ${esc(planName)}</span>
-        <span class="eff-lbl">${esc(headerRight)}</span>
       </div>
-      ${rowsHtml || `<div class="empty">No models recorded.</div>`}
+      <table class="plan-matrix">
+        <thead>
+          <tr>
+            <th>Model</th>
+            ${headCols}
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
     </div>
   `;
 }
