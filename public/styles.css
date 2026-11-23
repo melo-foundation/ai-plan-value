@@ -375,7 +375,7 @@ details[open] > summary.panel-toggle h2::before {
 }
 
 .panel-body {
-  padding: 10px 12px;
+  padding: 0;
 }
 
 /* 2003 glossy horizontal bar chart */
@@ -388,7 +388,7 @@ details[open] > summary.panel-toggle h2::before {
   grid-template-columns: 264px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 6px 7px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--grid-line);
 }
 
