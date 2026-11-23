@@ -49,6 +49,8 @@ const BENCHMARKS = {
   lcr: { label: "AA-LCR", unit: "%", min: 65, max: 86, step: 1, def: 75 },
   scicode: { label: "SciCode", unit: "%", min: 40, max: 67, step: 1, def: 50 },
   gdpval: { label: "GDPval", unit: " Elo", min: 1150, max: 1860, step: 10, def: 1500 },
+  contextWindow: { label: "Context Window", unit: "K", min: 0, max: 1000, step: 50, def: 200 },
+  outputSpeed: { label: "Output Speed", unit: " tok/s", min: 0, max: 350, step: 10, def: 80 },
 };
 
 const state = {
@@ -64,8 +66,6 @@ const state = {
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
-  minContext: 0,
-  minSpeed: 0,
   extraCriteria: [], // [{ benchKey, minScore }]
   tableQuery: "",
   cheapestEffortOnly: true,
@@ -96,9 +96,23 @@ function fmtMult(n) {
 
 function fmtScore(val, key) {
   if (val == null || !Number.isFinite(val)) return "—";
+  if (key === "contextWindow") {
+    return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 < 50 ? 0 : 1)}M` : `${Math.round(val)}K`;
+  }
+  if (key === "outputSpeed") {
+    return `${Math.round(val)} tok/s`;
+  }
   const meta = BENCHMARKS[key] || BENCHMARKS.intelligenceIndex;
   const num = key === "gdpval" ? Math.round(val) : val.toFixed(1);
   return `${num}${meta.unit}`;
+}
+
+function fmtThreshold(val, key) {
+  if (key === "contextWindow") {
+    return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}M` : `${val}K`;
+  }
+  const meta = BENCHMARKS[key] || BENCHMARKS.intelligenceIndex;
+  return `${val}${meta.unit}`;
 }
 
 function esc(s) {
@@ -118,6 +132,12 @@ function feeText(r) {
 }
 
 function getScore(entry, benchKey) {
+  if (benchKey === "contextWindow") {
+    return entry.contextWindowTokens > 0 ? entry.contextWindowTokens / 1000 : null;
+  }
+  if (benchKey === "outputSpeed") {
+    return entry.aaSpeed?.outputTokPerSec > 0 ? entry.aaSpeed.outputTokPerSec : null;
+  }
   const b = entry.benchmarks;
   if (b && b[benchKey] != null) return b[benchKey];
   if (benchKey === "intelligenceIndex") return entry.intelligenceIndex;
@@ -137,17 +157,6 @@ function estMark(r) {
       ? "Estimated subsidy (prior-generation quota carryover)"
       : "Estimated subsidy (preliminary user report)";
   return `<span class="est-star" title="${esc(tip)}">*</span>`;
-}
-
-function fmtCtx(tokens) {
-  if (!tokens || !Number.isFinite(tokens)) return "—";
-  if (tokens >= 1e6) return `${(tokens / 1e6).toFixed(tokens % 1e6 === 0 ? 0 : 1)}M`;
-  return `${Math.round(tokens / 1e3)}K`;
-}
-
-function fmtSpeed(tps) {
-  if (!tps || !Number.isFinite(tps)) return "—";
-  return `${Math.round(tps)} tok/s`;
 }
 
 function isLegacyEntry(r) {
@@ -179,12 +188,6 @@ function passesExtraCriteria(entry) {
 
 function passesModelSpecs(entry) {
   if (state.openWeightsOnly && !entry.isOpenWeights) return false;
-  if (state.minContext > 0 && (!entry.contextWindowTokens || entry.contextWindowTokens < state.minContext)) {
-    return false;
-  }
-  if (state.minSpeed > 0 && (!entry.aaSpeed?.outputTokPerSec || entry.aaSpeed.outputTokPerSec < state.minSpeed)) {
-    return false;
-  }
   return true;
 }
 
@@ -434,8 +437,6 @@ function renderTable(rows) {
 
   const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
   const isTokens = state.costMode === "tokens";
-  const showCtx = state.minContext > 0;
-  const showSpd = state.minSpeed > 0;
 
   const cols = [
     { key: "model", label: "Model & Plan", cls: "" },
@@ -446,8 +447,6 @@ function renderTable(rows) {
       cls: "num-col col-hide-sm",
       benchKey: c.benchKey,
     })),
-    ...(showCtx ? [{ key: "context", label: "Context", cls: "num-col col-hide-sm" }] : []),
-    ...(showSpd ? [{ key: "speed", label: "Speed", cls: "num-col col-hide-sm" }] : []),
     { key: "fee", label: "Fee", cls: "num-col" },
     { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
     { key: "apiCost", label: isTokens ? "API $/1M" : "API $/task", cls: "num-col col-hide-sm" },
@@ -528,8 +527,6 @@ function renderTable(rows) {
       const extraCells = state.extraCriteria
         .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
         .join("");
-      const ctxCell = showCtx ? `<td class="num-col col-hide-sm">${fmtCtx(r.contextWindowTokens)}</td>` : "";
-      const spdCell = showSpd ? `<td class="num-col col-hide-sm">${fmtSpeed(r.aaSpeed?.outputTokPerSec)}</td>` : "";
 
       return `
         <tr>
@@ -539,8 +536,6 @@ function renderTable(rows) {
           </td>
           <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
           ${extraCells}
-          ${ctxCell}
-          ${spdCell}
           <td class="num-col">${feeText(r)}</td>
           <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
           <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
@@ -574,8 +569,6 @@ function updateSettingsBadge() {
     (state.hideCnPortal ? 1 : 0) +
     (state.showApi ? 1 : 0) +
     (state.openWeightsOnly ? 1 : 0) +
-    (state.minContext > 0 ? 1 : 0) +
-    (state.minSpeed > 0 ? 1 : 0) +
     state.extraCriteria.length;
   const el = $("settingsCount");
   if (count > 0) {
@@ -602,12 +595,13 @@ function renderExtraCriteria() {
   barHost.innerHTML = state.extraCriteria
     .map((c, idx) => {
       const meta = BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex;
+      const valText = fmtThreshold(c.minScore, c.benchKey);
       return `
         <div class="extra-criterion">
           <div class="extra-criterion-head">
             <span>Min ${esc(meta.label)}:</span>
             <span class="extra-criterion-right">
-              <strong class="num" data-crit-out="${idx}">${c.minScore}${esc(meta.unit)}</strong>
+              <strong class="num" data-crit-out="${idx}">${esc(valText)}</strong>
               <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
             </span>
           </div>
@@ -620,9 +614,10 @@ function renderExtraCriteria() {
   listHost.innerHTML = state.extraCriteria
     .map((c, idx) => {
       const meta = BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex;
+      const valText = fmtThreshold(c.minScore, c.benchKey);
       return `
         <div class="settings-crit-item">
-          <span>Min ${esc(meta.label)} ≥ <strong class="num" data-crit-list-out="${idx}">${c.minScore}${esc(meta.unit)}</strong></span>
+          <span>Min ${esc(meta.label)} ≥ <strong class="num" data-crit-list-out="${idx}">${esc(valText)}</strong></span>
           <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
         </div>
       `;
@@ -635,8 +630,7 @@ function renderExtraCriteria() {
       const crit = state.extraCriteria[idx];
       if (!crit) return;
       crit.minScore = Number(slider.value);
-      const meta = BENCHMARKS[crit.benchKey] || BENCHMARKS.intelligenceIndex;
-      const text = `${crit.minScore}${meta.unit}`;
+      const text = fmtThreshold(crit.minScore, crit.benchKey);
       const outEl = barHost.querySelector(`[data-crit-out="${idx}"]`);
       if (outEl) outEl.textContent = text;
       const listOutEl = listHost.querySelector(`[data-crit-list-out="${idx}"]`);
@@ -661,9 +655,8 @@ function renderExtraCriteria() {
 }
 
 function render() {
-  const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
   const isTokens = state.costMode === "tokens";
-  $("minScoreOut").textContent = `${state.minScore}${meta.unit}`;
+  $("minScoreOut").textContent = fmtThreshold(state.minScore, state.benchKey);
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
@@ -774,18 +767,6 @@ $("openWeightsOnly").addEventListener("change", (e) => {
   render();
 });
 
-$("minContext").addEventListener("change", (e) => {
-  state.minContext = Number(e.target.value);
-  updateSettingsBadge();
-  render();
-});
-
-$("minSpeed").addEventListener("change", (e) => {
-  state.minSpeed = Number(e.target.value);
-  updateSettingsBadge();
-  render();
-});
-
 $("resetSettingsBtn").addEventListener("click", () => {
   state.hideLegacy = true;
   state.hideOffPeak = true;
@@ -793,8 +774,6 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
-  state.minContext = 0;
-  state.minSpeed = 0;
   state.extraCriteria = [];
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
@@ -802,8 +781,6 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;
-  $("minContext").value = "0";
-  $("minSpeed").value = "0";
   renderExtraCriteria();
   render();
 });

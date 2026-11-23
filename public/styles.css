@@ -447,24 +447,6 @@ input[type="range"]::-moz-range-thumb {
   gap: 6px;
 }
 
-.settings-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.settings-field {
-  display: grid;
-  gap: 4px;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.settings-field .select {
-  max-width: none;
-  width: 100%;
-}
-
 .table-toolbar {
   padding: 7px 10px;
   background: var(--filter-bg);

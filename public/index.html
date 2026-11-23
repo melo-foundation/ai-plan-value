@@ -72,6 +72,10 @@
                     <option value="scicode">SciCode</option>
                     <option value="gdpval">GDPval (Elo)</option>
                   </optgroup>
+                  <optgroup label="Specs">
+                    <option value="contextWindow">Context Window</option>
+                    <option value="outputSpeed">Output Speed (tok/s)</option>
+                  </optgroup>
                 </select>
               </span>
               <strong id="minScoreOut" class="num">45</strong>
@@ -181,34 +185,9 @@
         </div>
 
         <div class="settings-section">
-          <div class="settings-heading">Model specs</div>
-          <div class="settings-grid-2">
-            <label class="settings-field">
-              <span>Min context window</span>
-              <select id="minContext" class="select">
-                <option value="0" selected>Any</option>
-                <option value="128000">≥ 128K</option>
-                <option value="200000">≥ 200K</option>
-                <option value="400000">≥ 400K</option>
-                <option value="1000000">≥ 1M</option>
-              </select>
-            </label>
-            <label class="settings-field">
-              <span>Min output speed</span>
-              <select id="minSpeed" class="select">
-                <option value="0" selected>Any</option>
-                <option value="50">≥ 50 tok/s</option>
-                <option value="100">≥ 100 tok/s</option>
-                <option value="150">≥ 150 tok/s</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="settings-heading">Additional benchmark minimums</div>
+          <div class="settings-heading">Additional minimums</div>
           <div class="settings-add-row">
-            <select id="addBenchSelect" class="select" aria-label="Add benchmark minimum"></select>
+            <select id="addBenchSelect" class="select" aria-label="Add minimum requirement"></select>
             <button id="addCriterionBtn" class="btn btn-sm" type="button">+ Add</button>
           </div>
           <div id="settingsCriteriaList" class="settings-criteria-list"></div>
