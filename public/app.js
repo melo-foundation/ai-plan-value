@@ -53,15 +53,8 @@ const BENCHMARKS = {
   outputSpeed: { label: "Output Speed", unit: " tok/s", min: 0, max: 350, step: 10, def: 80 },
 };
 
-const SUITE_META = {
-  intelligence: { label: "Intelligence", heading: "Best Real Cost", benchLabel: null },
-  codingAgent: { label: "Coding Agent", heading: "Coding Agent Cost", benchLabel: "Coding Agent Index", unit: "", min: 15, max: 60, step: 1, def: 40 },
-  deepSwe: { label: "DeepSWE 1.1", heading: "DeepSWE Cost", benchLabel: "DeepSWE 1.1", unit: "%", min: 20, max: 75, step: 1, def: 50 },
-};
-
 const state = {
   dataset: null,
-  suite: "intelligence", // "intelligence" | "codingAgent" | "deepSwe"
   benchKey: "intelligenceIndex",
   costMode: "task", // "task" | "tokens"
   minScore: 45,
@@ -104,19 +97,15 @@ function fmtMult(n) {
 }
 
 function activeScoreKey() {
-  return state.suite === "intelligence" ? state.benchKey : state.suite;
+  return state.benchKey;
 }
 
 function activeBenchMeta() {
-  if (state.suite === "codingAgent") return SUITE_META.codingAgent;
-  if (state.suite === "deepSwe") return SUITE_META.deepSwe;
   return BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
 }
 
 function fmtScore(val, key) {
   if (val == null || !Number.isFinite(val)) return "—";
-  if (key === "codingAgent") return val.toFixed(1);
-  if (key === "deepSwe") return `${val.toFixed(1)}%`;
   if (key === "contextWindow") {
     return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 < 50 ? 0 : 1)}M` : `${Math.round(val)}K`;
   }
@@ -129,8 +118,6 @@ function fmtScore(val, key) {
 }
 
 function fmtThreshold(val, key) {
-  if (key === "codingAgent") return String(val);
-  if (key === "deepSwe") return `${val}%`;
   if (key === "contextWindow") {
     return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}M` : `${val}K`;
   }
@@ -233,16 +220,14 @@ function getAllEntriesResolved() {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
   const isTokens = state.costMode === "tokens";
-  const suite = state.suite;
 
   return raw
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
       const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
-      const suiteObj = suite === "codingAgent" ? e.suites?.codingAgent : suite === "deepSwe" ? e.suites?.deepSwe : null;
-      const score = suite === "intelligence" ? getScore(e, state.benchKey) : (suiteObj?.score ?? null);
-      const taskCost = suite === "intelligence" ? e.aaCostPerTaskUsd : (suiteObj?.costPerTaskUsd ?? null);
+      const score = getScore(e, state.benchKey);
+      const taskCost = e.aaCostPerTaskUsd;
 
       const p = e.aaPricing || {};
       const apiMtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok ?? null;
@@ -649,12 +634,6 @@ function renderTable(rows) {
 
 function syncBenchSlider(resetDefault = false) {
   const meta = activeBenchMeta();
-  const isIntel = state.suite === "intelligence";
-  $("benchSelect").hidden = !isIntel;
-  const suiteLabel = $("suiteBenchLabel");
-  suiteLabel.hidden = isIntel;
-  if (!isIntel) suiteLabel.textContent = meta.benchLabel || meta.label;
-
   const slider = $("minScore");
   slider.min = String(meta.min);
   slider.max = String(meta.max);
@@ -789,14 +768,13 @@ function renderExtraCriteria() {
 
 function render() {
   const isTokens = state.costMode === "tokens";
-  const suiteHead = (SUITE_META[state.suite] || SUITE_META.intelligence).heading;
   $("chartHeading").textContent = isTokens
-    ? `${suiteHead} per 1M Tokens`
-    : `${suiteHead} per Task`;
+    ? "Best Real Cost per 1M Tokens"
+    : "Best Real Cost per Task";
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
-  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, activeScoreKey())}`;
+  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
@@ -951,21 +929,6 @@ $("settingsBtn").addEventListener("click", () => settingsDialog.showModal());
 $("closeSettingsBtn").addEventListener("click", () => settingsDialog.close());
 settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
-});
-
-document.querySelectorAll("button[data-suite]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const next = btn.dataset.suite;
-    if (!next || next === state.suite || !SUITE_META[next]) return;
-    state.suite = next;
-    document.querySelectorAll("button[data-suite]").forEach((b) => {
-      const on = b.dataset.suite === next;
-      b.classList.toggle("active", on);
-      b.setAttribute("aria-pressed", String(on));
-    });
-    syncBenchSlider(true);
-    render();
-  });
 });
 
 $("costMode").addEventListener("change", (e) => {
