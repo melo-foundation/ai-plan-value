@@ -192,12 +192,11 @@ a {
 /* Filter toolbar */
 .filter-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 22px;
-  padding: 12px 14px;
+  gap: 14px 22px;
+  padding: 11px 14px;
   background: var(--filter-bg);
-  border: 1px solid var(--panel-border);
 }
 
 .filter-item {
@@ -216,10 +215,19 @@ a {
   color: var(--panel-head-fg);
 }
 
-.filter-head strong {
+.filter-val {
   color: var(--fg);
-  font-size: 14.5px;
+  font-size: 13.5px;
   white-space: nowrap;
+  background: var(--shell-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 2px;
+  padding: 1px 6px;
+}
+
+.suite-bench-label {
+  color: var(--fg);
+  font-weight: bold;
 }
 
 .bench-pick {
@@ -320,7 +328,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .extra-criteria {
-  grid-column: 1 / 4;
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px 22px;

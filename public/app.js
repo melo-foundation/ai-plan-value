@@ -53,8 +53,15 @@ const BENCHMARKS = {
   outputSpeed: { label: "Output Speed", unit: " tok/s", min: 0, max: 350, step: 10, def: 80 },
 };
 
+const SUITE_META = {
+  intelligence: { label: "Intelligence", heading: "Best Real Cost", benchLabel: null },
+  codingAgent: { label: "Coding Agent", heading: "Coding Agent Cost", benchLabel: "Coding Agent Index", unit: "", min: 15, max: 60, step: 1, def: 40 },
+  deepSwe: { label: "DeepSWE 1.1", heading: "DeepSWE Cost", benchLabel: "DeepSWE 1.1", unit: "%", min: 20, max: 75, step: 1, def: 50 },
+};
+
 const state = {
   dataset: null,
+  suite: "intelligence", // "intelligence" | "codingAgent" | "deepSwe"
   benchKey: "intelligenceIndex",
   costMode: "task", // "task" | "tokens"
   minScore: 45,
@@ -96,8 +103,20 @@ function fmtMult(n) {
   return n >= 10 ? `${n.toFixed(1)}×` : `${n.toFixed(2)}×`;
 }
 
+function activeScoreKey() {
+  return state.suite === "intelligence" ? state.benchKey : state.suite;
+}
+
+function activeBenchMeta() {
+  if (state.suite === "codingAgent") return SUITE_META.codingAgent;
+  if (state.suite === "deepSwe") return SUITE_META.deepSwe;
+  return BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+}
+
 function fmtScore(val, key) {
   if (val == null || !Number.isFinite(val)) return "—";
+  if (key === "codingAgent") return val.toFixed(1);
+  if (key === "deepSwe") return `${val.toFixed(1)}%`;
   if (key === "contextWindow") {
     return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 < 50 ? 0 : 1)}M` : `${Math.round(val)}K`;
   }
@@ -110,6 +129,8 @@ function fmtScore(val, key) {
 }
 
 function fmtThreshold(val, key) {
+  if (key === "codingAgent") return String(val);
+  if (key === "deepSwe") return `${val}%`;
   if (key === "contextWindow") {
     return val >= 1000 ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}M` : `${val}K`;
   }
@@ -212,13 +233,16 @@ function getAllEntriesResolved() {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
   const isTokens = state.costMode === "tokens";
+  const suite = state.suite;
 
   return raw
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
       const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
-      const score = getScore(e, state.benchKey);
+      const suiteObj = suite === "codingAgent" ? e.suites?.codingAgent : suite === "deepSwe" ? e.suites?.deepSwe : null;
+      const score = suite === "intelligence" ? getScore(e, state.benchKey) : (suiteObj?.score ?? null);
+      const taskCost = suite === "intelligence" ? e.aaCostPerTaskUsd : (suiteObj?.costPerTaskUsd ?? null);
 
       const p = e.aaPricing || {};
       const apiMtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok ?? null;
@@ -228,12 +252,14 @@ function getAllEntriesResolved() {
           ? apiMtok / subsidy
           : e.realUsdPerMtok ?? null;
 
-      const apiMetric = isTokens ? apiMtok : e.aaCostPerTaskUsd;
+      const apiMetric = isTokens ? apiMtok : taskCost;
       const effectiveCost = isTokens
         ? realMtok
-        : e.unmetered
-          ? 0
-          : e.aaCostPerTaskUsd / (subsidy || 1);
+        : taskCost == null
+          ? null
+          : e.unmetered
+            ? 0
+            : taskCost / (subsidy || 1);
 
       const volumePerMonth =
         !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
@@ -326,7 +352,11 @@ function renderPlanDrawer(planName, allResolved) {
             passesModelSpecs(e) &&
             (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
           const scoreStr =
-            e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
+            e.score != null
+              ? fmtScore(e.score, activeScoreKey())
+              : e.intelligenceIndex != null
+                ? `II ${e.intelligenceIndex.toFixed(1)}`
+                : "—";
           return `<td class="pm-cell${passes ? "" : " dim"}"><span class="pm-cost">${fmtUsd(e.effectiveCost)}${estMark(e)}</span><span class="pm-score">${esc(scoreStr)}</span></td>`;
         })
         .join("");
@@ -382,7 +412,8 @@ function renderBarChart(rows, allResolved) {
 
   const maxCost = Math.max(...bars.map((b) => b.effectiveCost), 0.01);
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const benchMeta = activeBenchMeta();
+  const scoreKey = activeScoreKey();
 
   host.innerHTML = bars
     .map((r) => {
@@ -395,7 +426,7 @@ function renderBarChart(rows, allResolved) {
       const planName = cleanPlan(r);
       const planText = `${planName}${r.isPreliminary ? "*" : ""}${r.isApi ? "" : ` · ${feeText(r)}`}`;
       const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}${r.isApi ? "" : ` · ${esc(feeText(r))}`}`;
-      const note = `${benchMeta.label} ${fmtScore(r.score, state.benchKey)}`;
+      const note = `${benchMeta.label} ${fmtScore(r.score, scoreKey)}`;
       const expKey = `${r.id}`;
       const isExpanded = !r.isApi && state.expandedPlans.has(expKey);
       const expBtn = r.isApi
@@ -435,7 +466,8 @@ function renderTable(rows) {
     ? rows.filter((r) => `${r.modelDisplay} ${cleanPlan(r)} ${r.vendor || ""}`.toLowerCase().includes(q))
     : rows;
 
-  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const benchMeta = activeBenchMeta();
+  const scoreKey = activeScoreKey();
   const isTokens = state.costMode === "tokens";
 
   const cols = [
@@ -534,7 +566,7 @@ function renderTable(rows) {
     return `
       <tr${grouped ? ' class="grouped-item"' : ""}>
         <td>${nameCell}</td>
-        <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
+        <td class="num-col">${fmtScore(r.score, scoreKey)}</td>
         ${extraCells}
         <td class="num-col">${feeText(r)}</td>
         <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
@@ -586,7 +618,7 @@ function renderTable(rows) {
       html.push(`
         <tr class="group-row" data-group="${esc(pName)}">
           <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}${groupEst}</td>
-          <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, state.benchKey)}</td>
+          <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, scoreKey)}</td>
           ${extraSummary}
           <td class="num-col">${feeText(g.sample)}</td>
           <td class="num-col col-hide-sm">${subText}${groupEst}</td>
@@ -616,7 +648,13 @@ function renderTable(rows) {
 }
 
 function syncBenchSlider(resetDefault = false) {
-  const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const meta = activeBenchMeta();
+  const isIntel = state.suite === "intelligence";
+  $("benchSelect").hidden = !isIntel;
+  const suiteLabel = $("suiteBenchLabel");
+  suiteLabel.hidden = isIntel;
+  if (!isIntel) suiteLabel.textContent = meta.benchLabel || meta.label;
+
   const slider = $("minScore");
   slider.min = String(meta.min);
   slider.max = String(meta.max);
@@ -751,13 +789,14 @@ function renderExtraCriteria() {
 
 function render() {
   const isTokens = state.costMode === "tokens";
+  const suiteHead = (SUITE_META[state.suite] || SUITE_META.intelligence).heading;
   $("chartHeading").textContent = isTokens
-    ? "Best Real Cost per 1M Tokens"
-    : "Best Real Cost per Task";
+    ? `${suiteHead} per 1M Tokens`
+    : `${suiteHead} per Task`;
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
-  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
+  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, activeScoreKey())}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
@@ -869,6 +908,8 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 });
 
 $("resetSettingsBtn").addEventListener("click", () => {
+  state.costMode = "task";
+  state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
@@ -876,6 +917,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.showApi = false;
   state.openWeightsOnly = false;
   state.extraCriteria = [];
+  $("costMode").value = "task";
+  $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;
@@ -910,20 +953,26 @@ settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
 });
 
-document.querySelectorAll("button[data-cost-mode]").forEach((btn) => {
+document.querySelectorAll("button[data-suite]").forEach((btn) => {
   btn.addEventListener("click", () => {
-    const mode = btn.dataset.costMode;
-    if (!mode || mode === state.costMode) return;
-    state.costMode = mode;
-    state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
-    $("maxCost").value = "4";
-    document.querySelectorAll("button[data-cost-mode]").forEach((b) => {
-      const on = b.dataset.costMode === mode;
+    const next = btn.dataset.suite;
+    if (!next || next === state.suite || !SUITE_META[next]) return;
+    state.suite = next;
+    document.querySelectorAll("button[data-suite]").forEach((b) => {
+      const on = b.dataset.suite === next;
       b.classList.toggle("active", on);
       b.setAttribute("aria-pressed", String(on));
     });
+    syncBenchSlider(true);
     render();
   });
+});
+
+$("costMode").addEventListener("change", (e) => {
+  state.costMode = e.target.value;
+  state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
+  $("maxCost").value = "4";
+  render();
 });
 
 $("cheapestEffortOnly").addEventListener("change", (e) => {

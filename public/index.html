@@ -41,71 +41,75 @@
       </header>
 
       <main class="workspace">
-        <section class="filter-bar" aria-label="Filters">
-          <div class="filter-item">
-            <span class="filter-head">
-              <span class="bench-pick">
-                <span>Min</span>
-                <select id="benchSelect" class="select" aria-label="Benchmark domain or test">
-                  <optgroup label="Overall">
-                    <option value="intelligenceIndex" selected>Intelligence Index</option>
-                  </optgroup>
-                  <optgroup label="Domains">
-                    <option value="engineering">Engineering</option>
-                    <option value="financeAndAccounting">Finance &amp; Accounting</option>
-                    <option value="strategyAndOps">Strategy &amp; Ops</option>
-                    <option value="legal">Legal</option>
-                    <option value="healthcareAndMedical">Healthcare &amp; Medical</option>
-                    <option value="economics">Economics</option>
-                  </optgroup>
-                  <optgroup label="Tests">
-                    <option value="hle">Humanity's Last Exam</option>
-                    <option value="hleDiamond">Humanity's Last Exam (Diamond)</option>
-                    <option value="frontierCode20">FrontierCode 2.0</option>
-                    <option value="terminalBench40">Terminal-Bench 4.0</option>
-                    <option value="terminalBenchScience">Terminal-Bench Science</option>
-                    <option value="critptAgenticHard">CritPt Hard</option>
-                    <option value="automationBench">AutomationBench</option>
-                    <option value="omniscienceAccuracy">Omniscience Accuracy</option>
-                    <option value="gdpPdfAllPass">GDP PDF</option>
-                    <option value="lcr">Long Context (AA-LCR)</option>
-                    <option value="scicode">SciCode</option>
-                    <option value="gdpval">GDPval (Elo)</option>
-                  </optgroup>
-                  <optgroup label="Specs">
-                    <option value="contextWindow">Context Window</option>
-                    <option value="outputSpeed">Output Speed (tok/s)</option>
-                  </optgroup>
-                </select>
-              </span>
-              <strong id="minScoreOut" class="num">≥ 45</strong>
-            </span>
-            <input id="minScore" type="range" min="0" max="64" step="1" value="45" aria-label="Minimum benchmark score" />
-          </div>
-
-          <label class="filter-item">
-            <span class="filter-head">
-              <span>Monthly budget:</span>
-              <strong id="maxBudgetOut" class="num">Any</strong>
-            </span>
-            <input id="maxBudget" type="range" min="0" max="5" step="1" value="5" />
-          </label>
-
-          <label class="filter-item">
-            <span class="filter-head">
-              <span id="maxCostLabel">Max cost/task:</span>
-              <strong id="maxCostOut" class="num">≤ $5</strong>
-            </span>
-            <input id="maxCost" type="range" min="0" max="6" step="1" value="4" />
-          </label>
-
-          <div class="filter-actions">
-            <button id="settingsBtn" class="btn" type="button">
+        <section class="panel filter-panel" aria-label="Filters">
+          <div class="panel-head">
+            <h2>Filters</h2>
+            <button id="settingsBtn" class="btn btn-sm" type="button">
               <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               <span>Settings</span>
             </button>
           </div>
-          <div id="extraCriteria" class="extra-criteria" hidden></div>
+          <div class="filter-bar">
+            <div class="filter-item">
+              <span class="filter-head">
+                <span class="bench-pick">
+                  <span>Min</span>
+                  <select id="benchSelect" class="select" aria-label="Benchmark domain or test">
+                    <optgroup label="Overall">
+                      <option value="intelligenceIndex" selected>Intelligence Index</option>
+                    </optgroup>
+                    <optgroup label="Domains">
+                      <option value="engineering">Engineering</option>
+                      <option value="financeAndAccounting">Finance &amp; Accounting</option>
+                      <option value="strategyAndOps">Strategy &amp; Ops</option>
+                      <option value="legal">Legal</option>
+                      <option value="healthcareAndMedical">Healthcare &amp; Medical</option>
+                      <option value="economics">Economics</option>
+                    </optgroup>
+                    <optgroup label="Tests">
+                      <option value="hle">Humanity's Last Exam</option>
+                      <option value="hleDiamond">Humanity's Last Exam (Diamond)</option>
+                      <option value="frontierCode20">FrontierCode 2.0</option>
+                      <option value="terminalBench40">Terminal-Bench 4.0</option>
+                      <option value="terminalBenchScience">Terminal-Bench Science</option>
+                      <option value="critptAgenticHard">CritPt Hard</option>
+                      <option value="automationBench">AutomationBench</option>
+                      <option value="omniscienceAccuracy">Omniscience Accuracy</option>
+                      <option value="gdpPdfAllPass">GDP PDF</option>
+                      <option value="lcr">Long Context (AA-LCR)</option>
+                      <option value="scicode">SciCode</option>
+                      <option value="gdpval">GDPval (Elo)</option>
+                    </optgroup>
+                    <optgroup label="Specs">
+                      <option value="contextWindow">Context Window</option>
+                      <option value="outputSpeed">Output Speed (tok/s)</option>
+                    </optgroup>
+                  </select>
+                  <span id="suiteBenchLabel" class="suite-bench-label" hidden></span>
+                </span>
+                <strong id="minScoreOut" class="num filter-val">≥ 45</strong>
+              </span>
+              <input id="minScore" type="range" min="0" max="64" step="1" value="45" aria-label="Minimum benchmark score" />
+            </div>
+
+            <label class="filter-item">
+              <span class="filter-head">
+                <span>Monthly budget:</span>
+                <strong id="maxBudgetOut" class="num filter-val">Any</strong>
+              </span>
+              <input id="maxBudget" type="range" min="0" max="5" step="1" value="5" />
+            </label>
+
+            <label class="filter-item">
+              <span class="filter-head">
+                <span id="maxCostLabel">Max cost/task:</span>
+                <strong id="maxCostOut" class="num filter-val">≤ $5</strong>
+              </span>
+              <input id="maxCost" type="range" min="0" max="6" step="1" value="4" />
+            </label>
+
+            <div id="extraCriteria" class="extra-criteria" hidden></div>
+          </div>
         </section>
 
         <section class="panel" aria-label="Real cost bar chart">
@@ -116,9 +120,10 @@
                 <input id="cheapestEffortOnly" type="checkbox" checked />
                 <span id="effortToggleLabel">Cheapest applicable reasoning level only</span>
               </label>
-              <div class="seg-switch" role="group" aria-label="Cost metric">
-                <button type="button" class="seg-btn active" data-cost-mode="task" aria-pressed="true">Per task</button>
-                <button type="button" class="seg-btn" data-cost-mode="tokens" aria-pressed="false">Per 1M tokens</button>
+              <div class="seg-switch" role="group" aria-label="Benchmark suite">
+                <button type="button" class="seg-btn active" data-suite="intelligence" aria-pressed="true">Intelligence</button>
+                <button type="button" class="seg-btn" data-suite="codingAgent" aria-pressed="false">Coding Agent</button>
+                <button type="button" class="seg-btn" data-suite="deepSwe" aria-pressed="false">DeepSWE</button>
               </div>
             </div>
           </div>
@@ -159,6 +164,16 @@
         </div>
       </div>
       <div class="dialog-body settings-body">
+        <div class="settings-section">
+          <div class="settings-head-row">
+            <label class="settings-heading" for="costMode">Cost metric</label>
+            <select id="costMode" class="select" aria-label="Cost metric">
+              <option value="task" selected>Per task</option>
+              <option value="tokens">Per 1M tokens</option>
+            </select>
+          </div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-heading">Plan &amp; model filters</div>
           <div class="settings-checks">

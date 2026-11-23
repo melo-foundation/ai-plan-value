@@ -759,14 +759,22 @@ function extractBalancedJsonObject(text, openBraceIdx) {
 }
 
 /**
- * Parse multi-effort Artificial Analysis Intelligence Index + Cost per Task directly
- * from upstream Fei2411/real-api-pricing (derived/benchmark-configurations.csv).
+ * Parse multi-effort Artificial Analysis Intelligence Index, AA Coding Agent Index,
+ * and DeepSWE 1.1 configs + Cost per Task directly from upstream
+ * Fei2411/real-api-pricing (derived/benchmark-configurations.csv).
  */
 function parseFeiBenchConfigs(csvText, aaByNorm) {
   const rows = parseCsv(csvText);
   const byBase = new Map(); // baseSlug -> Map<effort, variantObj>
+  const suiteBoards = {
+    aa_coding_agent_index: "codingAgent",
+    deepswe_1_1: "deepSwe",
+  };
   let count = 0;
+  let codingAgentCount = 0;
+  let deepSweCount = 0;
 
+  // First pass: aa_intelligence_index
   for (const r of rows) {
     if (r.board !== "aa_intelligence_index") continue;
     const score = toNum(r.score);
@@ -813,6 +821,7 @@ function parseFeiBenchConfigs(csvText, aaByNorm) {
       benchmarks: isHeadlineEffort
         ? { ...aaHeadline.benchmarks, intelligenceIndex: round1(score) }
         : { intelligenceIndex: round1(score) },
+      suites: {},
       aaUrl: aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
       aaLive: Boolean(aaHeadline),
       isHeadline: Boolean(isHeadlineEffort),
@@ -825,7 +834,74 @@ function parseFeiBenchConfigs(csvText, aaByNorm) {
     });
     count++;
   }
-  return { count, byBase };
+
+  // Second pass: attach AA Coding Agent Index and DeepSWE 1.1 configs (creating variants if needed)
+  for (const r of rows) {
+    const suiteKey = suiteBoards[r.board];
+    if (!suiteKey) continue;
+    const score = toNum(r.score);
+    const cpt = toNum(r.mean_cost_usd_per_task);
+    if (score == null || cpt == null || cpt <= 0) continue;
+
+    const baseSlug = canonicalBaseSlug(r.model, aaByNorm);
+    const rawEff =
+      r.reasoning_effort ||
+      (/\(non-reasoning\)/i.test(r.variant || "") ? "none" : "default");
+    const effort = cleanEffort(rawEff);
+    const aaHeadline = resolveAaModel(r.model, aaByNorm);
+
+    let effMap = byBase.get(baseSlug);
+    if (!effMap) {
+      effMap = new Map();
+      byBase.set(baseSlug, effMap);
+    }
+    let existing = effMap.get(effort);
+    if (!existing) {
+      const effortSuffix = EFFORT_LABELS[effort];
+      const baseDisplay = (aaHeadline?.shortName || r.variant || r.model)
+        .replace(/^(?:Claude Code|Codex|Antigravity CLI|mini-swe-agent)\s*-\s*/i, "")
+        .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
+        .trim();
+      existing = {
+        variantKey: effortSuffix ? `${baseSlug}--${effort}` : baseSlug,
+        baseSlug,
+        effort,
+        effortLabel: effortSuffix,
+        displayName: effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay,
+        baseDisplay,
+        creatorName: aaHeadline?.creatorName || null,
+        creatorColor: aaHeadline?.creatorColor || null,
+        intelligenceIndex: null,
+        costPerTaskUsd: null,
+        benchmarks: {},
+        suites: {},
+        aaUrl: aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+        aaLive: Boolean(aaHeadline),
+        isHeadline: false,
+        pricing: aaHeadline?.pricing || null,
+        costPerTaskBreakdown: null,
+        totalIndexCostUsd: null,
+        speed: null,
+        isOpenWeights: Boolean(aaHeadline?.isOpenWeights),
+        contextWindowTokens: aaHeadline?.contextWindowTokens ?? null,
+      };
+      effMap.set(effort, existing);
+    }
+    if (!existing.suites) existing.suites = {};
+    // Keep highest-scoring config if multiple harnesses exist for same (model, effort)
+    const prevSuite = existing.suites[suiteKey];
+    if (!prevSuite || score > prevSuite.score) {
+      existing.suites[suiteKey] = {
+        score: round1(score),
+        costPerTaskUsd: Number(cpt.toFixed(4)),
+        harness: r.agent_harness || null,
+      };
+    }
+    if (suiteKey === "codingAgent") codingAgentCount++;
+    else deepSweCount++;
+  }
+
+  return { count, codingAgentCount, deepSweCount, byBase };
 }
 
 function extractCopilotAvailableModels(doc) {
@@ -1172,11 +1248,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
     for (const [eff, fv] of effMap.entries()) {
       let targetEff = eff;
-      if (eff === "default" && !target.has("default") && target.size > 0) {
+      if (eff === "default" && !target.has("default") && target.size > 0 && fv.intelligenceIndex != null) {
         for (const [existingEff, pv] of target.entries()) {
           if (
-            Math.abs((pv.intelligenceIndex ?? 0) - fv.intelligenceIndex) < 0.35 &&
-            Math.abs((pv.costPerTaskUsd ?? 0) - fv.costPerTaskUsd) < 0.02
+            pv.intelligenceIndex != null &&
+            Math.abs(pv.intelligenceIndex - fv.intelligenceIndex) < 0.35 &&
+            Math.abs((pv.costPerTaskUsd ?? 0) - (fv.costPerTaskUsd ?? 0)) < 0.02
           ) {
             targetEff = existingEff;
             break;
@@ -1188,12 +1265,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       target.set(targetEff, {
         ...pv,
         ...fv,
+        intelligenceIndex: fv.intelligenceIndex ?? pv?.intelligenceIndex ?? null,
+        costPerTaskUsd: fv.costPerTaskUsd ?? pv?.costPerTaskUsd ?? null,
         effort: targetEff,
         effortLabel: effSuffix,
         variantKey: effSuffix ? `${baseSlug}--${targetEff}` : baseSlug,
         displayName: effSuffix ? `${fv.baseDisplay} (${effSuffix})` : fv.baseDisplay,
         pricing: fv.pricing || pv?.pricing || null,
         benchmarks: { ...(pv?.benchmarks || {}), ...(fv.benchmarks || {}) },
+        suites: { ...(pv?.suites || {}), ...(fv.suites || {}) },
       });
     }
   }
@@ -1260,6 +1340,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     return best;
   }
 
+  function hasAnySuiteFor(modelId) {
+    const base = canonicalBaseSlug(modelId, aaByNorm);
+    const effMap = aaVariantsByBase.get(base);
+    if (!effMap) return false;
+    for (const v of effMap.values()) {
+      if (v.suites && (v.suites.codingAgent || v.suites.deepSwe)) return true;
+    }
+    return false;
+  }
+
   for (const r of feiRows) {
     const modelId = r.model;
     const billing = r.billing === "metered" ? "metered" : "subscription";
@@ -1271,8 +1361,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     const intelligenceIndex = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? feiAaIntel;
     const aaCostPerTaskUsd = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? feiAaCpt;
+    const hasAltSuite = hasAnySuiteFor(modelId);
 
-    if (intelligenceIndex === null || aaCostPerTaskUsd === null || aaCostPerTaskUsd <= 0) {
+    if ((intelligenceIndex === null || aaCostPerTaskUsd === null || aaCostPerTaskUsd <= 0) && !hasAltSuite) {
       continue;
     }
 
@@ -1367,9 +1458,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       realUsdPerMtok,
       listBlendedUsdPerMtok,
       subsidyMultiple: subsidyMultiple !== null ? Number(subsidyMultiple.toFixed(4)) : null,
-      intelligenceIndex: Number(intelligenceIndex.toFixed(2)),
+      intelligenceIndex: intelligenceIndex != null ? Number(intelligenceIndex.toFixed(2)) : null,
       benchmarks,
-      aaCostPerTaskUsd: Number(aaCostPerTaskUsd.toFixed(4)),
+      aaCostPerTaskUsd: aaCostPerTaskUsd != null ? Number(aaCostPerTaskUsd.toFixed(4)) : null,
       aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || null,
       aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? null,
       aaPricing: pricing,
@@ -1748,6 +1839,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           ? `${baseEntry.replacesId}@${v.effort}`
           : baseEntry.replacesId;
 
+      const hasSuites = v.suites && (v.suites.codingAgent || v.suites.deepSwe);
+      const vIntel = v.intelligenceIndex != null ? Number(v.intelligenceIndex.toFixed(2)) : null;
+      const vCpt = v.costPerTaskUsd != null && v.costPerTaskUsd > 0 ? Number(v.costPerTaskUsd.toFixed(4)) : null;
+      if ((vIntel == null || vCpt == null) && !hasSuites) continue;
+
       expandedEntries.push({
         ...baseEntry,
         id: effId,
@@ -1758,12 +1854,13 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         modelDisplay: v.displayName,
         aaUrl: v.aaUrl || baseEntry.aaUrl,
         aaLive: v.aaLive || baseEntry.aaLive,
-        intelligenceIndex: Number(v.intelligenceIndex.toFixed(2)),
+        intelligenceIndex: vIntel,
         benchmarks: {
           ...(baseEntry.benchmarks && v.isHeadline ? baseEntry.benchmarks : {}),
           ...v.benchmarks,
         },
-        aaCostPerTaskUsd: Number(v.costPerTaskUsd.toFixed(4)),
+        suites: hasSuites ? v.suites : null,
+        aaCostPerTaskUsd: vCpt,
         aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
         aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
         aaPricing: baseEntry.aaPricing?.blended3to1Per1M != null ? baseEntry.aaPricing : (v.pricing || baseEntry.aaPricing || null),
@@ -1772,8 +1869,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   }
 
   expandedEntries.sort((a, b) => {
-    const effA = a.unmetered ? 0 : a.aaCostPerTaskUsd / (a.subsidyMultiple || 1);
-    const effB = b.unmetered ? 0 : b.aaCostPerTaskUsd / (b.subsidyMultiple || 1);
+    const cptA = a.aaCostPerTaskUsd ?? a.suites?.codingAgent?.costPerTaskUsd ?? a.suites?.deepSwe?.costPerTaskUsd ?? 1e9;
+    const cptB = b.aaCostPerTaskUsd ?? b.suites?.codingAgent?.costPerTaskUsd ?? b.suites?.deepSwe?.costPerTaskUsd ?? 1e9;
+    const effA = a.unmetered ? 0 : cptA / (a.subsidyMultiple || 1);
+    const effB = b.unmetered ? 0 : cptB / (b.subsidyMultiple || 1);
     return effA - effB;
   });
 
