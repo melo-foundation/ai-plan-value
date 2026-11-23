@@ -44,8 +44,12 @@ const MODEL_ALIASES = {
   "kimi-k3-1": "kimi-k3-1-pro",
   "qwen-4-max": "qwen4-max",
   "qwen-3-8-27b": "qwen3-8-27b",
+  "qwen3-8-max": "qwen-3-8-max",
+  "qwen3-8-flash": "qwen-3-8-flash",
   "aa-muse-wonder": "muse-wonder",
   "aa-muse-ember": "muse-ember",
+  "aa-step-5": "step-5-preview",
+  "minimax-m3-1": "minimax-m3-1-flash",
   "gemini-4": "gemini-4-argon",
 };
 
@@ -1078,16 +1082,28 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const ollamaHostedSlugs = new Set();
   let latestFeiDate = "";
 
+  function bestPriorsVariantFor(modelId) {
+    const base = canonicalBaseSlug(modelId, aaByNorm);
+    const effMap = priorsParsed.aaVariantsByBase.get(base);
+    if (!effMap || effMap.size === 0) return null;
+    let best = null;
+    for (const v of effMap.values()) {
+      if (!best || (v.intelligenceIndex ?? 0) > (best.intelligenceIndex ?? 0)) best = v;
+    }
+    return best;
+  }
+
   for (const r of feiRows) {
     const modelId = r.model;
     const billing = r.billing === "metered" ? "metered" : "subscription";
     const aaModel = resolveAaModel(modelId, aaByNorm);
+    const priorsVar = !aaModel ? bestPriorsVariantFor(modelId) : null;
 
     const feiAaIntel = toNum(r.aa_intelligence_index__score);
     const feiAaCpt = toNum(r.aa_intelligence_index__mean_cost_usd_per_task);
 
-    const intelligenceIndex = aaModel?.intelligenceIndex ?? feiAaIntel;
-    const aaCostPerTaskUsd = aaModel?.costPerTaskUsd ?? feiAaCpt;
+    const intelligenceIndex = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? feiAaIntel;
+    const aaCostPerTaskUsd = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? feiAaCpt;
 
     if (intelligenceIndex === null || aaCostPerTaskUsd === null || aaCostPerTaskUsd <= 0) {
       continue;
@@ -1115,7 +1131,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       continue;
     }
 
-    const aaSlug = aaModel?.slug || normSlug(modelId);
+    const aaSlug = aaModel?.slug || priorsVar?.baseSlug || canonicalBaseSlug(modelId, aaByNorm);
     if (billing === "metered") coveredMeteredAaSlugs.add(aaSlug);
 
     const planName = normalizePlanName(r.plan_en || r.plan || "");
@@ -1257,6 +1273,59 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     coveredMeteredAaSlugs.add(aaModel.slug);
   }
 
+  // Also ensure every Priors AA multi-effort model with AA Cost/Task has a Metered API (1x) baseline
+  for (const [baseSlug, effMap] of priorsParsed.aaVariantsByBase.entries()) {
+    if (coveredMeteredAaSlugs.has(baseSlug)) continue;
+    const best = bestPriorsVariantFor(baseSlug);
+    if (!best || best.intelligenceIndex == null || best.costPerTaskUsd == null || best.costPerTaskUsd <= 0) {
+      continue;
+    }
+    const creator = best.creatorName || "Other";
+    const entry = {
+      id: `aa-metered::${baseSlug}`,
+      origin: "artificial-analysis",
+      isPreliminary: false,
+      estimateType: null,
+      replacesId: null,
+      billing: "metered",
+      vendor: creator,
+      modelCreator: creator,
+      color: vendorColor(creator, best),
+      plan: "Pay-as-you-go API",
+      planLocal: "Pay-as-you-go API",
+      planUrl: resolvePlanUrl("Pay-as-you-go API", creator, "metered"),
+      isOffPeak: false,
+      unmetered: false,
+      modelId: baseSlug,
+      modelDisplay: best.baseDisplay || baseSlug,
+      aaVariant: best.displayName,
+      aaLive: best.aaLive,
+      aaUrl: best.aaUrl,
+      isOpenWeights: best.isOpenWeights,
+      contextWindowTokens: best.contextWindowTokens,
+      priceUsd: null,
+      monthlyTokens: null,
+      realUsdPerMtok: null,
+      listBlendedUsdPerMtok: null,
+      subsidyMultiple: 1,
+      intelligenceIndex: Number(best.intelligenceIndex.toFixed(2)),
+      benchmarks: best.benchmarks || { intelligenceIndex: round1(best.intelligenceIndex) },
+      aaCostPerTaskUsd: Number(best.costPerTaskUsd.toFixed(4)),
+      aaCostPerTaskBreakdown: best.costPerTaskBreakdown,
+      aaTotalIndexCostUsd: best.totalIndexCostUsd,
+      aaPricing: best.pricing,
+      aaSpeed: best.speed,
+      confidence: "high",
+      dataDate: priorsParsed.date || nowIso.slice(0, 10),
+      sourceNote: "Artificial Analysis (via Priors snapshot)",
+      decisionNote: "Direct first-party API list pricing (1.0× baseline).",
+      preliminary: null,
+    };
+    entries.push(entry);
+    if (!modelInfoBySlug.has(baseSlug)) modelInfoBySlug.set(baseSlug, entry);
+    coveredMeteredAaSlugs.add(baseSlug);
+  }
+
   // Layer entries from adamholter/priors raw-GitHub snapshot (preliminary, assumed, and extra modeled plans)
   let prelimCount = 0;
   let assumedCount = 0;
@@ -1265,12 +1334,13 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   for (const item of priorsParsed.items) {
     const aaModel = resolveAaModel(item.modelId, aaByNorm);
-    const fallbackModel = !aaModel ? modelInfoBySlug.get(normSlug(item.modelId)) : null;
-    const intel = aaModel?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-    const cpt = aaModel?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+    const priorsVar = !aaModel ? bestPriorsVariantFor(item.modelId) : null;
+    const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(canonicalBaseSlug(item.modelId, aaByNorm)) : null;
+    const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+    const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
     if (intel === null || cpt === null || cpt <= 0) continue;
 
-    const aaSlug = aaModel?.slug || fallbackModel.modelId;
+    const aaSlug = aaModel?.slug || priorsVar?.baseSlug || fallbackModel.modelId;
     const planSlug = normSlug(item.plan);
     const dedupeKey = `${planSlug}::${aaSlug}`;
     if (priorsSeen.has(dedupeKey)) continue;
@@ -1278,7 +1348,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     if (/^ollama\b/i.test(item.plan)) ollamaHostedSlugs.add(aaSlug);
 
-    const sellerVendor = vendorFromPlan(item.plan, aaModel?.creatorName || fallbackModel?.modelCreator);
+    const sellerVendor = vendorFromPlan(item.plan, aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator);
     const existingId =
       feiSubIndex.get(dedupeKey) ||
       (item.feeUsd !== null
@@ -1304,7 +1374,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     const isEstimated = item.isPrelim || item.isAssumed;
     const replacesId = item.isPrelim ? existingId : null;
-    const creator = aaModel?.creatorName || fallbackModel?.modelCreator || sellerVendor;
+    const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
 
     entries.push({
       id: `${origin}::${planSlug}::${aaSlug}`,
@@ -1315,17 +1385,17 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       billing: "subscription",
       vendor: sellerVendor,
       modelCreator: creator,
-      color: vendorColor(creator, aaModel),
+      color: vendorColor(creator, aaModel || priorsVar),
       plan: item.plan,
       planLocal: item.planRaw,
       planUrl: resolvePlanUrl(item.plan, sellerVendor, "subscription"),
       isOffPeak: /off-?peak/i.test(item.plan),
       unmetered: false,
       modelId: aaSlug,
-      modelDisplay: aaModel?.shortName || fallbackModel?.modelDisplay || item.modelName,
-      aaVariant: aaModel?.name || fallbackModel?.aaVariant || null,
+      modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || item.modelName,
+      aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
       aaLive: Boolean(aaModel),
-      aaUrl: aaModel?.sourceUrl || fallbackModel?.aaUrl || "https://artificialanalysis.ai/models#price-cost",
+      aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || "https://artificialanalysis.ai/models#price-cost",
       isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
       contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
       priceUsd: item.feeUsd,
@@ -1334,7 +1404,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       listBlendedUsdPerMtok: item.blendedList,
       subsidyMultiple: Number(item.multiple.toFixed(4)),
       intelligenceIndex: Number(intel.toFixed(2)),
-      benchmarks: aaModel?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
+      benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
       aaCostPerTaskUsd: Number(cpt.toFixed(4)),
       aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
       aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
@@ -1354,15 +1424,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const seenSlugs = new Set();
     for (const modelSlug of tier.availableModels) {
       const aaModel = resolveAaModel(modelSlug, aaByNorm);
-      const fallbackModel = !aaModel ? modelInfoBySlug.get(normSlug(modelSlug)) : null;
-      const intel = aaModel?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-      const cpt = aaModel?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+      const priorsVar = !aaModel ? bestPriorsVariantFor(modelSlug) : null;
+      const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(canonicalBaseSlug(modelSlug, aaByNorm)) : null;
+      const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+      const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
       if (intel === null || cpt === null || cpt <= 0) continue;
 
-      const aaSlug = aaModel?.slug || fallbackModel.modelId;
+      const aaSlug = aaModel?.slug || priorsVar?.baseSlug || fallbackModel.modelId;
       if (seenSlugs.has(aaSlug)) continue;
       seenSlugs.add(aaSlug);
-      const creator = aaModel?.creatorName || fallbackModel?.modelCreator || "GitHub";
+      const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || "GitHub";
 
       copilotEntryCount++;
       entries.push({
@@ -1413,12 +1484,13 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   for (const tier of ollamaTiers) {
     for (const aaSlug of ollamaHostedSlugs) {
       const aaModel = aaByNorm.get(aaSlug);
-      const fallbackModel = !aaModel ? modelInfoBySlug.get(aaSlug) : null;
-      const intel = aaModel?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-      const cpt = aaModel?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+      const priorsVar = !aaModel ? bestPriorsVariantFor(aaSlug) : null;
+      const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(aaSlug) : null;
+      const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+      const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
       if (intel === null || cpt === null || cpt <= 0) continue;
 
-      const creator = aaModel?.creatorName || fallbackModel?.modelCreator || "Ollama";
+      const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || "Ollama";
       ollamaTeamEntryCount++;
       entries.push({
         id: `first-party::${normSlug(tier.plan)}::${aaSlug}`,
