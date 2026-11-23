@@ -684,6 +684,9 @@ function render() {
   $("chartHeading").textContent = isTokens
     ? "Best Real Cost per 1M Tokens"
     : "Best Real Cost per Task";
+  $("effortToggleLabel").textContent = isTokens
+    ? "Highest-scoring reasoning level only"
+    : "Cheapest applicable reasoning level only";
   $("minScoreOut").textContent = fmtThreshold(state.minScore, state.benchKey);
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
