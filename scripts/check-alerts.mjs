@@ -131,12 +131,13 @@ async function loadPreviousDataset() {
 function summarizeModels(dataset) {
   const map = new Map();
   for (const e of dataset?.entries || []) {
-    const existing = map.get(e.modelId);
+    const key = e.baseModelId || e.modelId;
+    const existing = map.get(key);
     const hasSub = e.billing === "subscription";
     if (!existing) {
-      map.set(e.modelId, {
-        modelId: e.modelId,
-        modelDisplay: e.modelDisplay,
+      map.set(key, {
+        modelId: key,
+        modelDisplay: String(e.modelDisplay || key).replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning)\)\s*$/i, ""),
         creator: e.modelCreator || e.vendor,
         intelligenceIndex: e.intelligenceIndex,
         aaCostPerTaskUsd: e.aaCostPerTaskUsd,
@@ -145,8 +146,12 @@ function summarizeModels(dataset) {
         aaLive: e.aaLive,
         subscriptionCount: hasSub ? 1 : 0,
       });
-    } else if (hasSub) {
-      existing.subscriptionCount += 1;
+    } else {
+      if ((e.intelligenceIndex ?? 0) > (existing.intelligenceIndex ?? 0)) {
+        existing.intelligenceIndex = e.intelligenceIndex;
+        existing.aaCostPerTaskUsd = e.aaCostPerTaskUsd;
+      }
+      if (hasSub) existing.subscriptionCount += 1;
     }
   }
   return map;

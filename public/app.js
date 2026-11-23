@@ -144,11 +144,13 @@ function getFilteredRows() {
 function renderBarChart(rows) {
   const host = $("barChart");
 
+  // One bar per base model: automatically picks the cheapest (effort + plan) combo that clears your min score & budget
   const bestByModel = new Map();
   for (const r of rows) {
-    const prev = bestByModel.get(r.modelId);
+    const groupKey = r.baseModelId || r.modelId;
+    const prev = bestByModel.get(groupKey);
     if (!prev || r.effectiveCost < prev.effectiveCost) {
-      bestByModel.set(r.modelId, r);
+      bestByModel.set(groupKey, r);
     }
   }
 

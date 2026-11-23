@@ -39,13 +39,54 @@ const MODEL_ALIASES = {
   hy4: "tencent-hy4",
   "hy-4": "tencent-hy4",
   "deepseek-v4-1-flash": "deepseek-v4-1-flash-1017",
+  "deepseek-v4-pro": "deepseek-v4-pro-0813",
   "ling-3-1-flash-1019": "ling-3-1-flash",
   "kimi-k3-1": "kimi-k3-1-pro",
   "qwen-4-max": "qwen4-max",
   "qwen-3-8-27b": "qwen3-8-27b",
   "aa-muse-wonder": "muse-wonder",
+  "aa-muse-ember": "muse-ember",
   "gemini-4": "gemini-4-argon",
 };
+
+const PRIORS_BENCH_TO_KEY = {
+  "aa-intelligence-index-v5.0.1": "intelligenceIndex",
+  "aa-humanitys-last-exam": "hle",
+  "aa-hle-diamond": "hleDiamond",
+  "aa-frontiercode-2-0": "frontierCode20",
+  "aa-terminalbench-v4-0": "terminalBench40",
+  "aa-terminalbench-science": "terminalBenchScience",
+  "aa-critpt-v2-hard": "critptAgenticHard",
+  "aa-automationbench-aa": "automationBench",
+  "aa-omniscience-v1-1-accuracy": "omniscienceAccuracy",
+  "aa-gdp-pdf": "gdpPdfAllPass",
+  "aa-artificial-analysis-long-context-reasoning": "lcr",
+  "aa-scicode": "scicode",
+  "aa-gdpval-aa": "gdpval",
+};
+
+const EFFORT_LABELS = {
+  none: "non-reasoning",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max",
+  default: "",
+};
+
+function cleanEffort(rawEffort) {
+  const base = String(rawEffort || "default").split("~")[0].toLowerCase().trim();
+  return EFFORT_LABELS[base] !== undefined ? base : "default";
+}
+
+function canonicalBaseSlug(modelId, aaByNorm) {
+  const norm = normSlug(modelId);
+  if (aaByNorm.has(norm)) return aaByNorm.get(norm).slug;
+  const alias = MODEL_ALIASES[norm];
+  if (alias && aaByNorm.has(alias)) return aaByNorm.get(alias).slug;
+  return alias || norm;
+}
 
 const VENDOR_COLORS = {
   Anthropic: "#C96A4A",
@@ -432,28 +473,175 @@ function parseAaApiV2(json) {
 
 /**
  * Parse adamholter/priors raw-GitHub snapshot (latest.json.gz).
- * Extracts all `subscription-token-price` (model, plan) entries with exact blended multiples.
+ * Extracts:
+ *   1. All `subscription-token-price` (model, plan) entries with exact blended multiples
+ *      (properly applying `sameAs` listPrice and `poolRate` multipliers).
+ *   2. All multi-effort Artificial Analysis `(model, effort)` variants with
+ *      AA Intelligence Index v5.0.1, AA Cost per Task, and per-variant test scores.
  */
 function parsePriorsSnapshot(snapshot, aaByNorm) {
   const modelsById = new Map();
   for (const m of snapshot.models || []) {
     modelsById.set(m.id, m);
   }
+  const labsById = new Map();
+  for (const l of snapshot.labs || []) {
+    labsById.set(l.id, l);
+  }
+  const variantsById = new Map();
+  for (const v of snapshot.variants || []) {
+    variantsById.set(v.id, v);
+  }
 
+  // First pass: collect listPrice & mix by modelId so `sameAs` rows resolve accurately
+  const subDetailsByModel = new Map();
+  for (const obs of snapshot.observations || []) {
+    if (obs.benchmarkId !== "subscription-token-price") continue;
+    const modelId = String(obs.variantId || "").split("@")[0];
+    const det = obs.details || {};
+    if (det.listPrice) {
+      subDetailsByModel.set(modelId, det);
+    }
+  }
+
+  // Second pass: collect all AA multi-effort variants (intelligence + costPerTask + tests)
+  const variantObs = new Map(); // variantId -> { intel, cpt, benchmarks }
+  for (const obs of snapshot.observations || []) {
+    const bid = obs.benchmarkId;
+    const vid = obs.variantId;
+    if (!vid) continue;
+    if (bid === "aa-cost-per-task-index" || PRIORS_BENCH_TO_KEY[bid]) {
+      let rec = variantObs.get(vid);
+      if (!rec) {
+        rec = { cpt: null, benchmarks: {} };
+        variantObs.set(vid, rec);
+      }
+      if (bid === "aa-cost-per-task-index") {
+        rec.cpt = toNum(obs.value);
+      } else {
+        const key = PRIORS_BENCH_TO_KEY[bid];
+        rec.benchmarks[key] = round1(obs.value);
+      }
+    }
+  }
+
+  // Group multi-effort AA variants by canonical base model slug
+  const aaVariantsByBase = new Map(); // baseSlug -> Map<effort, variantObj>
+  for (const [vid, rec] of variantObs.entries()) {
+    const intel = rec.benchmarks.intelligenceIndex;
+    if (intel == null || rec.cpt == null || rec.cpt <= 0) continue;
+
+    const [rawModelId, rawEffort] = vid.split("@");
+    const effort = cleanEffort(rawEffort);
+    const baseSlug = canonicalBaseSlug(rawModelId, aaByNorm);
+    const aaHeadline = resolveAaModel(rawModelId, aaByNorm);
+    const modelMeta = modelsById.get(rawModelId);
+    const labMeta = modelMeta?.labId ? labsById.get(modelMeta.labId) : null;
+    const vMeta = variantsById.get(vid);
+
+    let effortMap = aaVariantsByBase.get(baseSlug);
+    if (!effortMap) {
+      effortMap = new Map();
+      aaVariantsByBase.set(baseSlug, effortMap);
+    }
+    // Avoid overwriting a cleaner variant with a preview ~hash duplicate
+    if (effortMap.has(effort) && String(rawEffort || "").includes("~")) continue;
+
+    const baseDisplay = (aaHeadline?.shortName || modelMeta?.name || rawModelId)
+      .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
+      .trim();
+    const effortSuffix = EFFORT_LABELS[effort];
+    const displayName = effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay;
+
+    // Attach live AA domain capabilities when this variant matches AA's headline variant
+    const isHeadlineEffort =
+      aaHeadline &&
+      aaHeadline.intelligenceIndex != null &&
+      Math.abs(aaHeadline.intelligenceIndex - intel) < 0.35 &&
+      aaHeadline.costPerTaskUsd != null &&
+      Math.abs(aaHeadline.costPerTaskUsd - rec.cpt) < 0.05;
+
+    const mergedBenchmarks = isHeadlineEffort
+      ? { ...rec.benchmarks, ...aaHeadline.benchmarks }
+      : { ...rec.benchmarks };
+
+    effortMap.set(effort, {
+      variantKey: effortSuffix ? `${baseSlug}--${effort}` : baseSlug,
+      baseSlug,
+      effort,
+      effortLabel: effortSuffix,
+      displayName,
+      baseDisplay,
+      creatorName: aaHeadline?.creatorName || labMeta?.name || null,
+      creatorColor: aaHeadline?.creatorColor || null,
+      intelligenceIndex: intel,
+      costPerTaskUsd: rec.cpt,
+      benchmarks: mergedBenchmarks,
+      aaUrl: vMeta?.sourceModel?.url || aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+      aaLive: Boolean(aaHeadline),
+      isHeadline: Boolean(isHeadlineEffort),
+      pricing: aaHeadline?.pricing || null,
+      costPerTaskBreakdown: isHeadlineEffort ? aaHeadline.costPerTaskBreakdown : null,
+      totalIndexCostUsd: isHeadlineEffort ? aaHeadline.totalIndexCostUsd : null,
+      speed: isHeadlineEffort ? aaHeadline.speed : null,
+      isOpenWeights: Boolean(aaHeadline?.isOpenWeights),
+      contextWindowTokens: aaHeadline?.contextWindowTokens ?? null,
+    });
+  }
+
+  // Ensure every live AA headline model is represented even if not yet in Priors snapshot
+  for (const aaModel of aaByNorm.values()) {
+    if (aaModel.intelligenceIndex == null || aaModel.costPerTaskUsd == null || aaModel.costPerTaskUsd <= 0) {
+      continue;
+    }
+    let effortMap = aaVariantsByBase.get(aaModel.slug);
+    if (!effortMap) {
+      effortMap = new Map();
+      aaVariantsByBase.set(aaModel.slug, effortMap);
+    }
+    const alreadyHasHeadline = [...effortMap.values()].some((v) => v.isHeadline);
+    if (!alreadyHasHeadline) {
+      const mEff = String(aaModel.name || "").match(/\((max|xhigh|high|medium|low)/i);
+      const effort = mEff ? mEff[1].toLowerCase() : "default";
+      const effortSuffix = EFFORT_LABELS[effort] || "";
+      const baseDisplay = (aaModel.shortName || aaModel.name)
+        .replace(/\s*\((?:max|xhigh|high|medium|low|default fallback)[^)]*\)\s*$/i, "")
+        .trim();
+      effortMap.set(effort, {
+        variantKey: effortSuffix ? `${aaModel.slug}--${effort}` : aaModel.slug,
+        baseSlug: aaModel.slug,
+        effort,
+        effortLabel: effortSuffix,
+        displayName: effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay,
+        baseDisplay,
+        creatorName: aaModel.creatorName,
+        creatorColor: aaModel.creatorColor,
+        intelligenceIndex: Number(aaModel.intelligenceIndex.toFixed(2)),
+        costPerTaskUsd: aaModel.costPerTaskUsd,
+        benchmarks: aaModel.benchmarks,
+        aaUrl: aaModel.sourceUrl,
+        aaLive: true,
+        isHeadline: true,
+        pricing: aaModel.pricing,
+        costPerTaskBreakdown: aaModel.costPerTaskBreakdown,
+        totalIndexCostUsd: aaModel.totalIndexCostUsd,
+        speed: aaModel.speed,
+        isOpenWeights: aaModel.isOpenWeights,
+        contextWindowTokens: aaModel.contextWindowTokens,
+      });
+    }
+  }
+
+  // Third pass: extract subscription-token-price items with exact sameAs + poolRate math
   const out = [];
   for (const obs of snapshot.observations || []) {
     if (obs.benchmarkId !== "subscription-token-price") continue;
     const modelId = String(obs.variantId || "").split("@")[0];
     const det = obs.details || {};
-    const aaModel = resolveAaModel(modelId, aaByNorm);
-    const lp = det.listPrice || (aaModel?.pricing
-      ? {
-          cached: aaModel.pricing.cacheHitPer1M ?? (aaModel.pricing.inputPer1M != null ? aaModel.pricing.inputPer1M * 0.1 : 0),
-          input: aaModel.pricing.inputPer1M ?? 0,
-          output: aaModel.pricing.outputPer1M ?? 0,
-        }
-      : {});
-    const mix = det.mix || { cache: 0.97, input: 0.025, output: 0.005 };
+    const sameAsDet = det.sameAs ? subDetailsByModel.get(det.sameAs) : null;
+    const lp = det.listPrice || sameAsDet?.listPrice || {};
+    const mix = det.mix || sameAsDet?.mix || { cache: 0.97, input: 0.025, output: 0.005 };
+    const poolRate = toNum(det.poolRate) || 1;
 
     const cacheWritePrice =
       lp.cacheWrite != null ? Number(lp.cacheWrite) : Number(lp.input || 0) * 1.25;
@@ -469,10 +657,11 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
     const modelMeta = modelsById.get(modelId);
 
     for (const p of det.plans || []) {
-      const usdPerMtok = toNum(p.usdPerMtok);
+      const rawUsdPerMtok = toNum(p.usdPerMtok);
       const feeUsd = toNum(p.feeUsd);
-      if (!usdPerMtok || usdPerMtok <= 0) continue;
+      if (!rawUsdPerMtok || rawUsdPerMtok <= 0) continue;
 
+      const usdPerMtok = rawUsdPerMtok * poolRate;
       const multiple = blendedList / usdPerMtok;
       if (!Number.isFinite(multiple) || multiple <= 0) continue;
 
@@ -496,7 +685,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
       });
     }
   }
-  return { date: snapshot.date || null, items: out };
+  return { date: snapshot.date || null, items: out, aaVariantsByBase };
 }
 
 function extractBalancedJsonObject(text, openBraceIdx) {
@@ -819,7 +1008,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   }
 
   // 3. Parse adamholter/priors raw-GitHub gzip snapshot
-  let priorsParsed = { date: null, items: [] };
+  let priorsParsed = { date: null, items: [], aaVariantsByBase: new Map() };
   if (priorsGzBuf) {
     try {
       const rawJson = zlib.gunzipSync(priorsGzBuf).toString("utf8");
@@ -828,7 +1017,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceStatus.priorsRepo.fetchedAt = nowIso;
       sourceStatus.priorsRepo.itemCount = priorsParsed.items.length;
       sourceStatus.priorsRepo.snapshotDate = priorsParsed.date;
-      log(`Parsed ${priorsParsed.items.length} plan×model entries from adamholter/priors (${priorsParsed.date})`);
+      const totalVariants = [...priorsParsed.aaVariantsByBase.values()].reduce((s, m) => s + m.size, 0);
+      log(
+        `Parsed ${priorsParsed.items.length} plan×model entries and ${totalVariants} multi-effort AA variants from adamholter/priors (${priorsParsed.date})`
+      );
     } catch (err) {
       sourceStatus.priorsRepo.error = err.message;
       log("Priors snapshot parse error:", err.message);
@@ -1271,30 +1463,81 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  entries.sort((a, b) => {
+  // Expand base-model entries across all Artificial Analysis reasoning effort variants (low/medium/high/xhigh/max)
+  const expandedEntries = [];
+  const seenExpandedIds = new Set();
+  for (const baseEntry of entries) {
+    const effortMap = priorsParsed.aaVariantsByBase.get(baseEntry.modelId);
+    if (!effortMap || effortMap.size === 0) {
+      const e = {
+        ...baseEntry,
+        baseModelId: baseEntry.modelId,
+        effort: "default",
+      };
+      if (!seenExpandedIds.has(e.id)) {
+        seenExpandedIds.add(e.id);
+        expandedEntries.push(e);
+      }
+      continue;
+    }
+
+    for (const v of effortMap.values()) {
+      const effId = v.effortLabel ? `${baseEntry.id}@${v.effort}` : baseEntry.id;
+      if (seenExpandedIds.has(effId)) continue;
+      seenExpandedIds.add(effId);
+
+      const replacesId =
+        baseEntry.replacesId && v.effortLabel
+          ? `${baseEntry.replacesId}@${v.effort}`
+          : baseEntry.replacesId;
+
+      expandedEntries.push({
+        ...baseEntry,
+        id: effId,
+        replacesId,
+        baseModelId: baseEntry.modelId,
+        modelId: v.variantKey,
+        effort: v.effort,
+        modelDisplay: v.displayName,
+        aaUrl: v.aaUrl || baseEntry.aaUrl,
+        aaLive: v.aaLive || baseEntry.aaLive,
+        intelligenceIndex: Number(v.intelligenceIndex.toFixed(2)),
+        benchmarks: {
+          ...(baseEntry.benchmarks && v.isHeadline ? baseEntry.benchmarks : {}),
+          ...v.benchmarks,
+        },
+        aaCostPerTaskUsd: Number(v.costPerTaskUsd.toFixed(4)),
+        aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
+        aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
+      });
+    }
+  }
+
+  expandedEntries.sort((a, b) => {
     const effA = a.unmetered ? 0 : a.aaCostPerTaskUsd / (a.subsidyMultiple || 1);
     const effB = b.unmetered ? 0 : b.aaCostPerTaskUsd / (b.subsidyMultiple || 1);
     return effA - effB;
   });
 
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: nowIso,
     latestDataDate: latestFeiDate || priorsParsed.date || nowIso.slice(0, 10),
     sources: sourceStatus,
     stats: {
-      totalEntries: entries.length,
-      subscriptions: entries.filter((e) => e.billing === "subscription").length,
-      meteredApis: entries.filter((e) => e.billing === "metered").length,
+      totalEntries: expandedEntries.length,
+      subscriptions: expandedEntries.filter((e) => e.billing === "subscription").length,
+      meteredApis: expandedEntries.filter((e) => e.billing === "metered").length,
       priorsPreliminary: prelimCount,
       priorsAssumed: assumedCount,
       priorsExtraMeasured: priorsExtraCount,
       githubCopilotEntries: copilotEntryCount,
       ollamaTeamEntries: ollamaTeamEntryCount,
-      uniqueModels: new Set(entries.map((e) => e.modelId)).size,
+      uniqueModels: new Set(expandedEntries.map((e) => e.baseModelId)).size,
+      uniqueVariants: new Set(expandedEntries.map((e) => e.modelId)).size,
       liveAaModels: aaByNorm.size,
     },
-    entries,
+    entries: expandedEntries,
   };
 
   fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
@@ -1303,7 +1546,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   fs.renameSync(tmpPath, OUTPUT_PATH);
 
   log(
-    `Wrote ${OUTPUT_PATH} (${payload.stats.totalEntries} entries: ${payload.stats.subscriptions} subs [incl. ${copilotEntryCount} Copilot + ${ollamaTeamEntryCount} Ollama Team], ${payload.stats.meteredApis} APIs across ${payload.stats.uniqueModels} models)`
+    `Wrote ${OUTPUT_PATH} (${payload.stats.totalEntries} entries across ${payload.stats.uniqueVariants} effort variants / ${payload.stats.uniqueModels} base models)`
   );
   return payload;
 }
