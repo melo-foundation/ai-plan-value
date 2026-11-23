@@ -178,8 +178,10 @@ async function main() {
     for (const [key, src] of Object.entries(current.sources || {})) {
       const empty =
         (key === "fei2411" && !src.rowCount) ||
+        (key === "priorsRepo" && !src.itemCount) ||
         (key === "artificialAnalysis" && !src.modelCount) ||
-        (key === "mypriors" && !src.sellerCount);
+        (key === "githubCopilot" && !src.tierCount) ||
+        (key === "ollamaCloud" && !src.tierCount);
       if (!src.ok || empty) {
         failedSources.push({
           name: src.name || key,
