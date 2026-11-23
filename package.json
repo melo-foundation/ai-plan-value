@@ -1,0 +1,13 @@
+{
+  "name": "ai-plan-value",
+  "version": "1.0.0",
+  "description": "True AI subscription value: combines Fei2411/real-api-pricing (the upstream source behind mypriors.com/subsidies) with live Artificial Analysis #price-cost data, auto-updating.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "refresh": "node scripts/refresh-data.mjs"
+  }
+}

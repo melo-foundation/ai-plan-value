@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Plan Value</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="titlebar">
+        <div class="titlebar-left">
+          <h1>AI Plan Value</h1>
+        </div>
+        <div class="titlebar-right">
+          <span id="updatedAt" class="stamp">Loading…</span>
+          <button id="methodBtn" class="btn" type="button">Methodology</button>
+          <button id="refreshBtn" class="btn" type="button" hidden>Refresh</button>
+          <button id="themeBtn" class="btn" type="button">Dark</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="filter-bar" aria-label="Filters">
+          <label class="filter-item">
+            <span class="filter-head">
+              <span>Minimum intelligence:</span>
+              <strong id="minIntelOut" class="num">45</strong>
+            </span>
+            <input id="minIntel" type="range" min="0" max="64" step="1" value="45" />
+          </label>
+
+          <label class="filter-item">
+            <span class="filter-head">
+              <span>Monthly budget:</span>
+              <strong id="maxBudgetOut" class="num">Any</strong>
+            </span>
+            <input id="maxBudget" type="range" min="0" max="5" step="1" value="5" />
+          </label>
+
+          <label class="filter-item">
+            <span class="filter-head">
+              <span>Max cost/task:</span>
+              <strong id="maxCostOut" class="num">≤ $5</strong>
+            </span>
+            <input id="maxCost" type="range" min="0" max="6" step="1" value="4" />
+          </label>
+
+          <label class="api-check">
+            <input id="showApi" type="checkbox" />
+            <span>Include API</span>
+          </label>
+        </section>
+
+        <section class="panel" aria-label="Real cost per task bar chart">
+          <div class="panel-head">
+            <h2>Best Real Cost per Task by Model</h2>
+          </div>
+          <div class="panel-body">
+            <div id="barChart" class="bar-chart"></div>
+          </div>
+        </section>
+
+        <details class="panel" aria-label="All matching plans">
+          <summary class="panel-head panel-toggle">
+            <h2>All Matching Plans</h2>
+          </summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-sort="model">Model &amp; Plan</th>
+                  <th data-sort="intelligence" class="num-col">Intelligence</th>
+                  <th data-sort="fee" class="num-col">Fee</th>
+                  <th data-sort="subsidy" class="num-col">Subsidy</th>
+                  <th data-sort="apiCost" class="num-col">API $/task</th>
+                  <th data-sort="effectiveCost" class="num-col active asc">Real $/task</th>
+                  <th data-sort="tasksPerMonth" class="num-col">Tasks/mo</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </details>
+      </main>
+    </div>
+
+    <dialog id="methodDialog" class="dialog">
+      <div class="dialog-titlebar">
+        <h2>Methodology</h2>
+        <button id="closeMethodBtn" class="btn btn-sm" type="button">Close</button>
+      </div>
+      <div class="dialog-body">
+        <p>
+          <strong>Intelligence &amp; API $/task</strong> come from
+          <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>,
+          which measures each model's Intelligence Index score and average API cost per benchmark task.
+        </p>
+        <p>
+          <strong>Plan subsidies</strong> come from
+          <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>
+          and <a href="https://mypriors.com/subsidies" target="_blank" rel="noopener noreferrer">Priors</a>,
+          measuring how many dollars of API usage a subscription provides per $1 of monthly fee at full usage.
+          Some recently released models use preliminary user reports or prior-generation quota estimates until measured directly.
+        </p>
+        <p>
+          <strong>Calculations:</strong><br />
+          Real $/task = API $/task ÷ plan subsidy<br />
+          Tasks/mo = monthly plan fee ÷ real $/task
+        </p>
+        <p class="dialog-note">Pay-as-you-go API prices are hidden by default and can be toggled on with "Include API". Data refreshes automatically every 6 hours.</p>
+      </div>
+    </dialog>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
