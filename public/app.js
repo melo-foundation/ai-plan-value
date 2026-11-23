@@ -68,6 +68,7 @@ const state = {
   openWeightsOnly: false,
   extraCriteria: [], // [{ benchKey, minScore }]
   tableQuery: "",
+  groupByPlan: false,
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
   sortKey: "effectiveCost",
@@ -437,7 +438,7 @@ function renderTable(rows) {
   const isTokens = state.costMode === "tokens";
 
   const cols = [
-    { key: "model", label: "Model & Plan", cls: "" },
+    { key: "model", label: state.groupByPlan ? "Model" : "Model & Plan", cls: "" },
     { key: "score", label: benchMeta.label, cls: "num-col" },
     ...state.extraCriteria.map((c) => ({
       key: `extra:${c.benchKey}`,
@@ -514,35 +515,54 @@ function renderTable(rows) {
     return;
   }
 
-  tbody.innerHTML = sorted
-    .map((r) => {
-      const tasksLabel = r.unmetered
-        ? "∞"
-        : r.tasksPerMonth
-          ? Math.round(r.tasksPerMonth).toLocaleString()
-          : "—";
+  const renderRow = (r, grouped) => {
+    const tasksLabel = r.unmetered
+      ? "∞"
+      : r.tasksPerMonth
+        ? Math.round(r.tasksPerMonth).toLocaleString()
+        : "—";
 
-      const extraCells = state.extraCriteria
-        .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
-        .join("");
+    const extraCells = state.extraCriteria
+      .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
+      .join("");
 
-      return `
-        <tr>
-          <td>
-            <div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
-            <div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>
-          </td>
-          <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
-          ${extraCells}
-          <td class="num-col">${feeText(r)}</td>
-          <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
-          <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
-          <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
-          <td class="num-col col-hide-sm">${tasksLabel}</td>
-        </tr>
-      `;
-    })
-    .join("");
+    const nameCell = grouped
+      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>`
+      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>`;
+
+    return `
+      <tr${grouped ? ' class="grouped-item"' : ""}>
+        <td>${nameCell}</td>
+        <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
+        ${extraCells}
+        <td class="num-col">${feeText(r)}</td>
+        <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
+        <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
+        <td class="num-col col-hide-sm">${tasksLabel}</td>
+      </tr>
+    `;
+  };
+
+  if (state.groupByPlan) {
+    const groups = new Map();
+    for (const r of sorted) {
+      const pName = cleanPlan(r);
+      if (!groups.has(pName)) groups.set(pName, { sample: r, rows: [] });
+      groups.get(pName).rows.push(r);
+    }
+    const html = [];
+    for (const [pName, g] of groups.entries()) {
+      const feePart = g.sample.isApi ? "" : ` <span class="group-fee">· ${esc(feeText(g.sample))}</span>`;
+      html.push(
+        `<tr class="group-row"><td colspan="${cols.length}">${renderLink(pName, g.sample.planUrl)}${feePart}</td></tr>`
+      );
+      for (const r of g.rows) html.push(renderRow(r, true));
+    }
+    tbody.innerHTML = html.join("");
+  } else {
+    tbody.innerHTML = sorted.map((r) => renderRow(r, false)).join("");
+  }
 }
 
 function syncBenchSlider(resetDefault = false) {
@@ -822,6 +842,11 @@ $("resetSettingsBtn").addEventListener("click", () => {
 
 $("tableSearch").addEventListener("input", (e) => {
   state.tableQuery = e.target.value;
+  render();
+});
+
+$("groupByPlan").addEventListener("change", (e) => {
+  state.groupByPlan = e.target.checked;
   render();
 });
 
