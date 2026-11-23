@@ -192,7 +192,7 @@ a {
 /* Filter toolbar */
 .filter-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   align-items: center;
   gap: 22px;
   padding: 12px 14px;
@@ -203,6 +203,7 @@ a {
 .filter-item {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .filter-head {
@@ -318,17 +319,18 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .extra-criteria {
-  grid-column: 1 / -1;
+  grid-column: 1 / 4;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px 22px;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--panel-border);
 }
 
 .extra-criterion {
   display: grid;
-  gap: 5px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .extra-criterion-head {
@@ -338,11 +340,17 @@ input[type="range"]::-moz-range-thumb {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
+}
+
+.extra-criterion-head .select {
+  max-width: 155px;
+  min-width: 0;
 }
 
 .extra-criterion-head strong {
   color: var(--fg);
-  font-size: 14px;
+  font-size: 14.5px;
   white-space: nowrap;
 }
 
@@ -350,6 +358,7 @@ input[type="range"]::-moz-range-thumb {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .remove-btn {
@@ -889,6 +898,10 @@ tbody tr:hover {
   .filter-actions {
     border-left: 0;
     padding-left: 0;
+  }
+  .extra-criteria {
+    grid-column: 1;
+    grid-template-columns: 1fr;
   }
   .bar-row {
     grid-template-columns: 150px minmax(0, 1fr);
