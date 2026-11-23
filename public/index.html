@@ -226,10 +226,14 @@
         <p>
           <strong>Calculations:</strong><br />
           Real $/task = API $/task ÷ plan subsidy<br />
+          API 3:1 blended $/1M = (3 × input $/1M + 1 × output $/1M) ÷ 4<br />
           Real $/1M tokens = API 3:1 blended $/1M ÷ plan subsidy<br />
           Tasks/mo (or Mtok/mo) = monthly plan fee ÷ real cost
         </p>
-        <p class="dialog-note">Legacy and off-peak plans are hidden by default, and pay-as-you-go API prices can be toggled on in Settings. Data refreshes automatically every 6 hours.</p>
+        <p class="dialog-note">
+          Per-task cost is usually the fairer cross-model comparison since it reflects each model's actual reasoning, output length, and caching on benchmarks; Per 1M tokens applies the plan subsidy to Artificial Analysis's standard 3:1 input:output blended rate.
+          Legacy and off-peak plans are hidden by default, and pay-as-you-go API prices can be toggled on in Settings. Data refreshes automatically every 6 hours.
+        </p>
       </div>
     </dialog>
 
