@@ -619,19 +619,70 @@ tbody tr:hover {
     padding: 5px 7px 5px 6px;
     gap: 5px;
   }
+  .workspace {
+    padding: 10px 10px 16px;
+    gap: 12px;
+  }
   .filter-bar {
     grid-template-columns: 1fr;
     gap: 14px;
+    padding: 10px 12px;
+  }
+  .select {
+    max-width: 165px;
   }
   .api-check {
     border-left: 0;
     padding-left: 0;
   }
   .bar-row {
-    grid-template-columns: 174px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 8px;
+    padding: 7px 10px;
   }
   .bar-note {
     display: none;
+  }
+  table {
+    font-size: 12.5px;
+    table-layout: fixed;
+  }
+  th,
+  td {
+    padding: 7px 6px;
+  }
+  th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: auto;
+  }
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 68px;
+  }
+  th:nth-child(3),
+  td:nth-child(3) {
+    width: 68px;
+  }
+  th:nth-child(6),
+  td:nth-child(6) {
+    width: 72px;
+  }
+  th:nth-child(4),
+  td:nth-child(4),
+  th:nth-child(5),
+  td:nth-child(5),
+  th:nth-child(7),
+  td:nth-child(7) {
+    display: none;
+  }
+  td:nth-child(1) .model,
+  td:nth-child(1) .plan {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
