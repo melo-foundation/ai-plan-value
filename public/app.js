@@ -49,6 +49,7 @@ const state = {
   maxCostIdx: 4,
   showApi: false,
   cheapestEffortOnly: true,
+  expandedPlans: new Set(),
   sortKey: "effectiveCost",
   sortDir: "asc",
 };
@@ -105,44 +106,109 @@ function renderLink(text, url) {
   return `<a class="row-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
 }
 
-function getFilteredRows() {
+const EFFORT_ORDER = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, default: 6 };
+const EFFORT_SHORT = { none: "non-r", low: "low", medium: "med", high: "high", xhigh: "xhigh", max: "max", default: "std" };
+
+function getAllEntriesResolved() {
   if (!state.dataset) return [];
   const raw = state.dataset.entries || [];
-  const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
-  const maxCost = COST_STOPS[state.maxCostIdx].max;
-
   const replaced = new Set();
   for (const e of raw) {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
+  return raw
+    .filter((e) => !replaced.has(e.id))
+    .map((e) => {
+      const isApi = e.billing === "metered";
+      const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
+      const effectiveCost = e.unmetered ? 0 : e.aaCostPerTaskUsd / (subsidy || 1);
+      const score = getScore(e, state.benchKey);
+      const tasksPerMonth =
+        !isApi && e.priceUsd && !e.unmetered && effectiveCost > 0
+          ? e.priceUsd / effectiveCost
+          : null;
+      return { ...e, isApi, score, subsidy, effectiveCost, tasksPerMonth };
+    });
+}
+
+function getFilteredRows(allResolved) {
+  const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
+  const maxCost = COST_STOPS[state.maxCostIdx].max;
 
   const out = [];
-  for (const e of raw) {
-    if (replaced.has(e.id)) continue;
-    const score = getScore(e, state.benchKey);
-    if (score == null || score < state.minScore) continue;
-
-    const isApi = e.billing === "metered";
-    if (isApi && !state.showApi) continue;
-    if (!isApi && Number.isFinite(maxBudget) && (e.priceUsd == null || e.priceUsd > maxBudget + 0.5)) {
+  for (const r of allResolved) {
+    if (r.score == null || r.score < state.minScore) continue;
+    if (r.isApi && !state.showApi) continue;
+    if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
-
-    const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
-    const effectiveCost = e.unmetered ? 0 : e.aaCostPerTaskUsd / (subsidy || 1);
-    if (Number.isFinite(maxCost) && effectiveCost > maxCost) continue;
-
-    const tasksPerMonth =
-      !isApi && e.priceUsd && !e.unmetered && effectiveCost > 0
-        ? e.priceUsd / effectiveCost
-        : null;
-
-    out.push({ ...e, isApi, score, subsidy, effectiveCost, tasksPerMonth });
+    if (Number.isFinite(maxCost) && r.effectiveCost > maxCost) continue;
+    out.push(r);
   }
   return out;
 }
 
-function renderBarChart(rows) {
+function renderPlanDrawer(planName, allResolved) {
+  const maxCost = COST_STOPS[state.maxCostIdx].max;
+  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const planEntries = allResolved.filter((e) => !e.isApi && cleanPlan(e) === planName);
+
+  // Group by base model, then sort efforts low -> max
+  const byModel = new Map();
+  for (const e of planEntries) {
+    const key = e.baseModelId || e.modelId;
+    if (!byModel.has(key)) {
+      const baseName = String(e.modelDisplay || key).replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning)\)\s*$/i, "");
+      byModel.set(key, { baseName, aaUrl: e.aaUrl, efforts: [] });
+    }
+    byModel.get(key).efforts.push(e);
+  }
+
+  const models = [...byModel.values()].sort((a, b) => {
+    const maxA = Math.max(...a.efforts.map((x) => x.score ?? x.intelligenceIndex ?? 0));
+    const maxB = Math.max(...b.efforts.map((x) => x.score ?? x.intelligenceIndex ?? 0));
+    return maxB - maxA;
+  });
+
+  const rowsHtml = models
+    .map((m) => {
+      m.efforts.sort((a, b) => (EFFORT_ORDER[a.effort] ?? 9) - (EFFORT_ORDER[b.effort] ?? 9));
+      const chips = m.efforts
+        .map((e) => {
+          const passes =
+            e.score != null &&
+            e.score >= state.minScore &&
+            (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
+          const lbl = EFFORT_SHORT[e.effort] || e.effort;
+          const scoreStr = e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
+          return `<span class="eff-chip${passes ? "" : " dim"}"><span class="eff-lbl">${esc(lbl)}</span> <strong>${fmtUsd(e.effectiveCost)}</strong> (${esc(scoreStr)})</span>`;
+        })
+        .join("");
+
+      return `
+        <div class="plan-model-row">
+          <div class="plan-model-name">${renderLink(m.baseName, m.aaUrl)}</div>
+          <div class="plan-efforts">${chips}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const sample = planEntries[0];
+  const headerRight = sample ? `${feeText(sample)} · ${benchMeta.label}` : benchMeta.label;
+
+  return `
+    <div class="plan-drawer">
+      <div class="plan-drawer-head">
+        <span>All models in ${esc(planName)}</span>
+        <span class="eff-lbl">${esc(headerRight)}</span>
+      </div>
+      ${rowsHtml || `<div class="empty">No models recorded.</div>`}
+    </div>
+  `;
+}
+
+function renderBarChart(rows, allResolved) {
   const host = $("barChart");
 
   // Checked (default): 1 bar per base model (cheapest qualifying effort+plan).
@@ -175,24 +241,40 @@ function renderBarChart(rows) {
           ? "#8fa3b8"
           : r.color || "#3a6ea5";
 
-      const planText = `${cleanPlan(r)}${r.isApi ? "" : ` · ${feeText(r)}`}`;
+      const planName = cleanPlan(r);
+      const planText = `${planName}${r.isApi ? "" : ` · ${feeText(r)}`}`;
       const note = `${benchMeta.label} ${fmtScore(r.score, state.benchKey)}`;
+      const expKey = `${r.id}`;
+      const isExpanded = !r.isApi && state.expandedPlans.has(expKey);
+      const expBtn = r.isApi
+        ? ""
+        : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
       return `
         <div class="bar-row">
           <div class="bar-label">
             <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
-            <div class="bar-plan">${renderLink(planText, r.planUrl)}</div>
+            <div class="bar-plan">${renderLink(planText, r.planUrl)}${expBtn}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
             <span class="bar-val">${fmtUsd(r.effectiveCost)}</span>
             <span class="bar-note">${esc(note)}</span>
           </div>
+          ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
         </div>
       `;
     })
     .join("");
+
+  host.querySelectorAll(".plan-exp-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.exp;
+      if (state.expandedPlans.has(key)) state.expandedPlans.delete(key);
+      else state.expandedPlans.add(key);
+      render();
+    });
+  });
 }
 
 function renderTable(rows) {
@@ -275,8 +357,9 @@ function render() {
   $("minScoreOut").textContent = `${state.minScore}${meta.unit}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostOut").textContent = COST_STOPS[state.maxCostIdx].label;
-  const rows = getFilteredRows();
-  renderBarChart(rows);
+  const allResolved = getAllEntriesResolved();
+  const rows = getFilteredRows(allResolved);
+  renderBarChart(rows, allResolved);
   renderTable(rows);
 }
 
