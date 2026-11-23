@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "generatedAt": "2026-11-23T17:44:01.466Z",
+  "generatedAt": "2026-11-23T18:25:07.525Z",
   "latestDataDate": "2026-11-20",
   "sources": {
     "fei2411": {
@@ -8,7 +8,7 @@
       "url": "https://github.com/Fei2411/real-api-pricing",
       "rawUrl": "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/points.csv",
       "ok": true,
-      "fetchedAt": "2026-11-23T17:44:01.466Z",
+      "fetchedAt": "2026-11-23T18:25:07.525Z",
       "rowCount": 381,
       "error": null
     },
@@ -17,7 +17,7 @@
       "url": "https://github.com/adamholter/priors",
       "rawUrl": "https://raw.githubusercontent.com/adamholter/priors/main/data/snapshots/latest.json.gz",
       "ok": true,
-      "fetchedAt": "2026-11-23T17:44:01.466Z",
+      "fetchedAt": "2026-11-23T18:25:07.525Z",
       "itemCount": 320,
       "snapshotDate": "2026-11-22",
       "error": null
@@ -26,7 +26,7 @@
       "name": "Artificial Analysis (#price-cost)",
       "url": "https://artificialanalysis.ai/models#price-cost",
       "ok": true,
-      "fetchedAt": "2026-11-23T17:44:01.466Z",
+      "fetchedAt": "2026-11-23T18:25:07.525Z",
       "modelCount": 28,
       "usedApiV2": false,
       "error": null
@@ -35,7 +35,7 @@
       "name": "GitHub Copilot Plans",
       "url": "https://github.com/features/copilot/plans",
       "ok": true,
-      "fetchedAt": "2026-11-23T17:44:01.466Z",
+      "fetchedAt": "2026-11-23T18:25:07.525Z",
       "tierCount": 3,
       "error": null
     },
@@ -43,7 +43,7 @@
       "name": "Ollama Cloud Pricing",
       "url": "https://ollama.com/pricing",
       "ok": true,
-      "fetchedAt": "2026-11-23T17:44:01.466Z",
+      "fetchedAt": "2026-11-23T18:25:07.525Z",
       "tierCount": 1,
       "error": null
     }
@@ -654,7 +654,13 @@
       "aaCostPerTaskUsd": 0.0399,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-04",
@@ -4423,7 +4429,13 @@
       "aaCostPerTaskUsd": 0.3313,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.45,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-08~2026-10-30",
@@ -6115,7 +6127,13 @@
       "aaCostPerTaskUsd": 0.5833,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-04",
@@ -7875,7 +7893,13 @@
       "aaCostPerTaskUsd": 0.0399,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -7933,7 +7957,13 @@
       "aaCostPerTaskUsd": 0.0405,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.1075,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -9618,7 +9648,13 @@
       "aaCostPerTaskUsd": 1.0391,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-04",
@@ -10544,7 +10580,13 @@
       "aaCostPerTaskUsd": 0.0614,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -12893,7 +12935,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-09",
@@ -13224,7 +13272,13 @@
       "aaCostPerTaskUsd": 0.1615,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -14082,7 +14136,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-09",
@@ -14140,7 +14200,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-09",
@@ -14330,7 +14396,13 @@
       "aaCostPerTaskUsd": 0.1615,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -15415,7 +15487,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-09",
@@ -16303,7 +16381,13 @@
       "aaCostPerTaskUsd": 3.7349,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "low",
       "dataDate": "2026-06-10~2026-09-06",
@@ -17036,7 +17120,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-10-27",
@@ -17935,7 +18025,13 @@
       "aaCostPerTaskUsd": 0.1237,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -18532,7 +18628,13 @@
       "aaCostPerTaskUsd": 0.5833,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-04",
@@ -19526,7 +19628,13 @@
       "aaCostPerTaskUsd": 1.0391,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-04",
@@ -19584,7 +19692,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-10-27",
@@ -21258,7 +21372,13 @@
       "aaCostPerTaskUsd": 0.1615,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -21991,7 +22111,13 @@
       "aaCostPerTaskUsd": 0.3313,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.45,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -22811,7 +22937,13 @@
       "aaCostPerTaskUsd": 0.1732,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.11,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -23144,7 +23276,13 @@
       "aaCostPerTaskUsd": 0.1782,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.58125,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -23270,7 +23408,13 @@
       "aaCostPerTaskUsd": 0.5833,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-04",
@@ -23328,7 +23472,13 @@
       "aaCostPerTaskUsd": 0.3594,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -23833,7 +23983,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-09",
@@ -24313,7 +24469,13 @@
       "aaCostPerTaskUsd": 0.1945,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5625,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -24567,7 +24729,13 @@
       "aaCostPerTaskUsd": 0.3594,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -24953,7 +25121,13 @@
       "aaCostPerTaskUsd": 0.2032,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -25603,7 +25777,13 @@
       "aaCostPerTaskUsd": 4.6786,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -26268,7 +26448,13 @@
       "aaCostPerTaskUsd": 0.3313,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.45,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-08~2026-10-30",
@@ -26326,7 +26512,13 @@
       "aaCostPerTaskUsd": 0.3313,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.45,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -27123,7 +27315,13 @@
       "aaCostPerTaskUsd": 4.6786,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -27505,7 +27703,13 @@
       "aaCostPerTaskUsd": 0.491,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -27563,7 +27767,13 @@
       "aaCostPerTaskUsd": 0.491,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -27855,7 +28065,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-09",
@@ -28679,7 +28895,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-10-27",
@@ -28952,7 +29174,13 @@
       "aaCostPerTaskUsd": 0.5318,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -29751,7 +29979,13 @@
       "aaCostPerTaskUsd": 1.2851,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -30299,7 +30533,13 @@
       "aaCostPerTaskUsd": 0.2844,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.6000000000000001,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -30425,7 +30665,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-11-09",
@@ -30566,7 +30812,13 @@
       "aaCostPerTaskUsd": 0.5833,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -30816,7 +31068,13 @@
       "aaCostPerTaskUsd": 0.591,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -31385,7 +31643,13 @@
       "aaCostPerTaskUsd": 0.3145,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.095,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -31820,7 +32084,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-09",
@@ -32142,7 +32412,13 @@
       "aaCostPerTaskUsd": 0.591,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -32392,7 +32668,13 @@
       "aaCostPerTaskUsd": 0.3313,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.45,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-08~2026-10-30",
@@ -32650,7 +32932,13 @@
       "aaCostPerTaskUsd": 0.3453,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -32836,7 +33124,13 @@
       "aaCostPerTaskUsd": 0.5318,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -32894,7 +33188,13 @@
       "aaCostPerTaskUsd": 0.3594,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -33227,7 +33527,13 @@
       "aaCostPerTaskUsd": 0.764,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -33285,7 +33591,13 @@
       "aaCostPerTaskUsd": 1.2851,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -33562,7 +33874,13 @@
       "aaCostPerTaskUsd": 0.491,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -34174,7 +34492,13 @@
       "aaCostPerTaskUsd": 0.8485,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -34436,7 +34760,13 @@
       "aaCostPerTaskUsd": 0.764,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -35712,7 +36042,13 @@
       "aaCostPerTaskUsd": 0.4818,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -35902,7 +36238,13 @@
       "aaCostPerTaskUsd": 0.977,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -36043,7 +36385,13 @@
       "aaCostPerTaskUsd": 0.491,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.26249999999999996,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -37056,7 +37404,13 @@
       "aaCostPerTaskUsd": 4.6786,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -37114,7 +37468,13 @@
       "aaCostPerTaskUsd": 0.5318,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -37730,7 +38090,13 @@
       "aaCostPerTaskUsd": 0.8485,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -37954,7 +38320,13 @@
       "aaCostPerTaskUsd": 0.5694,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.22999999999999998,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -38231,7 +38603,13 @@
       "aaCostPerTaskUsd": 0.5747,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.15000000000000002,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -38357,7 +38735,13 @@
       "aaCostPerTaskUsd": 0.5833,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -38412,7 +38796,13 @@
       "aaCostPerTaskUsd": 0.5865,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.2375,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -38534,7 +38924,13 @@
       "aaCostPerTaskUsd": 0.591,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -38988,7 +39384,13 @@
       "aaCostPerTaskUsd": 0.617,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.7625,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -39046,7 +39448,13 @@
       "aaCostPerTaskUsd": 1.2721,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -39421,7 +39829,13 @@
       "aaCostPerTaskUsd": 1.2851,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -39611,7 +40025,13 @@
       "aaCostPerTaskUsd": 0.977,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -39981,7 +40401,13 @@
       "aaCostPerTaskUsd": 0.6929,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.85,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -40190,7 +40616,13 @@
       "aaCostPerTaskUsd": 1.2721,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -40248,7 +40680,13 @@
       "aaCostPerTaskUsd": 1.4237,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -40702,7 +41140,13 @@
       "aaCostPerTaskUsd": 0.764,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -40760,7 +41204,13 @@
       "aaCostPerTaskUsd": 0.7642,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.975,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -41150,7 +41600,13 @@
       "aaCostPerTaskUsd": 1.4237,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -41751,7 +42207,13 @@
       "aaCostPerTaskUsd": 0.8485,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -42020,7 +42482,13 @@
       "aaCostPerTaskUsd": 1.7691,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -42519,7 +42987,13 @@
       "aaCostPerTaskUsd": 0.9557,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -42939,7 +43413,13 @@
       "aaCostPerTaskUsd": 0.977,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -43227,7 +43707,13 @@
       "aaCostPerTaskUsd": 1.0391,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -44341,7 +44827,13 @@
       "aaCostPerTaskUsd": 1.7691,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -44463,7 +44955,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -44521,7 +45019,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -44579,7 +45083,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -44773,7 +45283,13 @@
       "aaCostPerTaskUsd": 2.4658,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -44959,7 +45475,13 @@
       "aaCostPerTaskUsd": 1.2721,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -45016,7 +45538,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "low",
       "dataDate": "2026-09-29",
@@ -45098,7 +45626,13 @@
       "aaCostPerTaskUsd": 1.2851,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.5249999999999999,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -45224,7 +45758,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -45282,7 +45822,13 @@
       "aaCostPerTaskUsd": 1.352,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.7625,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -45408,7 +45954,13 @@
       "aaCostPerTaskUsd": 2.7324,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -45549,7 +46101,13 @@
       "aaCostPerTaskUsd": 2.4658,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -45803,7 +46361,13 @@
       "aaCostPerTaskUsd": 1.4237,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -46065,7 +46629,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -46123,7 +46693,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -46181,7 +46757,13 @@
       "aaCostPerTaskUsd": 2.7324,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -46307,7 +46889,13 @@
       "aaCostPerTaskUsd": 2.3453,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.425,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -46433,7 +47021,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-10-27",
@@ -46491,7 +47085,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -46907,7 +47507,13 @@
       "aaCostPerTaskUsd": 3.2386,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -47101,7 +47707,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -47755,7 +48367,13 @@
       "aaCostPerTaskUsd": 1.7691,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.98,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-06",
@@ -47813,7 +48431,13 @@
       "aaCostPerTaskUsd": 3.2386,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -47871,7 +48495,13 @@
       "aaCostPerTaskUsd": 3.6589,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -48914,7 +49544,13 @@
       "aaCostPerTaskUsd": 2.0177,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -48972,7 +49608,13 @@
       "aaCostPerTaskUsd": 3.6589,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -49528,7 +50170,13 @@
       "aaCostPerTaskUsd": 2.1897,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 0.9875,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -49918,7 +50566,13 @@
       "aaCostPerTaskUsd": 4.4711,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -50104,7 +50758,13 @@
       "aaCostPerTaskUsd": 4.6786,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -50162,7 +50822,13 @@
       "aaCostPerTaskUsd": 2.3453,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.425,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -50220,7 +50886,13 @@
       "aaCostPerTaskUsd": 2.3453,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.425,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -50278,7 +50950,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -50336,7 +51014,13 @@
       "aaCostPerTaskUsd": 2.3688,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 6,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-10-27",
@@ -50477,7 +51161,13 @@
       "aaCostPerTaskUsd": 2.3858,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 2,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -50769,7 +51459,13 @@
       "aaCostPerTaskUsd": 2.4658,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 4,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -50827,7 +51523,13 @@
       "aaCostPerTaskUsd": 4.4711,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -51100,7 +51802,13 @@
       "aaCostPerTaskUsd": 2.7324,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -51158,7 +51866,13 @@
       "aaCostPerTaskUsd": 5.5643,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -51624,7 +52338,13 @@
       "aaCostPerTaskUsd": 5.5643,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -51682,7 +52402,13 @@
       "aaCostPerTaskUsd": 4.6786,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -51740,7 +52466,13 @@
       "aaCostPerTaskUsd": 6.2447,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -51798,7 +52530,13 @@
       "aaCostPerTaskUsd": 6.2586,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -52173,7 +52911,13 @@
       "aaCostPerTaskUsd": 3.2386,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -52665,7 +53409,13 @@
       "aaCostPerTaskUsd": 6.2447,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -52953,7 +53703,13 @@
       "aaCostPerTaskUsd": 3.6589,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -53369,7 +54125,13 @@
       "aaCostPerTaskUsd": 7.54,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -53646,7 +54408,13 @@
       "aaCostPerTaskUsd": 7.766,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -54357,7 +55125,13 @@
       "aaCostPerTaskUsd": 6.2586,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -54415,7 +55189,13 @@
       "aaCostPerTaskUsd": 7.54,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -54541,7 +55321,13 @@
       "aaCostPerTaskUsd": 8.6292,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -54686,7 +55472,7 @@
         "inputPer1M": null,
         "outputPer1M": null,
         "cacheHitPer1M": null,
-        "blended3to1Per1M": null,
+        "blended3to1Per1M": 20,
         "blended7to2to1Per1M": null
       },
       "aaSpeed": null,
@@ -54942,7 +55728,13 @@
       "aaCostPerTaskUsd": 8.6292,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -55000,7 +55792,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "medium",
       "dataDate": "2026-09-29",
@@ -55058,7 +55856,13 @@
       "aaCostPerTaskUsd": 9.9466,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -55516,7 +56320,13 @@
       "aaCostPerTaskUsd": 7.766,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -55823,7 +56633,13 @@
       "aaCostPerTaskUsd": 10.8475,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -55881,7 +56697,13 @@
       "aaCostPerTaskUsd": 9.9466,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -55943,7 +56765,7 @@
         "inputPer1M": null,
         "outputPer1M": null,
         "cacheHitPer1M": null,
-        "blended3to1Per1M": null,
+        "blended3to1Per1M": 20,
         "blended7to2to1Per1M": null
       },
       "aaSpeed": null,
@@ -56169,7 +56991,13 @@
       "aaCostPerTaskUsd": 8.6292,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -56227,7 +57055,13 @@
       "aaCostPerTaskUsd": 8.6292,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -56285,7 +57119,13 @@
       "aaCostPerTaskUsd": 10.8475,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -56547,7 +57387,13 @@
       "aaCostPerTaskUsd": 6.2447,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -56605,7 +57451,13 @@
       "aaCostPerTaskUsd": 6.2586,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -56663,7 +57515,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -56721,7 +57579,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -56862,7 +57726,13 @@
       "aaCostPerTaskUsd": 12.994,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -56984,7 +57854,13 @@
       "aaCostPerTaskUsd": 9.9466,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -57042,7 +57918,13 @@
       "aaCostPerTaskUsd": 9.9466,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -57330,7 +58212,13 @@
       "aaCostPerTaskUsd": 12.994,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 20,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -57460,7 +58348,7 @@
         "inputPer1M": null,
         "outputPer1M": null,
         "cacheHitPer1M": null,
-        "blended3to1Per1M": null,
+        "blended3to1Per1M": 20,
         "blended7to2to1Per1M": null
       },
       "aaSpeed": null,
@@ -57686,7 +58574,13 @@
       "aaCostPerTaskUsd": 7.766,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 1.5,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -58027,7 +58921,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-09-29",
@@ -58085,7 +58985,13 @@
       "aaCostPerTaskUsd": 8.6292,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -58373,7 +59279,13 @@
       "aaCostPerTaskUsd": 10.0239,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 3,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-22",
@@ -58518,7 +59430,7 @@
         "inputPer1M": null,
         "outputPer1M": null,
         "cacheHitPer1M": null,
-        "blended3to1Per1M": null,
+        "blended3to1Per1M": 20,
         "blended7to2to1Per1M": null
       },
       "aaSpeed": null,
@@ -58578,7 +59490,13 @@
       "aaCostPerTaskUsd": 9.9466,
       "aaCostPerTaskBreakdown": null,
       "aaTotalIndexCostUsd": null,
-      "aaPricing": null,
+      "aaPricing": {
+        "inputPer1M": null,
+        "outputPer1M": null,
+        "cacheHitPer1M": null,
+        "blended3to1Per1M": 8,
+        "blended7to2to1Per1M": null
+      },
       "aaSpeed": null,
       "confidence": "high",
       "dataDate": "2026-11-23",
@@ -58704,7 +59622,7 @@
         "inputPer1M": null,
         "outputPer1M": null,
         "cacheHitPer1M": null,
-        "blended3to1Per1M": null,
+        "blended3to1Per1M": 20,
         "blended7to2to1Per1M": null
       },
       "aaSpeed": null,

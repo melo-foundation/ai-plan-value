@@ -20,12 +20,12 @@ const COST_STOPS_TASK = [
 ];
 
 const COST_STOPS_TOKENS = [
-  { label: "≤ $0.005", max: 0.005 },
-  { label: "≤ $0.01", max: 0.01 },
-  { label: "≤ $0.05", max: 0.05 },
   { label: "≤ $0.10", max: 0.1 },
+  { label: "≤ $0.25", max: 0.25 },
   { label: "≤ $0.50", max: 0.5 },
   { label: "≤ $1", max: 1 },
+  { label: "≤ $5", max: 5 },
+  { label: "≤ $10", max: 10 },
   { label: "Any", max: Infinity },
 ];
 
@@ -219,14 +219,12 @@ function getAllEntriesResolved() {
       const score = getScore(e, state.benchKey);
 
       const p = e.aaPricing || {};
-      const apiMtok = e.listBlendedUsdPerMtok ?? p.blended7to2to1Per1M ?? p.blended3to1Per1M ?? null;
+      const apiMtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok ?? null;
       const realMtok = e.unmetered
         ? 0
-        : e.realUsdPerMtok != null
-          ? e.realUsdPerMtok
-          : apiMtok != null && subsidy > 0
-            ? apiMtok / subsidy
-            : null;
+        : apiMtok != null && subsidy > 0
+          ? apiMtok / subsidy
+          : e.realUsdPerMtok ?? null;
 
       const apiMetric = isTokens ? apiMtok : e.aaCostPerTaskUsd;
       const effectiveCost = isTokens

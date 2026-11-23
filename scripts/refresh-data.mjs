@@ -529,20 +529,30 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
     }
   }
 
-  // Second pass: collect all AA multi-effort variants (intelligence + costPerTask + tests)
-  const variantObs = new Map(); // variantId -> { intel, cpt, benchmarks }
+  // Second pass: collect all AA multi-effort variants (intelligence + costPerTask + tests + 3:1 blended price)
+  const variantObs = new Map(); // variantId -> { cpt, price3to1, benchmarks }
+  const price3to1ByBase = new Map(); // baseSlug -> number
   for (const obs of snapshot.observations || []) {
     const bid = obs.benchmarkId;
     const vid = obs.variantId;
     if (!vid) continue;
-    if (bid === "aa-cost-per-task-index" || PRIORS_BENCH_TO_KEY[bid]) {
+    if (bid === "aa-price-blended") {
+      const val = toNum(obs.value);
+      if (val != null && val > 0) {
+        const baseSlug = canonicalBaseSlug(vid.split("@")[0], aaByNorm);
+        if (!price3to1ByBase.has(baseSlug)) price3to1ByBase.set(baseSlug, val);
+      }
+    }
+    if (bid === "aa-cost-per-task-index" || bid === "aa-price-blended" || PRIORS_BENCH_TO_KEY[bid]) {
       let rec = variantObs.get(vid);
       if (!rec) {
-        rec = { cpt: null, benchmarks: {} };
+        rec = { cpt: null, price3to1: null, benchmarks: {} };
         variantObs.set(vid, rec);
       }
       if (bid === "aa-cost-per-task-index") {
         rec.cpt = toNum(obs.value);
+      } else if (bid === "aa-price-blended") {
+        rec.price3to1 = toNum(obs.value);
       } else {
         const key = PRIORS_BENCH_TO_KEY[bid];
         rec.benchmarks[key] = round1(obs.value);
@@ -605,7 +615,17 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
       aaUrl: vMeta?.sourceModel?.url || aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
       aaLive: Boolean(aaHeadline),
       isHeadline: Boolean(isHeadlineEffort),
-      pricing: aaHeadline?.pricing || null,
+      pricing:
+        aaHeadline?.pricing ||
+        (rec.price3to1 || price3to1ByBase.get(baseSlug)
+          ? {
+              inputPer1M: null,
+              outputPer1M: null,
+              cacheHitPer1M: null,
+              blended3to1Per1M: rec.price3to1 || price3to1ByBase.get(baseSlug),
+              blended7to2to1Per1M: null,
+            }
+          : null),
       costPerTaskBreakdown: isHeadlineEffort ? aaHeadline.costPerTaskBreakdown : null,
       totalIndexCostUsd: isHeadlineEffort ? aaHeadline.totalIndexCostUsd : null,
       speed: isHeadlineEffort ? aaHeadline.speed : null,
@@ -1169,6 +1189,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         effortLabel: effSuffix,
         variantKey: effSuffix ? `${baseSlug}--${targetEff}` : baseSlug,
         displayName: effSuffix ? `${fv.baseDisplay} (${effSuffix})` : fv.baseDisplay,
+        pricing: fv.pricing || pv?.pricing || null,
         benchmarks: { ...(pv?.benchmarks || {}), ...(fv.benchmarks || {}) },
       });
     }
@@ -1742,6 +1763,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         aaCostPerTaskUsd: Number(v.costPerTaskUsd.toFixed(4)),
         aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
         aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
+        aaPricing: baseEntry.aaPricing?.blended3to1Per1M != null ? baseEntry.aaPricing : (v.pricing || baseEntry.aaPricing || null),
       });
     }
   }
