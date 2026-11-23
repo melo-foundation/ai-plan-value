@@ -579,8 +579,11 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
       effortMap = new Map();
       aaVariantsByBase.set(baseSlug, effortMap);
     }
-    // Avoid overwriting a cleaner variant with a preview ~hash duplicate
+    // Avoid overwriting a cleaner variant with a ~hash duplicate, and drop obsolete -preview defaults
     if (effortMap.has(effort) && String(rawEffort || "").includes("~")) continue;
+    if (effort === "default" && /~.*-preview-/i.test(String(rawEffort || "")) && !/preview/i.test(baseSlug)) {
+      continue;
+    }
 
     const baseDisplay = (aaHeadline?.shortName || modelMeta?.name || rawModelId)
       .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
