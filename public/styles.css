@@ -441,6 +441,52 @@ input[type="range"]::-moz-range-thumb {
   font-size: 12.5px;
 }
 
+.dialog-titlebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.settings-field .select {
+  max-width: none;
+  width: 100%;
+}
+
+.table-toolbar {
+  padding: 7px 10px;
+  background: var(--filter-bg);
+  border-bottom: 1px solid var(--cell-border);
+}
+
+.search-input {
+  width: min(300px, 100%);
+  font: 13px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--shell-bg);
+  border-top: 1px solid var(--shell-border);
+  border-left: 1px solid var(--shell-border);
+  border-right: 1px solid var(--panel-border);
+  border-bottom: 1px solid var(--panel-border);
+  padding: 4px 7px;
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
 .num,
 .num-col {
   font-variant-numeric: tabular-nums;
@@ -876,42 +922,18 @@ tbody tr:hover {
   }
   table:not(.plan-matrix) {
     font-size: 12.5px;
-    table-layout: fixed;
+    table-layout: auto;
   }
   table:not(.plan-matrix) th,
   table:not(.plan-matrix) td {
     padding: 7px 6px;
   }
-  table:not(.plan-matrix) th {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  table:not(.plan-matrix) th:nth-child(1),
-  table:not(.plan-matrix) td:nth-child(1) {
-    width: auto;
-  }
-  table:not(.plan-matrix) th:nth-child(2),
-  table:not(.plan-matrix) td:nth-child(2) {
-    width: 68px;
-  }
-  table:not(.plan-matrix) th:nth-child(3),
-  table:not(.plan-matrix) td:nth-child(3) {
-    width: 68px;
-  }
-  table:not(.plan-matrix) th:nth-child(6),
-  table:not(.plan-matrix) td:nth-child(6) {
-    width: 72px;
-  }
-  table:not(.plan-matrix) th:nth-child(4),
-  table:not(.plan-matrix) td:nth-child(4),
-  table:not(.plan-matrix) th:nth-child(5),
-  table:not(.plan-matrix) td:nth-child(5),
-  table:not(.plan-matrix) th:nth-child(7),
-  table:not(.plan-matrix) td:nth-child(7) {
+  table:not(.plan-matrix) .col-hide-sm {
     display: none;
   }
   table:not(.plan-matrix) td:nth-child(1) .model,
   table:not(.plan-matrix) td:nth-child(1) .plan {
+    max-width: 170px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

@@ -124,23 +124,16 @@
           </div>
         </section>
 
-        <details class="panel" aria-label="All matching plans">
+        <details class="panel" aria-label="Full comparison table">
           <summary class="panel-head panel-toggle">
-            <h2>All Matching Plans</h2>
+            <h2>Full Comparison Table</h2>
           </summary>
+          <div class="table-toolbar">
+            <input id="tableSearch" class="search-input" type="search" placeholder="Filter by model or plan…" aria-label="Filter table by model or plan" />
+          </div>
           <div class="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th data-sort="model">Model &amp; Plan</th>
-                  <th id="scoreColHead" data-sort="score" class="num-col">Intelligence</th>
-                  <th data-sort="fee" class="num-col">Fee</th>
-                  <th data-sort="subsidy" class="num-col">Subsidy</th>
-                  <th id="apiCostColHead" data-sort="apiCost" class="num-col">API $/task</th>
-                  <th id="realCostColHead" data-sort="effectiveCost" class="num-col active asc">Real $/task</th>
-                  <th id="volumeColHead" data-sort="tasksPerMonth" class="num-col">Tasks/mo</th>
-                </tr>
-              </thead>
+              <thead id="tableHead"></thead>
               <tbody id="rows"></tbody>
             </table>
           </div>
@@ -153,18 +146,63 @@
     <dialog id="settingsDialog" class="dialog">
       <div class="dialog-titlebar">
         <h2>Settings</h2>
-        <button id="closeSettingsBtn" class="btn btn-sm" type="button">Close</button>
+        <div class="dialog-titlebar-actions">
+          <button id="resetSettingsBtn" class="btn btn-sm" type="button">Reset</button>
+          <button id="closeSettingsBtn" class="btn btn-sm" type="button">Close</button>
+        </div>
       </div>
       <div class="dialog-body settings-body">
         <div class="settings-section">
+          <div class="settings-heading">Plan &amp; model filters</div>
           <label class="settings-check">
-            <input id="showApi" type="checkbox" />
-            <span>Include pay-as-you-go API prices</span>
+            <input id="hideLegacy" type="checkbox" checked />
+            <span>Hide legacy / grandfathered plans</span>
+          </label>
+          <label class="settings-check">
+            <input id="hideOffPeak" type="checkbox" checked />
+            <span>Hide off-peak / night-only quotas</span>
           </label>
           <label class="settings-check">
             <input id="hideEstimated" type="checkbox" />
             <span>Hide estimated subsidies (*)</span>
           </label>
+          <label class="settings-check">
+            <input id="hideCnPortal" type="checkbox" />
+            <span>Hide domestic CN (¥) portal plans</span>
+          </label>
+          <label class="settings-check">
+            <input id="showApi" type="checkbox" />
+            <span>Include pay-as-you-go API prices</span>
+          </label>
+          <label class="settings-check">
+            <input id="openWeightsOnly" type="checkbox" />
+            <span>Open-weights models only</span>
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-heading">Model specs</div>
+          <div class="settings-grid-2">
+            <label class="settings-field">
+              <span>Min context window</span>
+              <select id="minContext" class="select">
+                <option value="0" selected>Any</option>
+                <option value="128000">≥ 128K</option>
+                <option value="200000">≥ 200K</option>
+                <option value="400000">≥ 400K</option>
+                <option value="1000000">≥ 1M</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>Min output speed</span>
+              <select id="minSpeed" class="select">
+                <option value="0" selected>Any</option>
+                <option value="50">≥ 50 tok/s</option>
+                <option value="100">≥ 100 tok/s</option>
+                <option value="150">≥ 150 tok/s</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <div class="settings-section">

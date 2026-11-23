@@ -58,9 +58,16 @@ const state = {
   minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
-  showApi: false,
+  hideLegacy: true,
+  hideOffPeak: true,
   hideEstimated: false,
+  hideCnPortal: false,
+  showApi: false,
+  openWeightsOnly: false,
+  minContext: 0,
+  minSpeed: 0,
   extraCriteria: [], // [{ benchKey, minScore }]
+  tableQuery: "",
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
   sortKey: "effectiveCost",
@@ -132,10 +139,51 @@ function estMark(r) {
   return `<span class="est-star" title="${esc(tip)}">*</span>`;
 }
 
+function fmtCtx(tokens) {
+  if (!tokens || !Number.isFinite(tokens)) return "—";
+  if (tokens >= 1e6) return `${(tokens / 1e6).toFixed(tokens % 1e6 === 0 ? 0 : 1)}M`;
+  return `${Math.round(tokens / 1e3)}K`;
+}
+
+function fmtSpeed(tps) {
+  if (!tps || !Number.isFinite(tps)) return "—";
+  return `${Math.round(tps)} tok/s`;
+}
+
+function isLegacyEntry(r) {
+  if (typeof r.isLegacy === "boolean") return r.isLegacy;
+  return /\blegacy\b|existing subscribers|老客/i.test(`${r.plan || ""} ${r.planLocal || ""}`);
+}
+
+function isOffPeakEntry(r) {
+  if (typeof r.isOffPeak === "boolean") return r.isOffPeak;
+  return /\boff-?peak\b|\bnight\b|闲时/i.test(`${r.plan || ""} ${r.planLocal || ""}`);
+}
+
+function isCnPortalEntry(r) {
+  if (typeof r.isCnPortal === "boolean") return r.isCnPortal;
+  const combined = `${r.plan || ""} ${r.planLocal || ""}`;
+  return (
+    /¥|\(CN\b|阿里云|闲时|忙时|中间值|老客|新客|^tencent token plan\b/i.test(combined) ||
+    (/^minimax token plan\b/i.test(r.plan || "") && !/global/i.test(combined))
+  );
+}
+
 function passesExtraCriteria(entry) {
   for (const c of state.extraCriteria) {
     const val = getScore(entry, c.benchKey);
     if (val == null || val < c.minScore) return false;
+  }
+  return true;
+}
+
+function passesModelSpecs(entry) {
+  if (state.openWeightsOnly && !entry.isOpenWeights) return false;
+  if (state.minContext > 0 && (!entry.contextWindowTokens || entry.contextWindowTokens < state.minContext)) {
+    return false;
+  }
+  if (state.minSpeed > 0 && (!entry.aaSpeed?.outputTokPerSec || entry.aaSpeed.outputTokPerSec < state.minSpeed)) {
+    return false;
   }
   return true;
 }
@@ -209,8 +257,12 @@ function getFilteredRows(allResolved) {
   for (const r of allResolved) {
     if (r.score == null || r.score < state.minScore) continue;
     if (!passesExtraCriteria(r)) continue;
+    if (!passesModelSpecs(r)) continue;
     if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
+    if (!r.isApi && state.hideLegacy && isLegacyEntry(r)) continue;
+    if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
+    if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
     if (state.hideEstimated && r.isPreliminary) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
@@ -268,6 +320,7 @@ function renderPlanDrawer(planName, allResolved) {
             e.score != null &&
             e.score >= state.minScore &&
             passesExtraCriteria(e) &&
+            passesModelSpecs(e) &&
             (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
           const scoreStr =
             e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
@@ -374,14 +427,80 @@ function renderBarChart(rows, allResolved) {
 }
 
 function renderTable(rows) {
+  const q = state.tableQuery.trim().toLowerCase();
+  const visible = q
+    ? rows.filter((r) => `${r.modelDisplay} ${cleanPlan(r)} ${r.vendor || ""}`.toLowerCase().includes(q))
+    : rows;
+
+  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const isTokens = state.costMode === "tokens";
+  const showCtx = state.minContext > 0;
+  const showSpd = state.minSpeed > 0;
+
+  const cols = [
+    { key: "model", label: "Model & Plan", cls: "" },
+    { key: "score", label: benchMeta.label, cls: "num-col" },
+    ...state.extraCriteria.map((c) => ({
+      key: `extra:${c.benchKey}`,
+      label: (BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex).label,
+      cls: "num-col col-hide-sm",
+      benchKey: c.benchKey,
+    })),
+    ...(showCtx ? [{ key: "context", label: "Context", cls: "num-col col-hide-sm" }] : []),
+    ...(showSpd ? [{ key: "speed", label: "Speed", cls: "num-col col-hide-sm" }] : []),
+    { key: "fee", label: "Fee", cls: "num-col" },
+    { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
+    { key: "apiCost", label: isTokens ? "API $/1M" : "API $/task", cls: "num-col col-hide-sm" },
+    { key: "effectiveCost", label: isTokens ? "Real $/1M" : "Real $/task", cls: "num-col" },
+    { key: "tasksPerMonth", label: isTokens ? "Mtok/mo" : "Tasks/mo", cls: "num-col col-hide-sm" },
+  ];
+
+  if (!cols.some((c) => c.key === state.sortKey)) {
+    state.sortKey = "effectiveCost";
+    state.sortDir = "asc";
+  }
+
+  const thead = $("tableHead");
+  thead.innerHTML = `<tr>${cols
+    .map((c) => {
+      const active = c.key === state.sortKey ? ` active ${state.sortDir}` : "";
+      return `<th data-sort="${esc(c.key)}" class="${c.cls}${active}">${esc(c.label)}</th>`;
+    })
+    .join("")}</tr>`;
+
+  thead.querySelectorAll("th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (state.sortKey === key) {
+        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.sortKey = key;
+        const descDefault =
+          key === "score" ||
+          key === "subsidy" ||
+          key === "tasksPerMonth" ||
+          key === "context" ||
+          key === "speed" ||
+          key.startsWith("extra:");
+        state.sortDir = descDefault ? "desc" : "asc";
+      }
+      render();
+    });
+  });
+
   const dir = state.sortDir === "asc" ? 1 : -1;
-  const sorted = [...rows].sort((a, b) => {
+  const sorted = [...visible].sort((a, b) => {
     if (state.sortKey === "model") {
       return dir * `${a.modelDisplay} ${a.plan}`.localeCompare(`${b.modelDisplay} ${b.plan}`);
     }
     const val = (r) => {
+      if (state.sortKey.startsWith("extra:")) {
+        return getScore(r, state.sortKey.slice(6)) ?? -1;
+      }
       switch (state.sortKey) {
         case "score": return r.score ?? -1;
+        case "context": return r.contextWindowTokens ?? -1;
+        case "speed": return r.aaSpeed?.outputTokPerSec ?? -1;
         case "fee": return r.isApi ? 0 : (r.priceUsd ?? 1e9);
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
         case "apiCost": return r.apiMetric ?? 1e9;
@@ -392,23 +511,9 @@ function renderTable(rows) {
     return dir * (val(a) - val(b));
   });
 
-  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
-  const isTokens = state.costMode === "tokens";
-  $("scoreColHead").textContent = benchMeta.label;
-  $("apiCostColHead").textContent = isTokens ? "API $/1M" : "API $/task";
-  $("realCostColHead").textContent = isTokens ? "Real $/1M" : "Real $/task";
-  $("volumeColHead").textContent = isTokens ? "Mtok/mo" : "Tasks/mo";
-
-  document.querySelectorAll("th[data-sort]").forEach((th) => {
-    th.classList.remove("active", "asc", "desc");
-    if (th.dataset.sort === state.sortKey) {
-      th.classList.add("active", state.sortDir);
-    }
-  });
-
   const tbody = $("rows");
   if (!sorted.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">No plans match these limits.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No plans match these limits.</td></tr>`;
     return;
   }
 
@@ -420,6 +525,12 @@ function renderTable(rows) {
           ? Math.round(r.tasksPerMonth).toLocaleString()
           : "—";
 
+      const extraCells = state.extraCriteria
+        .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
+        .join("");
+      const ctxCell = showCtx ? `<td class="num-col col-hide-sm">${fmtCtx(r.contextWindowTokens)}</td>` : "";
+      const spdCell = showSpd ? `<td class="num-col col-hide-sm">${fmtSpeed(r.aaSpeed?.outputTokPerSec)}</td>` : "";
+
       return `
         <tr>
           <td>
@@ -427,11 +538,14 @@ function renderTable(rows) {
             <div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>
           </td>
           <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
+          ${extraCells}
+          ${ctxCell}
+          ${spdCell}
           <td class="num-col">${feeText(r)}</td>
-          <td class="num-col">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
-          <td class="num-col">${fmtUsd(r.apiMetric)}</td>
+          <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
+          <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
           <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
-          <td class="num-col">${tasksLabel}</td>
+          <td class="num-col col-hide-sm">${tasksLabel}</td>
         </tr>
       `;
     })
@@ -454,8 +568,14 @@ function syncBenchSlider(resetDefault = false) {
 
 function updateSettingsBadge() {
   const count =
-    (state.showApi ? 1 : 0) +
+    (!state.hideLegacy ? 1 : 0) +
+    (!state.hideOffPeak ? 1 : 0) +
     (state.hideEstimated ? 1 : 0) +
+    (state.hideCnPortal ? 1 : 0) +
+    (state.showApi ? 1 : 0) +
+    (state.openWeightsOnly ? 1 : 0) +
+    (state.minContext > 0 ? 1 : 0) +
+    (state.minSpeed > 0 ? 1 : 0) +
     state.extraCriteria.length;
   const el = $("settingsCount");
   if (count > 0) {
@@ -618,8 +738,14 @@ $("maxCost").addEventListener("input", (e) => {
   render();
 });
 
-$("showApi").addEventListener("change", (e) => {
-  state.showApi = e.target.checked;
+$("hideLegacy").addEventListener("change", (e) => {
+  state.hideLegacy = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("hideOffPeak").addEventListener("change", (e) => {
+  state.hideOffPeak = e.target.checked;
   updateSettingsBadge();
   render();
 });
@@ -627,6 +753,63 @@ $("showApi").addEventListener("change", (e) => {
 $("hideEstimated").addEventListener("change", (e) => {
   state.hideEstimated = e.target.checked;
   updateSettingsBadge();
+  render();
+});
+
+$("hideCnPortal").addEventListener("change", (e) => {
+  state.hideCnPortal = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("showApi").addEventListener("change", (e) => {
+  state.showApi = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("openWeightsOnly").addEventListener("change", (e) => {
+  state.openWeightsOnly = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("minContext").addEventListener("change", (e) => {
+  state.minContext = Number(e.target.value);
+  updateSettingsBadge();
+  render();
+});
+
+$("minSpeed").addEventListener("change", (e) => {
+  state.minSpeed = Number(e.target.value);
+  updateSettingsBadge();
+  render();
+});
+
+$("resetSettingsBtn").addEventListener("click", () => {
+  state.hideLegacy = true;
+  state.hideOffPeak = true;
+  state.hideEstimated = false;
+  state.hideCnPortal = false;
+  state.showApi = false;
+  state.openWeightsOnly = false;
+  state.minContext = 0;
+  state.minSpeed = 0;
+  state.extraCriteria = [];
+  $("hideLegacy").checked = true;
+  $("hideOffPeak").checked = true;
+  $("hideEstimated").checked = false;
+  $("hideCnPortal").checked = false;
+  $("showApi").checked = false;
+  $("openWeightsOnly").checked = false;
+  $("minContext").value = "0";
+  $("minSpeed").value = "0";
+  renderExtraCriteria();
+  render();
+});
+
+$("tableSearch").addEventListener("input", (e) => {
+  state.tableQuery = e.target.value;
   render();
 });
 
@@ -671,19 +854,6 @@ $("methodBtn").addEventListener("click", () => dialog.showModal());
 $("closeMethodBtn").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", (e) => {
   if (e.target === dialog) dialog.close();
-});
-
-document.querySelectorAll("th[data-sort]").forEach((th) => {
-  th.addEventListener("click", () => {
-    const key = th.dataset.sort;
-    if (state.sortKey === key) {
-      state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-    } else {
-      state.sortKey = key;
-      state.sortDir = ["score", "subsidy", "tasksPerMonth"].includes(key) ? "desc" : "asc";
-    }
-    render();
-  });
 });
 
 $("refreshBtn").addEventListener("click", async () => {

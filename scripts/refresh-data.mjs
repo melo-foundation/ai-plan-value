@@ -197,10 +197,29 @@ function round1(v) {
 }
 
 function normalizePlanName(name) {
-  const s = String(name || "").trim();
+  let s = String(name || "").trim();
   if (/^Claude Max 20x\b/i.test(s)) return "Claude Ultra";
   if (/^Claude Max 5x\b/i.test(s)) return "Claude Max";
-  return s.replace(/\s*\(9\/14\+\)/, "");
+  s = s.replace(/\s*\(9\/14\+\)/, "");
+  // Unify Fei2411 Chinese GLM Coding labels with clean English labels to prevent Priors duplicates
+  const glm = s.match(/^GLM Coding (Lite|Pro|Max)\s*\((老客|新客)\s*(¥\d+)\)\s*(闲时|忙时|中间值)$/);
+  if (glm) {
+    const [, tier, cust, rmb, window] = glm;
+    const custText = cust === "老客" ? ", existing subscribers" : "";
+    const winText = window === "闲时" ? "off-peak" : window === "忙时" ? "peak" : "mixed";
+    return `GLM Coding ${tier} ${rmb}${custText} (${winText})`;
+  }
+  return s;
+}
+
+function detectPlanFlags(planName, planLocal = "") {
+  const combined = `${planName || ""} ${planLocal || ""}`;
+  const isOffPeak = /\boff-?peak\b|\bnight\b|闲时/i.test(combined);
+  const isLegacy = /\blegacy\b|existing subscribers|老客/i.test(combined);
+  const isCnPortal =
+    /¥|\(CN\b|阿里云|闲时|忙时|中间值|老客|新客|^tencent token plan\b/i.test(combined) ||
+    (/^minimax token plan\b/i.test(planName || "") && !/global/i.test(combined));
+  return { isOffPeak, isLegacy, isCnPortal };
 }
 
 function resolvePlanUrl(planName, vendor, billing) {
@@ -1283,7 +1302,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (r.data_date && r.data_date > latestFeiDate) latestFeiDate = r.data_date;
 
     const entryId = r.id || `${normSlug(planName)}::${normSlug(modelId)}`;
-    const isOffPeak = /off-?peak|非高峰|夜间/i.test(`${r.plan} ${r.plan_en} ${r.note}`);
+    const { isOffPeak, isLegacy, isCnPortal } = detectPlanFlags(planName, r.plan || "");
     const benchmarks = aaModel?.benchmarks
       ? {
           ...aaModel.benchmarks,
@@ -1309,6 +1328,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       planLocal: r.plan || planName,
       planUrl: resolvePlanUrl(planName, aaModel?.creatorName || vendor, billing),
       isOffPeak,
+      isLegacy,
+      isCnPortal,
       unmetered,
       modelId: aaSlug,
       modelDisplay: r.model_display || aaModel?.shortName || modelId,
@@ -1370,6 +1391,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       planLocal: "Pay-as-you-go API",
       planUrl: resolvePlanUrl("Pay-as-you-go API", creator, "metered"),
       isOffPeak: false,
+      isLegacy: false,
+      isCnPortal: false,
       unmetered: false,
       modelId: aaModel.slug,
       modelDisplay: aaModel.shortName || aaModel.name,
@@ -1424,6 +1447,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       planLocal: "Pay-as-you-go API",
       planUrl: resolvePlanUrl("Pay-as-you-go API", creator, "metered"),
       isOffPeak: false,
+      isLegacy: false,
+      isCnPortal: false,
       unmetered: false,
       modelId: baseSlug,
       modelDisplay: best.baseDisplay || baseSlug,
@@ -1504,6 +1529,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const isEstimated = item.isPrelim || item.isAssumed;
     const replacesId = item.isPrelim ? existingId : null;
     const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
+    const priorsFlags = detectPlanFlags(item.plan, item.planRaw);
 
     entries.push({
       id: `${origin}::${planSlug}::${aaSlug}`,
@@ -1518,7 +1544,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       plan: item.plan,
       planLocal: item.planRaw,
       planUrl: resolvePlanUrl(item.plan, sellerVendor, "subscription"),
-      isOffPeak: /off-?peak/i.test(item.plan),
+      isOffPeak: priorsFlags.isOffPeak,
+      isLegacy: priorsFlags.isLegacy,
+      isCnPortal: priorsFlags.isCnPortal,
       unmetered: false,
       modelId: aaSlug,
       modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || item.modelName,
@@ -1579,6 +1607,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         planLocal: tier.plan,
         planUrl: SOURCES.githubCopilotPlans,
         isOffPeak: false,
+        isLegacy: false,
+        isCnPortal: false,
         unmetered: false,
         modelId: aaSlug,
         modelDisplay: aaModel?.shortName || fallbackModel?.modelDisplay || modelSlug,
@@ -1635,6 +1665,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         planLocal: tier.plan,
         planUrl: SOURCES.ollamaPricing,
         isOffPeak: false,
+        isLegacy: false,
+        isCnPortal: false,
         unmetered: false,
         modelId: aaSlug,
         modelDisplay: aaModel?.shortName || fallbackModel?.modelDisplay || aaSlug,
