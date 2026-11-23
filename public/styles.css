@@ -414,15 +414,11 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-.settings-add-row {
+.settings-head-row {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
-}
-
-.settings-add-row .select {
-  max-width: none;
-  flex: 1 1 auto;
 }
 
 .settings-criteria-list {

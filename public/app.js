@@ -579,9 +579,26 @@ function updateSettingsBadge() {
   }
 }
 
+const DEFAULT_EXTRA_ORDER = [
+  "frontierCode20",
+  "contextWindow",
+  "outputSpeed",
+  "engineering",
+  "terminalBench40",
+  "hle",
+  "lcr",
+  ...Object.keys(BENCHMARKS),
+];
+
+function nextUnusedBenchKey() {
+  const used = new Set([state.benchKey, ...state.extraCriteria.map((c) => c.benchKey)]);
+  return DEFAULT_EXTRA_ORDER.find((k) => !used.has(k)) || "frontierCode20";
+}
+
 function renderExtraCriteria() {
   const barHost = $("extraCriteria");
   const listHost = $("settingsCriteriaList");
+  const selectOptionsHtml = $("benchSelect").innerHTML;
 
   if (!state.extraCriteria.length) {
     barHost.hidden = true;
@@ -599,7 +616,10 @@ function renderExtraCriteria() {
       return `
         <div class="extra-criterion">
           <div class="extra-criterion-head">
-            <span>Min ${esc(meta.label)}:</span>
+            <span class="bench-pick">
+              <span>Min</span>
+              <select class="select" data-crit-select="${idx}" aria-label="Additional minimum metric">${selectOptionsHtml}</select>
+            </span>
             <span class="extra-criterion-right">
               <strong class="num" data-crit-out="${idx}">${esc(valText)}</strong>
               <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
@@ -613,16 +633,39 @@ function renderExtraCriteria() {
 
   listHost.innerHTML = state.extraCriteria
     .map((c, idx) => {
-      const meta = BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex;
       const valText = fmtThreshold(c.minScore, c.benchKey);
       return `
         <div class="settings-crit-item">
-          <span>Min ${esc(meta.label)} ≥ <strong class="num" data-crit-list-out="${idx}">${esc(valText)}</strong></span>
+          <span class="bench-pick">
+            <span>Min</span>
+            <select class="select" data-crit-select="${idx}" aria-label="Additional minimum metric">${selectOptionsHtml}</select>
+            <span>≥ <strong class="num" data-crit-list-out="${idx}">${esc(valText)}</strong></span>
+          </span>
           <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
         </div>
       `;
     })
     .join("");
+
+  // Sync each <select> to its current benchKey and bind changes
+  const bindSelects = (container) => {
+    container.querySelectorAll("select[data-crit-select]").forEach((sel) => {
+      const idx = Number(sel.dataset.critSelect);
+      const crit = state.extraCriteria[idx];
+      if (!crit) return;
+      sel.value = crit.benchKey;
+      sel.addEventListener("change", () => {
+        const nextKey = sel.value;
+        if (!BENCHMARKS[nextKey]) return;
+        crit.benchKey = nextKey;
+        crit.minScore = BENCHMARKS[nextKey].def;
+        renderExtraCriteria();
+        render();
+      });
+    });
+  };
+  bindSelects(barHost);
+  bindSelects(listHost);
 
   barHost.querySelectorAll("input[data-crit-slider]").forEach((slider) => {
     slider.addEventListener("input", () => {
@@ -790,13 +833,8 @@ $("tableSearch").addEventListener("input", (e) => {
   render();
 });
 
-$("addBenchSelect").innerHTML = $("benchSelect").innerHTML;
-$("addBenchSelect").value = "frontierCode20";
-
 $("addCriterionBtn").addEventListener("click", () => {
-  const key = $("addBenchSelect").value;
-  if (!BENCHMARKS[key]) return;
-  if (state.extraCriteria.some((c) => c.benchKey === key)) return;
+  const key = nextUnusedBenchKey();
   state.extraCriteria.push({ benchKey: key, minScore: BENCHMARKS[key].def });
   renderExtraCriteria();
   render();
