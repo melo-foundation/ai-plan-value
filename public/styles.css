@@ -22,6 +22,8 @@
   --btn-bot: #d8e2ec;
   --btn-border: #7f95ad;
   --btn-fg: #182b42;
+  --btn-shine: rgba(255, 255, 255, 0.5);
+  --thumb-shine: rgba(255, 255, 255, 0.7);
   --link: #1c4e8a;
   --grid-line: #e7edf4;
 }
@@ -50,6 +52,8 @@
   --btn-bot: #263241;
   --btn-border: #4e627a;
   --btn-fg: #e8eff7;
+  --btn-shine: rgba(255, 255, 255, 0.08);
+  --thumb-shine: rgba(255, 255, 255, 0.1);
   --link: #7cb5f5;
   --grid-line: #2c3746;
 }
@@ -135,7 +139,7 @@ a {
   border-radius: 3px;
   padding: 5px 9px 5px 7px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 var(--btn-shine);
   white-space: nowrap;
 }
 
@@ -280,7 +284,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 2px;
   background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
   border: 1px solid var(--btn-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px 0 var(--thumb-shine), 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
@@ -303,7 +307,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 2px;
   background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
   border: 1px solid var(--btn-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px 0 var(--thumb-shine), 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 .api-check {
