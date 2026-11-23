@@ -323,7 +323,7 @@ function renderBarChart(rows, allResolved) {
         <div class="bar-row">
           <div class="bar-label">
             <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
-            <div class="bar-plan">${renderLink(planText, r.planUrl)}${expBtn}</div>
+            <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${renderLink(planText, r.planUrl)}</span>${expBtn}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>

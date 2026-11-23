@@ -25,6 +25,7 @@ const SOURCES = {
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/points.csv",
   priorsSnapshotGz:
     "https://raw.githubusercontent.com/adamholter/priors/main/data/snapshots/latest.json.gz",
+  mypriorsSubsidies: "https://mypriors.com/subsidies",
   aaModelsPage: "https://artificialanalysis.ai/models",
   aaApiV2: "https://artificialanalysis.ai/api/v2/data/llms/models",
   githubCopilotPlans: "https://github.com/features/copilot/plans",
@@ -714,6 +715,17 @@ function extractBalancedJsonObject(text, openBraceIdx) {
   throw new Error("Unbalanced JSON object");
 }
 
+function parseMyPriorsSubsidiesHtml(html) {
+  const rsc = extractNextRscText(html);
+  const idx = rsc.indexOf('"sellers":');
+  if (idx === -1) {
+    throw new Error("Could not locate sellers payload in mypriors.com/subsidies HTML");
+  }
+  const openBrace = rsc.lastIndexOf("{", idx);
+  const payload = extractBalancedJsonObject(rsc, openBrace);
+  return Array.isArray(payload.sellers) ? payload.sellers : [];
+}
+
 function extractCopilotAvailableModels(doc) {
   const available = [];
   const walk = (node) => {
@@ -895,6 +907,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       snapshotDate: null,
       error: null,
     },
+    mypriors: {
+      name: "mypriors.com/subsidies",
+      url: SOURCES.mypriorsSubsidies,
+      ok: false,
+      fetchedAt: null,
+      sellerCount: 0,
+      error: null,
+    },
     artificialAnalysis: {
       name: "Artificial Analysis (#price-cost)",
       url: "https://artificialanalysis.ai/models#price-cost",
@@ -924,6 +944,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   let feiCsvText = null;
   let priorsGzBuf = null;
+  let mypriorsHtml = null;
   let aaHtml = null;
   let aaV2Json = null;
   let copilotHtml = null;
@@ -933,6 +954,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     log("Reading local fixture snapshots from /tmp ...");
     if (fs.existsSync("/tmp/fei_points.csv")) feiCsvText = fs.readFileSync("/tmp/fei_points.csv", "utf8");
     if (fs.existsSync("/tmp/priors_latest.json.gz")) priorsGzBuf = fs.readFileSync("/tmp/priors_latest.json.gz");
+    if (fs.existsSync("/tmp/mypriors_subsidies.html")) mypriorsHtml = fs.readFileSync("/tmp/mypriors_subsidies.html", "utf8");
     if (fs.existsSync("/tmp/aa_models.html")) aaHtml = fs.readFileSync("/tmp/aa_models.html", "utf8");
     if (fs.existsSync("/tmp/copilot_plans.html")) copilotHtml = fs.readFileSync("/tmp/copilot_plans.html", "utf8");
     if (fs.existsSync("/tmp/ollama_pricing.html")) ollamaHtml = fs.readFileSync("/tmp/ollama_pricing.html", "utf8");
@@ -944,6 +966,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchBuffer(SOURCES.priorsSnapshotGz)
         .then((b) => { priorsGzBuf = b; })
         .catch((err) => { sourceStatus.priorsRepo.error = err.message; }),
+      fetchText(SOURCES.mypriorsSubsidies)
+        .then((t) => { mypriorsHtml = t; })
+        .catch((err) => { sourceStatus.mypriors.error = err.message; }),
       fetchText(SOURCES.aaModelsPage)
         .then((t) => { aaHtml = t; })
         .catch((err) => { sourceStatus.artificialAnalysis.error = err.message; }),
@@ -1028,6 +1053,21 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     } catch (err) {
       sourceStatus.priorsRepo.error = err.message;
       log("Priors snapshot parse error:", err.message);
+    }
+  }
+
+  // 3b. Parse mypriors.com/subsidies computed sellers (captures subscription.ts derived rows like Gemini 4 Hydrogen/Carbon, Fable 5.2 on Ultra, GPT-6.1 Terra/Sol)
+  let mypriorsSellers = [];
+  if (mypriorsHtml) {
+    try {
+      mypriorsSellers = parseMyPriorsSubsidiesHtml(mypriorsHtml);
+      sourceStatus.mypriors.ok = true;
+      sourceStatus.mypriors.fetchedAt = nowIso;
+      sourceStatus.mypriors.sellerCount = mypriorsSellers.length;
+      log(`Parsed ${mypriorsSellers.length} sellers from mypriors.com/subsidies`);
+    } catch (err) {
+      sourceStatus.mypriors.error = err.message;
+      log("MyPriors HTML parse error:", err.message);
     }
   }
 
@@ -1416,6 +1456,89 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       decisionNote: item.preliminary?.note || item.preliminary?.short || null,
       preliminary: item.preliminary,
     });
+  }
+
+  // Layer any computed plan×model pairs from mypriors.com/subsidies that weren't in Fei2411 or raw latest.json.gz
+  // (e.g. Google AI Ultra/Pro Gemini 4 Hydrogen & Carbon & 3.8 Flash, Claude Ultra Fable 5.2/5.1, ChatGPT GPT-6.1 Terra/Sol, GPT-6 Astra/Sol)
+  let mypriorsComputedCount = 0;
+  for (const seller of mypriorsSellers) {
+    for (const plan of seller.plans || []) {
+      const normPlan = normalizePlanName(plan.plan);
+      const planSlug = normSlug(normPlan);
+      const feeUsd = toNum(plan.feeUsd);
+      for (const m of plan.models || []) {
+        if (!m.multiple || m.multiple <= 0) continue;
+        const aaModel = resolveAaModel(m.id, aaByNorm);
+        const priorsVar = !aaModel ? bestPriorsVariantFor(m.id) : null;
+        const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(canonicalBaseSlug(m.id, aaByNorm)) : null;
+        const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+        const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+        if (intel === null || cpt === null || cpt <= 0) continue;
+
+        const aaSlug = aaModel?.slug || priorsVar?.baseSlug || fallbackModel.modelId;
+        const dedupeKey = `${planSlug}::${aaSlug}`;
+        if (priorsSeen.has(dedupeKey)) continue;
+
+        const sellerVendor = vendorFromPlan(normPlan, seller.name);
+        const existingId =
+          feiSubIndex.get(dedupeKey) ||
+          (feeUsd !== null
+            ? feiVendorFeeModelIndex.get(`${normSlug(sellerVendor)}::${Math.round(feeUsd)}::${aaSlug}`)
+            : null);
+
+        const isPrelim = Boolean(m.preliminary);
+        const isAssumed = Boolean(m.assumed);
+        if (existingId && !isPrelim) continue;
+
+        priorsSeen.add(dedupeKey);
+        if (/^ollama\b/i.test(normPlan)) ollamaHostedSlugs.add(aaSlug);
+
+        mypriorsComputedCount++;
+        const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
+        const listBlend = aaModel?.pricing?.blended7to2to1Per1M ?? aaModel?.pricing?.blended3to1Per1M ?? null;
+
+        entries.push({
+          id: `mypriors-computed::${planSlug}::${aaSlug}`,
+          origin: isPrelim ? "priors-preliminary" : isAssumed ? "priors-assumed" : "priors-computed",
+          isPreliminary: isPrelim || isAssumed,
+          estimateType: isPrelim ? "preliminary" : isAssumed ? "assumed" : null,
+          replacesId: isPrelim ? existingId : null,
+          billing: "subscription",
+          vendor: sellerVendor,
+          modelCreator: creator,
+          color: vendorColor(creator, aaModel || priorsVar),
+          plan: normPlan,
+          planLocal: plan.plan,
+          planUrl: resolvePlanUrl(normPlan, sellerVendor, "subscription"),
+          isOffPeak: /off-?peak/i.test(plan.plan),
+          unmetered: false,
+          modelId: aaSlug,
+          modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || m.name,
+          aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
+          aaLive: Boolean(aaModel),
+          aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || "https://artificialanalysis.ai/models#price-cost",
+          isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
+          contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
+          priceUsd: feeUsd,
+          monthlyTokens: null,
+          realUsdPerMtok: listBlend != null ? listBlend / m.multiple : null,
+          listBlendedUsdPerMtok: listBlend,
+          subsidyMultiple: Number(m.multiple.toFixed(4)),
+          intelligenceIndex: Number(intel.toFixed(2)),
+          benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
+          aaCostPerTaskUsd: Number(cpt.toFixed(4)),
+          aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
+          aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
+          aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
+          aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
+          confidence: isPrelim || isAssumed ? "low" : "medium",
+          dataDate: priorsParsed.date || nowIso.slice(0, 10),
+          sourceNote: "mypriors.com/subsidies",
+          decisionNote: m.preliminary?.note || m.preliminary?.short || null,
+          preliminary: m.preliminary || null,
+        });
+      }
+    }
   }
 
   // Layer live-verified first-party GitHub Copilot AI Credits tiers (respecting per-plan Available Models matrix)

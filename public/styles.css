@@ -448,6 +448,7 @@ details[open] > summary.panel-toggle h2::before {
 
 .bar-plan {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px;
   font-size: 12.5px;
@@ -455,7 +456,9 @@ details[open] > summary.panel-toggle h2::before {
   min-width: 0;
 }
 
-.bar-plan .row-link {
+.bar-plan .plan-text {
+  min-width: 0;
+  flex: 0 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

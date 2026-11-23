@@ -150,7 +150,7 @@ const server = http.createServer(async (req, res) => {
   const ext = path.extname(fullPath).toLowerCase();
   res.writeHead(200, {
     "content-type": MIME_TYPES[ext] || "application/octet-stream",
-    "cache-control": ext === ".json" ? "no-cache" : "public, max-age=60",
+    "cache-control": "no-cache",
   });
   fs.createReadStream(fullPath).pipe(res);
 });
