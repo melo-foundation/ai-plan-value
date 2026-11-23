@@ -48,7 +48,7 @@ const state = {
   budgetIdx: 5,
   maxCostIdx: 4,
   showApi: false,
-  showEfforts: false,
+  cheapestEffortOnly: true,
   sortKey: "effectiveCost",
   sortDir: "asc",
 };
@@ -145,11 +145,11 @@ function getFilteredRows() {
 function renderBarChart(rows) {
   const host = $("barChart");
 
-  // Collapsed (default): 1 bar per base model (cheapest qualifying effort+plan).
-  // Expanded ("Show all efforts"): 1 bar per (model, effort) variant.
+  // Checked (default): 1 bar per base model (cheapest qualifying effort+plan).
+  // Unchecked: 1 bar per (model, effort) variant.
   const bestByModel = new Map();
   for (const r of rows) {
-    const groupKey = state.showEfforts ? r.modelId : (r.baseModelId || r.modelId);
+    const groupKey = state.cheapestEffortOnly ? (r.baseModelId || r.modelId) : r.modelId;
     const prev = bestByModel.get(groupKey);
     if (!prev || r.effectiveCost < prev.effectiveCost) {
       bestByModel.set(groupKey, r);
@@ -349,8 +349,8 @@ $("showApi").addEventListener("change", (e) => {
   render();
 });
 
-$("showEfforts").addEventListener("change", (e) => {
-  state.showEfforts = e.target.checked;
+$("cheapestEffortOnly").addEventListener("change", (e) => {
+  state.cheapestEffortOnly = e.target.checked;
   render();
 });
 
