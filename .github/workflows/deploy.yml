@@ -12,6 +12,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  issues: write
 
 concurrency:
   group: "pages"
@@ -32,10 +33,30 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Save baseline snapshot for new-model diff
+        run: cp public/data/combined.json /tmp/prev-combined.json
+
       - name: Refresh live data from upstream sources
+        id: refresh
+        continue-on-error: true
         env:
           AA_API_KEY: ${{ secrets.AA_API_KEY }}
         run: node scripts/refresh-data.mjs
+
+      - name: Check for fetch failures and new important models
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          PREV_SNAPSHOT_PATH: /tmp/prev-combined.json
+          IMPORTANT_INTEL_THRESHOLD: "45"
+        run: node scripts/check-alerts.mjs
+
+      - name: Abort deploy if refresh completely failed
+        if: steps.refresh.outcome == 'failure'
+        run: |
+          echo "Refresh failed; keeping previous live Pages deployment intact."
+          exit 1
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
