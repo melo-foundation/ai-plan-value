@@ -573,6 +573,46 @@ tr.grouped-item td:first-child {
   color: var(--panel-head-fg);
 }
 
+.panel-head-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.seg-switch {
+  display: inline-flex;
+  border: 1px solid var(--btn-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  font: bold 12px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  color: var(--btn-fg);
+  background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
+  border: 0;
+  border-right: 1px solid var(--btn-border);
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 var(--btn-shine);
+}
+
+.seg-btn:last-child {
+  border-right: 0;
+}
+
+.seg-btn:hover:not(.active) {
+  filter: brightness(1.05);
+}
+
+.seg-btn.active {
+  background: linear-gradient(to bottom, var(--title-top), var(--title-bot));
+  color: var(--title-fg);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 .head-check {
   display: inline-flex;
   align-items: center;
@@ -968,6 +1008,10 @@ tbody tr:hover {
   .panel-head {
     flex-wrap: wrap;
     row-gap: 6px;
+  }
+  .panel-head-controls {
+    width: 100%;
+    justify-content: space-between;
   }
   .head-check {
     white-space: normal;

@@ -869,8 +869,6 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 });
 
 $("resetSettingsBtn").addEventListener("click", () => {
-  state.costMode = "task";
-  state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
@@ -878,8 +876,6 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.showApi = false;
   state.openWeightsOnly = false;
   state.extraCriteria = [];
-  $("costMode").value = "task";
-  $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;
@@ -914,11 +910,20 @@ settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
 });
 
-$("costMode").addEventListener("change", (e) => {
-  state.costMode = e.target.value;
-  state.maxCostIdx = 4; // ≤ $5/task or ≤ $0.50/1M tokens
-  $("maxCost").value = "4";
-  render();
+document.querySelectorAll("button[data-cost-mode]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.costMode;
+    if (!mode || mode === state.costMode) return;
+    state.costMode = mode;
+    state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
+    $("maxCost").value = "4";
+    document.querySelectorAll("button[data-cost-mode]").forEach((b) => {
+      const on = b.dataset.costMode === mode;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    render();
+  });
 });
 
 $("cheapestEffortOnly").addEventListener("change", (e) => {

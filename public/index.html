@@ -111,10 +111,16 @@
         <section class="panel" aria-label="Real cost bar chart">
           <div class="panel-head">
             <h2 id="chartHeading">Best Real Cost per Task</h2>
-            <label class="head-check">
-              <input id="cheapestEffortOnly" type="checkbox" checked />
-              <span id="effortToggleLabel">Cheapest applicable reasoning level only</span>
-            </label>
+            <div class="panel-head-controls">
+              <label class="head-check">
+                <input id="cheapestEffortOnly" type="checkbox" checked />
+                <span id="effortToggleLabel">Cheapest applicable reasoning level only</span>
+              </label>
+              <div class="seg-switch" role="group" aria-label="Cost metric">
+                <button type="button" class="seg-btn active" data-cost-mode="task" aria-pressed="true">Per task</button>
+                <button type="button" class="seg-btn" data-cost-mode="tokens" aria-pressed="false">Per 1M tokens</button>
+              </div>
+            </div>
           </div>
           <div class="panel-body">
             <div id="barChart" class="bar-chart"></div>
@@ -153,16 +159,6 @@
         </div>
       </div>
       <div class="dialog-body settings-body">
-        <div class="settings-section">
-          <div class="settings-head-row">
-            <label class="settings-heading" for="costMode">Cost metric</label>
-            <select id="costMode" class="select" aria-label="Cost metric">
-              <option value="task" selected>Per task</option>
-              <option value="tokens">Per 1M tokens</option>
-            </select>
-          </div>
-        </div>
-
         <div class="settings-section">
           <div class="settings-heading">Plan &amp; model filters</div>
           <div class="settings-checks">
