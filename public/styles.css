@@ -352,6 +352,23 @@ input[type="range"]::-moz-range-thumb {
   color: var(--panel-head-fg);
 }
 
+.head-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: normal;
+  color: var(--panel-head-fg);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.head-check input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
 summary.panel-toggle {
   cursor: pointer;
   list-style: none;
