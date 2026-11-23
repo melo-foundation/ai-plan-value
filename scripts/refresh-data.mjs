@@ -34,7 +34,7 @@ const SOURCES = {
 const USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-// Verified exact slug aliases between Fei2411/Priors model IDs and Artificial Analysis slugs.
+// Verified exact slug aliases between Fei2411/Priors/Copilot model IDs and Artificial Analysis slugs.
 const MODEL_ALIASES = {
   hy4: "tencent-hy4",
   "hy-4": "tencent-hy4",
@@ -46,22 +46,6 @@ const MODEL_ALIASES = {
   "aa-muse-wonder": "muse-wonder",
   "gemini-4": "gemini-4-argon",
 };
-
-// Officially documented GitHub Copilot AI-credit models (docs.github.com/en/copilot)
-const GITHUB_COPILOT_MODELS = [
-  "gpt-6-luna",
-  "gpt-6-1-terra",
-  "gpt-6-2-sol",
-  "gpt-6-2-astra",
-  "claude-haiku-5-5",
-  "claude-sonnet-5-5",
-  "claude-opus-5-5",
-  "claude-fable-5-2",
-  "gemini-4-hydrogen",
-  "gemini-4-carbon",
-  "gemini-4-neon",
-  "gemini-4-argon",
-];
 
 const VENDOR_COLORS = {
   Anthropic: "#C96A4A",
@@ -450,7 +434,7 @@ function parseAaApiV2(json) {
  * Parse adamholter/priors raw-GitHub snapshot (latest.json.gz).
  * Extracts all `subscription-token-price` (model, plan) entries with exact blended multiples.
  */
-function parsePriorsSnapshot(snapshot) {
+function parsePriorsSnapshot(snapshot, aaByNorm) {
   const modelsById = new Map();
   for (const m of snapshot.models || []) {
     modelsById.set(m.id, m);
@@ -461,7 +445,14 @@ function parsePriorsSnapshot(snapshot) {
     if (obs.benchmarkId !== "subscription-token-price") continue;
     const modelId = String(obs.variantId || "").split("@")[0];
     const det = obs.details || {};
-    const lp = det.listPrice || {};
+    const aaModel = resolveAaModel(modelId, aaByNorm);
+    const lp = det.listPrice || (aaModel?.pricing
+      ? {
+          cached: aaModel.pricing.cacheHitPer1M ?? (aaModel.pricing.inputPer1M != null ? aaModel.pricing.inputPer1M * 0.1 : 0),
+          input: aaModel.pricing.inputPer1M ?? 0,
+          output: aaModel.pricing.outputPer1M ?? 0,
+        }
+      : {});
     const mix = det.mix || { cache: 0.97, input: 0.025, output: 0.005 };
 
     const cacheWritePrice =
@@ -508,24 +499,78 @@ function parsePriorsSnapshot(snapshot) {
   return { date: snapshot.date || null, items: out };
 }
 
+function extractBalancedJsonObject(text, openBraceIdx) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = openBraceIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return JSON.parse(text.slice(openBraceIdx, i + 1));
+    }
+  }
+  throw new Error("Unbalanced JSON object");
+}
+
+function extractCopilotAvailableModels(doc) {
+  const available = [];
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.nodeType === "text" && typeof node.value === "string") {
+      const marks = Array.isArray(node.marks) ? node.marks.map((m) => m.type) : [];
+      const val = node.value.trim();
+      if (val && !marks.includes("strikethrough")) {
+        // Strip leading vendor prefix ("Anthropic Claude Opus 5.5" -> "claude-opus-5-5")
+        const stripped = val.replace(/^(Anthropic|OpenAI|Google|xAI|Microsoft|Moonshot(?:\s+AI)?)\s+/i, "");
+        available.push(normSlug(stripped));
+      }
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+    } else {
+      for (const v of Object.values(node)) walk(v);
+    }
+  };
+  walk(doc);
+  return [...new Set(available)];
+}
+
 /**
- * Live-parse deterministic GitHub Copilot AI Credit tiers from https://github.com/features/copilot/plans.
- * Throws if GitHub changes the pricing/credit page structure so check-alerts.mjs opens a [Data Alert].
+ * Live-parse deterministic GitHub Copilot AI Credit tiers AND per-plan available models
+ * directly from https://github.com/features/copilot/plans.
+ * Throws if GitHub changes pricing/credit/model availability format so check-alerts.mjs opens a [Data Alert].
  */
 function parseGithubCopilotPlansHtml(html) {
+  const amIdx = html.indexOf('Available models","heading"');
+  if (amIdx === -1) {
+    throw new Error('Could not locate "Available models" matrix on github.com/features/copilot/plans');
+  }
+
   const tiers = [
     {
       name: "GitHub Copilot Pro",
+      availField: "customTextForPro",
       priceRe: /"id":"Pro","heading":"Pro","subheading":[\s\S]{0,220}?"value":"\$(\d+)"/,
       creditRe: /\$(\d+(?:,\d+)?)\s+monthly total credits for Pro\b/,
     },
     {
       name: "GitHub Copilot Pro+",
+      availField: "customTextForProPlus",
       priceRe: /"id":"ProPlus","heading":"Pro\+","subheading":[\s\S]{0,220}?"value":"\$(\d+)"/,
       creditRe: /\$(\d+(?:,\d+)?)\s+monthly total credits for Pro\+/i,
     },
     {
       name: "GitHub Copilot Max",
+      availField: "customTextForMax",
       priceRe: /"id":"Max","heading":"Max","subheading":[\s\S]{0,220}?"value":"\$(\d+)"/,
       creditRe: /\$(\d+(?:,\d+)?)\s+monthly total credits for Max\b/,
     },
@@ -543,11 +588,24 @@ function parseGithubCopilotPlansHtml(html) {
     if (!Number.isFinite(feeUsd) || !Number.isFinite(creditsUsd) || feeUsd <= 0 || creditsUsd <= 0) {
       throw new Error(`Invalid parsed numbers for ${t.name}`);
     }
+
+    const fieldPos = html.indexOf(`"${t.availField}":`, amIdx);
+    if (fieldPos === -1) {
+      throw new Error(`Could not locate ${t.availField} model list for ${t.name}`);
+    }
+    const braceIdx = html.indexOf("{", fieldPos);
+    const doc = extractBalancedJsonObject(html, braceIdx);
+    const availableModels = extractCopilotAvailableModels(doc);
+    if (availableModels.length === 0) {
+      throw new Error(`Parsed 0 available models for ${t.name}`);
+    }
+
     parsed.push({
       plan: t.name,
       feeUsd,
       creditsUsd,
       multiple: creditsUsd / feeUsd,
+      availableModels,
     });
   }
   return parsed;
@@ -765,7 +823,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   if (priorsGzBuf) {
     try {
       const rawJson = zlib.gunzipSync(priorsGzBuf).toString("utf8");
-      priorsParsed = parsePriorsSnapshot(JSON.parse(rawJson));
+      priorsParsed = parsePriorsSnapshot(JSON.parse(rawJson), aaByNorm);
       sourceStatus.priorsRepo.ok = true;
       sourceStatus.priorsRepo.fetchedAt = nowIso;
       sourceStatus.priorsRepo.itemCount = priorsParsed.items.length;
@@ -1098,10 +1156,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     });
   }
 
-  // Layer live-verified first-party GitHub Copilot AI Credits tiers
+  // Layer live-verified first-party GitHub Copilot AI Credits tiers (respecting per-plan Available Models matrix)
   let copilotEntryCount = 0;
   for (const tier of copilotTiers) {
-    for (const modelSlug of GITHUB_COPILOT_MODELS) {
+    const seenSlugs = new Set();
+    for (const modelSlug of tier.availableModels) {
       const aaModel = resolveAaModel(modelSlug, aaByNorm);
       const fallbackModel = !aaModel ? modelInfoBySlug.get(normSlug(modelSlug)) : null;
       const intel = aaModel?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
@@ -1109,6 +1168,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       if (intel === null || cpt === null || cpt <= 0) continue;
 
       const aaSlug = aaModel?.slug || fallbackModel.modelId;
+      if (seenSlugs.has(aaSlug)) continue;
+      seenSlugs.add(aaSlug);
       const creator = aaModel?.creatorName || fallbackModel?.modelCreator || "GitHub";
 
       copilotEntryCount++;
