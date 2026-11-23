@@ -110,13 +110,7 @@
 
         <section class="panel" aria-label="Real cost bar chart">
           <div class="panel-head">
-            <div class="panel-title-group">
-              <h2 id="chartHeading">Best Real Cost by Model</h2>
-              <select id="costMode" class="select select-sm" aria-label="Cost metric">
-                <option value="task" selected>Per task</option>
-                <option value="tokens">Per 1M tokens</option>
-              </select>
-            </div>
+            <h2 id="chartHeading">Best Real Cost per Task</h2>
             <label class="head-check">
               <input id="cheapestEffortOnly" type="checkbox" checked />
               <span>Cheapest applicable reasoning level only</span>
@@ -156,37 +150,49 @@
       </div>
       <div class="dialog-body settings-body">
         <div class="settings-section">
+          <div class="settings-head-row">
+            <label class="settings-heading" for="costMode">Cost metric</label>
+            <select id="costMode" class="select" aria-label="Cost metric">
+              <option value="task" selected>Per task</option>
+              <option value="tokens">Per 1M tokens</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <div class="settings-heading">Plan &amp; model filters</div>
-          <label class="settings-check">
-            <input id="hideLegacy" type="checkbox" checked />
-            <span>Hide legacy / grandfathered plans</span>
-          </label>
-          <label class="settings-check">
-            <input id="hideOffPeak" type="checkbox" checked />
-            <span>Hide off-peak / night-only quotas</span>
-          </label>
-          <label class="settings-check">
-            <input id="hideEstimated" type="checkbox" />
-            <span>Hide estimated subsidies (*)</span>
-          </label>
-          <label class="settings-check">
-            <input id="hideCnPortal" type="checkbox" />
-            <span>Hide domestic CN (¥) portal plans</span>
-          </label>
-          <label class="settings-check">
-            <input id="showApi" type="checkbox" />
-            <span>Include pay-as-you-go API prices</span>
-          </label>
-          <label class="settings-check">
-            <input id="openWeightsOnly" type="checkbox" />
-            <span>Open-weights models only</span>
-          </label>
+          <div class="settings-checks">
+            <label class="settings-check">
+              <input id="hideLegacy" type="checkbox" checked />
+              <span>Hide legacy / grandfathered plans</span>
+            </label>
+            <label class="settings-check">
+              <input id="hideOffPeak" type="checkbox" checked />
+              <span>Hide off-peak / night-only quotas</span>
+            </label>
+            <label class="settings-check">
+              <input id="hideEstimated" type="checkbox" />
+              <span>Hide estimated subsidies (*)</span>
+            </label>
+            <label class="settings-check">
+              <input id="hideCnPortal" type="checkbox" />
+              <span>Hide domestic CN (¥) portal plans</span>
+            </label>
+            <label class="settings-check">
+              <input id="showApi" type="checkbox" />
+              <span>Include pay-as-you-go API prices</span>
+            </label>
+            <label class="settings-check">
+              <input id="openWeightsOnly" type="checkbox" />
+              <span>Open-weights models only</span>
+            </label>
+          </div>
         </div>
 
         <div class="settings-section">
           <div class="settings-head-row">
-            <span class="settings-heading">Additional minimums</span>
-            <button id="addCriterionBtn" class="btn btn-sm" type="button">+ Add minimum</button>
+            <span class="settings-heading">Additional minimum thresholds</span>
+            <button id="addCriterionBtn" class="btn btn-sm" type="button">+ Add</button>
           </div>
           <div id="settingsCriteriaList" class="settings-criteria-list"></div>
         </div>
@@ -216,9 +222,10 @@
         <p>
           <strong>Calculations:</strong><br />
           Real $/task = API $/task ÷ plan subsidy<br />
-          Tasks/mo = monthly plan fee ÷ real $/task
+          Real $/1M tokens = blended API $/1M ÷ plan subsidy<br />
+          Tasks/mo (or Mtok/mo) = monthly plan fee ÷ real cost
         </p>
-        <p class="dialog-note">Pay-as-you-go API prices are hidden by default and can be toggled on with "Include API". Data refreshes automatically every 6 hours.</p>
+        <p class="dialog-note">Legacy and off-peak plans are hidden by default, and pay-as-you-go API prices can be toggled on in Settings. Data refreshes automatically every 6 hours.</p>
       </div>
     </dialog>
 

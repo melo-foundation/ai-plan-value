@@ -683,6 +683,9 @@ function renderExtraCriteria() {
 
 function render() {
   const isTokens = state.costMode === "tokens";
+  $("chartHeading").textContent = isTokens
+    ? "Best Real Cost per 1M Tokens"
+    : "Best Real Cost per Task";
   $("minScoreOut").textContent = fmtThreshold(state.minScore, state.benchKey);
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
@@ -795,6 +798,8 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 });
 
 $("resetSettingsBtn").addEventListener("click", () => {
+  state.costMode = "task";
+  state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
@@ -802,6 +807,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.showApi = false;
   state.openWeightsOnly = false;
   state.extraCriteria = [];
+  $("costMode").value = "task";
+  $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;

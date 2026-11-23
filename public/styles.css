@@ -407,11 +407,17 @@ input[type="range"]::-moz-range-thumb {
   color: var(--panel-head-fg);
 }
 
+.settings-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
 .settings-check {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--fg);
   cursor: pointer;
   user-select: none;
@@ -901,6 +907,9 @@ tbody tr:hover {
   }
   .extra-criteria {
     grid-column: 1;
+    grid-template-columns: 1fr;
+  }
+  .settings-checks {
     grid-template-columns: 1fr;
   }
   .bar-row {
