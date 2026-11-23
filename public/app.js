@@ -59,6 +59,8 @@ const state = {
   budgetIdx: 5,
   maxCostIdx: 4,
   showApi: false,
+  hideEstimated: false,
+  extraCriteria: [], // [{ benchKey, minScore }]
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
   sortKey: "effectiveCost",
@@ -119,6 +121,23 @@ function renderLink(text, url) {
   const safe = esc(text);
   if (!url) return safe;
   return `<a class="row-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
+}
+
+function estMark(r) {
+  if (!r.isPreliminary) return "";
+  const tip =
+    r.estimateType === "assumed"
+      ? "Estimated subsidy (prior-generation quota carryover)"
+      : "Estimated subsidy (preliminary user report)";
+  return `<span class="est-star" title="${esc(tip)}">*</span>`;
+}
+
+function passesExtraCriteria(entry) {
+  for (const c of state.extraCriteria) {
+    const val = getScore(entry, c.benchKey);
+    if (val == null || val < c.minScore) return false;
+  }
+  return true;
 }
 
 const EFFORT_ORDER = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, default: 6 };
@@ -189,8 +208,10 @@ function getFilteredRows(allResolved) {
   const out = [];
   for (const r of allResolved) {
     if (r.score == null || r.score < state.minScore) continue;
+    if (!passesExtraCriteria(r)) continue;
     if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
+    if (state.hideEstimated && r.isPreliminary) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
@@ -203,7 +224,11 @@ function getFilteredRows(allResolved) {
 function renderPlanDrawer(planName, allResolved) {
   const maxCost = currentCostStops()[state.maxCostIdx].max;
   const planEntries = allResolved.filter(
-    (e) => !e.isApi && cleanPlan(e) === planName && e.effectiveCost != null
+    (e) =>
+      !e.isApi &&
+      cleanPlan(e) === planName &&
+      e.effectiveCost != null &&
+      !(state.hideEstimated && e.isPreliminary)
   );
 
   // Collect effort columns actually present in this plan, ordered low -> max
@@ -242,10 +267,11 @@ function renderPlanDrawer(planName, allResolved) {
           const passes =
             e.score != null &&
             e.score >= state.minScore &&
+            passesExtraCriteria(e) &&
             (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
           const scoreStr =
             e.score != null ? fmtScore(e.score, state.benchKey) : `II ${e.intelligenceIndex.toFixed(1)}`;
-          return `<td class="pm-cell${passes ? "" : " dim"}"><span class="pm-cost">${fmtUsd(e.effectiveCost)}</span><span class="pm-score">${esc(scoreStr)}</span></td>`;
+          return `<td class="pm-cell${passes ? "" : " dim"}"><span class="pm-cost">${fmtUsd(e.effectiveCost)}${estMark(e)}</span><span class="pm-score">${esc(scoreStr)}</span></td>`;
         })
         .join("");
 
@@ -311,7 +337,8 @@ function renderBarChart(rows, allResolved) {
           : r.color || "#3a6ea5";
 
       const planName = cleanPlan(r);
-      const planText = `${planName}${r.isApi ? "" : ` · ${feeText(r)}`}`;
+      const planText = `${planName}${r.isPreliminary ? "*" : ""}${r.isApi ? "" : ` · ${feeText(r)}`}`;
+      const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}${r.isApi ? "" : ` · ${esc(feeText(r))}`}`;
       const note = `${benchMeta.label} ${fmtScore(r.score, state.benchKey)}`;
       const expKey = `${r.id}`;
       const isExpanded = !r.isApi && state.expandedPlans.has(expKey);
@@ -323,7 +350,7 @@ function renderBarChart(rows, allResolved) {
         <div class="bar-row">
           <div class="bar-label">
             <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
-            <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${renderLink(planText, r.planUrl)}</span>${expBtn}</div>
+            <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
@@ -397,7 +424,7 @@ function renderTable(rows) {
         <tr>
           <td>
             <div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
-            <div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>
+            <div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>
           </td>
           <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
           <td class="num-col">${feeText(r)}</td>
@@ -425,6 +452,94 @@ function syncBenchSlider(resetDefault = false) {
   slider.value = String(state.minScore);
 }
 
+function updateSettingsBadge() {
+  const count =
+    (state.showApi ? 1 : 0) +
+    (state.hideEstimated ? 1 : 0) +
+    state.extraCriteria.length;
+  const el = $("settingsCount");
+  if (count > 0) {
+    el.textContent = String(count);
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+  }
+}
+
+function renderExtraCriteria() {
+  const barHost = $("extraCriteria");
+  const listHost = $("settingsCriteriaList");
+
+  if (!state.extraCriteria.length) {
+    barHost.hidden = true;
+    barHost.innerHTML = "";
+    listHost.innerHTML = "";
+    updateSettingsBadge();
+    return;
+  }
+
+  barHost.hidden = false;
+  barHost.innerHTML = state.extraCriteria
+    .map((c, idx) => {
+      const meta = BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex;
+      return `
+        <div class="extra-criterion">
+          <div class="extra-criterion-head">
+            <span>Min ${esc(meta.label)}:</span>
+            <span class="extra-criterion-right">
+              <strong class="num" data-crit-out="${idx}">${c.minScore}${esc(meta.unit)}</strong>
+              <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
+            </span>
+          </div>
+          <input type="range" data-crit-slider="${idx}" min="${meta.min}" max="${meta.max}" step="${meta.step}" value="${c.minScore}" aria-label="Minimum ${esc(meta.label)}" />
+        </div>
+      `;
+    })
+    .join("");
+
+  listHost.innerHTML = state.extraCriteria
+    .map((c, idx) => {
+      const meta = BENCHMARKS[c.benchKey] || BENCHMARKS.intelligenceIndex;
+      return `
+        <div class="settings-crit-item">
+          <span>Min ${esc(meta.label)} ≥ <strong class="num" data-crit-list-out="${idx}">${c.minScore}${esc(meta.unit)}</strong></span>
+          <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  barHost.querySelectorAll("input[data-crit-slider]").forEach((slider) => {
+    slider.addEventListener("input", () => {
+      const idx = Number(slider.dataset.critSlider);
+      const crit = state.extraCriteria[idx];
+      if (!crit) return;
+      crit.minScore = Number(slider.value);
+      const meta = BENCHMARKS[crit.benchKey] || BENCHMARKS.intelligenceIndex;
+      const text = `${crit.minScore}${meta.unit}`;
+      const outEl = barHost.querySelector(`[data-crit-out="${idx}"]`);
+      if (outEl) outEl.textContent = text;
+      const listOutEl = listHost.querySelector(`[data-crit-list-out="${idx}"]`);
+      if (listOutEl) listOutEl.textContent = text;
+      render();
+    });
+  });
+
+  const bindRemove = (container) => {
+    container.querySelectorAll("[data-remove-crit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.removeCrit);
+        state.extraCriteria.splice(idx, 1);
+        renderExtraCriteria();
+        render();
+      });
+    });
+  };
+  bindRemove(barHost);
+  bindRemove(listHost);
+  updateSettingsBadge();
+}
+
 function render() {
   const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
   const isTokens = state.costMode === "tokens";
@@ -436,6 +551,7 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
+  $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
 }
 
 function renderMeta() {
@@ -504,7 +620,33 @@ $("maxCost").addEventListener("input", (e) => {
 
 $("showApi").addEventListener("change", (e) => {
   state.showApi = e.target.checked;
+  updateSettingsBadge();
   render();
+});
+
+$("hideEstimated").addEventListener("change", (e) => {
+  state.hideEstimated = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("addBenchSelect").innerHTML = $("benchSelect").innerHTML;
+$("addBenchSelect").value = "frontierCode20";
+
+$("addCriterionBtn").addEventListener("click", () => {
+  const key = $("addBenchSelect").value;
+  if (!BENCHMARKS[key]) return;
+  if (state.extraCriteria.some((c) => c.benchKey === key)) return;
+  state.extraCriteria.push({ benchKey: key, minScore: BENCHMARKS[key].def });
+  renderExtraCriteria();
+  render();
+});
+
+const settingsDialog = $("settingsDialog");
+$("settingsBtn").addEventListener("click", () => settingsDialog.showModal());
+$("closeSettingsBtn").addEventListener("click", () => settingsDialog.close());
+settingsDialog.addEventListener("click", (e) => {
+  if (e.target === settingsDialog) settingsDialog.close();
 });
 
 $("costMode").addEventListener("change", (e) => {

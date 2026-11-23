@@ -95,10 +95,14 @@
             <input id="maxCost" type="range" min="0" max="6" step="1" value="4" />
           </label>
 
-          <label class="api-check">
-            <input id="showApi" type="checkbox" />
-            <span>Include API</span>
-          </label>
+          <div class="filter-actions">
+            <button id="settingsBtn" class="btn" type="button">
+              <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <span>Settings</span>
+              <span id="settingsCount" class="star-count" hidden></span>
+            </button>
+          </div>
+          <div id="extraCriteria" class="extra-criteria" hidden></div>
         </section>
 
         <section class="panel" aria-label="Real cost bar chart">
@@ -141,8 +145,38 @@
             </table>
           </div>
         </details>
+
+        <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
       </main>
     </div>
+
+    <dialog id="settingsDialog" class="dialog">
+      <div class="dialog-titlebar">
+        <h2>Settings</h2>
+        <button id="closeSettingsBtn" class="btn btn-sm" type="button">Close</button>
+      </div>
+      <div class="dialog-body settings-body">
+        <div class="settings-section">
+          <label class="settings-check">
+            <input id="showApi" type="checkbox" />
+            <span>Include pay-as-you-go API prices</span>
+          </label>
+          <label class="settings-check">
+            <input id="hideEstimated" type="checkbox" />
+            <span>Hide estimated subsidies (*)</span>
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-heading">Additional benchmark minimums</div>
+          <div class="settings-add-row">
+            <select id="addBenchSelect" class="select" aria-label="Add benchmark minimum"></select>
+            <button id="addCriterionBtn" class="btn btn-sm" type="button">+ Add</button>
+          </div>
+          <div id="settingsCriteriaList" class="settings-criteria-list"></div>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="methodDialog" class="dialog">
       <div class="dialog-titlebar">
