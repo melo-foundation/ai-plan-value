@@ -371,6 +371,7 @@ function normalizeAaModel(m) {
       frontierCode20: pctFromFraction(m.frontierCode20),
       terminalBench40: pctFromFraction(m.terminalBench40),
       terminalBenchScience: pctFromFraction(m.terminalBenchScience),
+      hle: pctFromFraction(m.hle),
       hleDiamond: pctFromFraction(m.hleDiamond),
       critptAgenticHard: pctFromFraction(m.critptAgenticHard),
       automationBench: pctFromFraction(m.automationBenchPartialScore),
