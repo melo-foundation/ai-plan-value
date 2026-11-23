@@ -391,6 +391,22 @@ $("refreshBtn").addEventListener("click", async () => {
   }
 });
 
+async function loadStarCount() {
+  try {
+    const res = await fetch("https://api.github.com/repos/melo-foundation/ai-plan-value");
+    if (!res.ok) return;
+    const repo = await res.json();
+    if (typeof repo?.stargazers_count === "number") {
+      const el = $("starCount");
+      el.textContent = repo.stargazers_count.toLocaleString();
+      el.hidden = false;
+    }
+  } catch {
+    // Ignore rate limits or offline mode
+  }
+}
+
 syncBenchSlider(true);
 initTheme();
 loadData();
+loadStarCount();

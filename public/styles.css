@@ -141,6 +141,19 @@ a {
   padding: 4px 8px;
 }
 
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.star-count {
+  padding-left: 6px;
+  border-left: 1px solid var(--btn-border);
+  font-variant-numeric: tabular-nums;
+}
+
 .workspace {
   padding: 14px 17px 20px;
   display: grid;
