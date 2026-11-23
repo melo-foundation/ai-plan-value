@@ -288,10 +288,7 @@ function renderMeta() {
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  const isDark = theme === "dark";
-  $("themeLabel").textContent = isDark ? "Light" : "Dark";
-  $("themeIconSun").hidden = !isDark;
-  $("themeIconMoon").hidden = isDark;
+  $("themeLabel").textContent = theme === "dark" ? "Light" : "Dark";
   localStorage.setItem("ai-plan-value-theme", theme);
   if (state.dataset) render();
 }
