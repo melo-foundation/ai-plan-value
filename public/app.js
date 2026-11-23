@@ -561,23 +561,7 @@ function syncBenchSlider(resetDefault = false) {
   slider.value = String(state.minScore);
 }
 
-function updateSettingsBadge() {
-  const count =
-    (!state.hideLegacy ? 1 : 0) +
-    (!state.hideOffPeak ? 1 : 0) +
-    (state.hideEstimated ? 1 : 0) +
-    (state.hideCnPortal ? 1 : 0) +
-    (state.showApi ? 1 : 0) +
-    (state.openWeightsOnly ? 1 : 0) +
-    state.extraCriteria.length;
-  const el = $("settingsCount");
-  if (count > 0) {
-    el.textContent = String(count);
-    el.hidden = false;
-  } else {
-    el.hidden = true;
-  }
-}
+function updateSettingsBadge() {}
 
 const DEFAULT_EXTRA_ORDER = [
   "frontierCode20",
