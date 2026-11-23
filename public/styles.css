@@ -345,6 +345,18 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--panel-border);
 }
 
+.panel-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.select-sm {
+  font-size: 12px;
+  padding: 1px 4px;
+}
+
 .panel-head h2 {
   margin: 0;
   font-size: 14.5px;
@@ -404,7 +416,8 @@ details[open] > summary.panel-toggle h2::before {
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  row-gap: 4px;
+  column-gap: 12px;
   padding: 7px 12px;
   border-bottom: 1px solid var(--grid-line);
 }
@@ -465,28 +478,10 @@ details[open] > summary.panel-toggle h2::before {
 
 .plan-drawer {
   grid-column: 1 / -1;
-  margin-top: 6px;
+  margin-top: 1px;
   background: var(--shell-bg);
   border: 1px solid var(--panel-border);
   overflow-x: auto;
-}
-
-.plan-drawer-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 9px;
-  background: linear-gradient(to bottom, var(--panel-head-top), var(--panel-head-bot));
-  border-bottom: 1px solid var(--panel-border);
-  font-size: 12px;
-  font-weight: bold;
-  color: var(--panel-head-fg);
-}
-
-.plan-drawer-sub {
-  font-weight: normal;
-  font-size: 11.5px;
-  color: var(--muted);
 }
 
 .plan-matrix {

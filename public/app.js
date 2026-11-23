@@ -9,13 +9,23 @@ const BUDGET_STOPS = [
   { label: "Any", max: Infinity },
 ];
 
-const COST_STOPS = [
+const COST_STOPS_TASK = [
   { label: "≤ $0.25", max: 0.25 },
   { label: "≤ $0.50", max: 0.5 },
   { label: "≤ $1", max: 1 },
   { label: "≤ $2", max: 2 },
   { label: "≤ $5", max: 5 },
   { label: "≤ $10", max: 10 },
+  { label: "Any", max: Infinity },
+];
+
+const COST_STOPS_TOKENS = [
+  { label: "≤ $0.005", max: 0.005 },
+  { label: "≤ $0.01", max: 0.01 },
+  { label: "≤ $0.05", max: 0.05 },
+  { label: "≤ $0.10", max: 0.1 },
+  { label: "≤ $0.50", max: 0.5 },
+  { label: "≤ $1", max: 1 },
   { label: "Any", max: Infinity },
 ];
 
@@ -44,6 +54,7 @@ const BENCHMARKS = {
 const state = {
   dataset: null,
   benchKey: "intelligenceIndex",
+  costMode: "task", // "task" | "tokens"
   minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
@@ -53,6 +64,10 @@ const state = {
   sortKey: "effectiveCost",
   sortDir: "asc",
 };
+
+function currentCostStops() {
+  return state.costMode === "tokens" ? COST_STOPS_TOKENS : COST_STOPS_TASK;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -124,28 +139,57 @@ function getAllEntriesResolved() {
   for (const e of raw) {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
+  const isTokens = state.costMode === "tokens";
+
   return raw
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
       const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
-      const effectiveCost = e.unmetered ? 0 : e.aaCostPerTaskUsd / (subsidy || 1);
       const score = getScore(e, state.benchKey);
-      const tasksPerMonth =
-        !isApi && e.priceUsd && !e.unmetered && effectiveCost > 0
+
+      const p = e.aaPricing || {};
+      const apiMtok = e.listBlendedUsdPerMtok ?? p.blended7to2to1Per1M ?? p.blended3to1Per1M ?? null;
+      const realMtok = e.unmetered
+        ? 0
+        : e.realUsdPerMtok != null
+          ? e.realUsdPerMtok
+          : apiMtok != null && subsidy > 0
+            ? apiMtok / subsidy
+            : null;
+
+      const apiMetric = isTokens ? apiMtok : e.aaCostPerTaskUsd;
+      const effectiveCost = isTokens
+        ? realMtok
+        : e.unmetered
+          ? 0
+          : e.aaCostPerTaskUsd / (subsidy || 1);
+
+      const volumePerMonth =
+        !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
           ? e.priceUsd / effectiveCost
           : null;
-      return { ...e, isApi, score, subsidy, effectiveCost, tasksPerMonth };
+
+      return {
+        ...e,
+        isApi,
+        score,
+        subsidy,
+        apiMetric,
+        effectiveCost,
+        tasksPerMonth: volumePerMonth,
+      };
     });
 }
 
 function getFilteredRows(allResolved) {
   const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
-  const maxCost = COST_STOPS[state.maxCostIdx].max;
+  const maxCost = currentCostStops()[state.maxCostIdx].max;
 
   const out = [];
   for (const r of allResolved) {
     if (r.score == null || r.score < state.minScore) continue;
+    if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
@@ -157,9 +201,10 @@ function getFilteredRows(allResolved) {
 }
 
 function renderPlanDrawer(planName, allResolved) {
-  const maxCost = COST_STOPS[state.maxCostIdx].max;
-  const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
-  const planEntries = allResolved.filter((e) => !e.isApi && cleanPlan(e) === planName);
+  const maxCost = currentCostStops()[state.maxCostIdx].max;
+  const planEntries = allResolved.filter(
+    (e) => !e.isApi && cleanPlan(e) === planName && e.effectiveCost != null
+  );
 
   // Collect effort columns actually present in this plan, ordered low -> max
   const effortSet = new Set();
@@ -215,9 +260,6 @@ function renderPlanDrawer(planName, allResolved) {
 
   return `
     <div class="plan-drawer">
-      <div class="plan-drawer-head">
-        <span>All models in ${esc(planName)}</span>
-      </div>
       <table class="plan-matrix">
         <thead>
           <tr>
@@ -234,13 +276,17 @@ function renderPlanDrawer(planName, allResolved) {
 function renderBarChart(rows, allResolved) {
   const host = $("barChart");
 
-  // Checked (default): 1 bar per base model (cheapest qualifying effort+plan).
+  // Checked (default): 1 bar per base model (cheapest qualifying effort+plan; ties broken by higher score).
   // Unchecked: 1 bar per (model, effort) variant.
   const bestByModel = new Map();
   for (const r of rows) {
     const groupKey = state.cheapestEffortOnly ? (r.baseModelId || r.modelId) : r.modelId;
     const prev = bestByModel.get(groupKey);
-    if (!prev || r.effectiveCost < prev.effectiveCost) {
+    const isBetter =
+      !prev ||
+      r.effectiveCost < prev.effectiveCost - 1e-9 ||
+      (Math.abs(r.effectiveCost - prev.effectiveCost) <= 1e-9 && (r.score ?? 0) > (prev.score ?? 0));
+    if (isBetter) {
       bestByModel.set(groupKey, r);
     }
   }
@@ -311,7 +357,7 @@ function renderTable(rows) {
         case "score": return r.score ?? -1;
         case "fee": return r.isApi ? 0 : (r.priceUsd ?? 1e9);
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
-        case "apiCost": return r.aaCostPerTaskUsd ?? 1e9;
+        case "apiCost": return r.apiMetric ?? 1e9;
         case "tasksPerMonth": return r.tasksPerMonth ?? -1;
         default: return r.effectiveCost ?? 1e9;
       }
@@ -320,7 +366,11 @@ function renderTable(rows) {
   });
 
   const benchMeta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const isTokens = state.costMode === "tokens";
   $("scoreColHead").textContent = benchMeta.label;
+  $("apiCostColHead").textContent = isTokens ? "API $/1M" : "API $/task";
+  $("realCostColHead").textContent = isTokens ? "Real $/1M" : "Real $/task";
+  $("volumeColHead").textContent = isTokens ? "Mtok/mo" : "Tasks/mo";
 
   document.querySelectorAll("th[data-sort]").forEach((th) => {
     th.classList.remove("active", "asc", "desc");
@@ -352,7 +402,7 @@ function renderTable(rows) {
           <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
           <td class="num-col">${feeText(r)}</td>
           <td class="num-col">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
-          <td class="num-col">${fmtUsd(r.aaCostPerTaskUsd)}</td>
+          <td class="num-col">${fmtUsd(r.apiMetric)}</td>
           <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
           <td class="num-col">${tasksLabel}</td>
         </tr>
@@ -377,9 +427,11 @@ function syncBenchSlider(resetDefault = false) {
 
 function render() {
   const meta = BENCHMARKS[state.benchKey] || BENCHMARKS.intelligenceIndex;
+  const isTokens = state.costMode === "tokens";
   $("minScoreOut").textContent = `${state.minScore}${meta.unit}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
-  $("maxCostOut").textContent = COST_STOPS[state.maxCostIdx].label;
+  $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
+  $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
   const allResolved = getAllEntriesResolved();
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
@@ -452,6 +504,13 @@ $("maxCost").addEventListener("input", (e) => {
 
 $("showApi").addEventListener("change", (e) => {
   state.showApi = e.target.checked;
+  render();
+});
+
+$("costMode").addEventListener("change", (e) => {
+  state.costMode = e.target.value;
+  state.maxCostIdx = 4; // ≤ $5/task or ≤ $0.50/1M tokens
+  $("maxCost").value = "4";
   render();
 });
 

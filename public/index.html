@@ -89,7 +89,7 @@
 
           <label class="filter-item">
             <span class="filter-head">
-              <span>Max cost/task:</span>
+              <span id="maxCostLabel">Max cost/task:</span>
               <strong id="maxCostOut" class="num">≤ $5</strong>
             </span>
             <input id="maxCost" type="range" min="0" max="6" step="1" value="4" />
@@ -101,9 +101,15 @@
           </label>
         </section>
 
-        <section class="panel" aria-label="Real cost per task bar chart">
+        <section class="panel" aria-label="Real cost bar chart">
           <div class="panel-head">
-            <h2>Best Real Cost per Task by Model</h2>
+            <div class="panel-title-group">
+              <h2 id="chartHeading">Best Real Cost by Model</h2>
+              <select id="costMode" class="select select-sm" aria-label="Cost metric">
+                <option value="task" selected>Per task</option>
+                <option value="tokens">Per 1M tokens</option>
+              </select>
+            </div>
             <label class="head-check">
               <input id="cheapestEffortOnly" type="checkbox" checked />
               <span>Cheapest reasoning level only</span>
@@ -126,9 +132,9 @@
                   <th id="scoreColHead" data-sort="score" class="num-col">Intelligence</th>
                   <th data-sort="fee" class="num-col">Fee</th>
                   <th data-sort="subsidy" class="num-col">Subsidy</th>
-                  <th data-sort="apiCost" class="num-col">API $/task</th>
-                  <th data-sort="effectiveCost" class="num-col active asc">Real $/task</th>
-                  <th data-sort="tasksPerMonth" class="num-col">Tasks/mo</th>
+                  <th id="apiCostColHead" data-sort="apiCost" class="num-col">API $/task</th>
+                  <th id="realCostColHead" data-sort="effectiveCost" class="num-col active asc">Real $/task</th>
+                  <th id="volumeColHead" data-sort="tasksPerMonth" class="num-col">Tasks/mo</th>
                 </tr>
               </thead>
               <tbody id="rows"></tbody>
