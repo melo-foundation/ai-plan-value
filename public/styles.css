@@ -380,10 +380,12 @@ input[type="range"]::-moz-range-thumb {
   cursor: help;
 }
 
-.footnote {
-  margin: -6px 2px 0;
+.panel-footnote {
+  padding: 6px 12px;
   font-size: 12px;
   color: var(--muted);
+  background: var(--filter-bg);
+  border-top: 1px solid var(--panel-border);
 }
 
 .settings-body {

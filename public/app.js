@@ -377,8 +377,11 @@ function renderBarChart(rows, allResolved) {
 
   if (!bars.length) {
     host.innerHTML = `<div class="empty">No plans match these limits.</div>`;
+    $("chartFootnote").hidden = true;
     return;
   }
+
+  $("chartFootnote").hidden = !bars.some((b) => b.isPreliminary);
 
   const maxCost = Math.max(...bars.map((b) => b.effectiveCost), 0.01);
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -513,8 +516,11 @@ function renderTable(rows) {
   const tbody = $("rows");
   if (!sorted.length) {
     tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No plans match these limits.</td></tr>`;
+    $("tableFootnote").hidden = true;
     return;
   }
+
+  $("tableFootnote").hidden = !sorted.some((r) => r.isPreliminary);
 
   tbody.innerHTML = sorted
     .map((r) => {
@@ -537,7 +543,7 @@ function renderTable(rows) {
           <td class="num-col">${fmtScore(r.score, state.benchKey)}</td>
           ${extraCells}
           <td class="num-col">${feeText(r)}</td>
-          <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
+          <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
           <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
           <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
           <td class="num-col col-hide-sm">${tasksLabel}</td>
@@ -694,7 +700,6 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
-  $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
 }
 
 function renderMeta() {
