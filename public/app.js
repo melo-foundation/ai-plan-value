@@ -673,7 +673,7 @@ function renderExtraCriteria() {
               <select class="select" data-crit-select="${idx}" aria-label="Additional minimum metric">${selectOptionsHtml}</select>
             </span>
             <span class="extra-criterion-right">
-              <strong class="num" data-crit-out="${idx}">${esc(valText)}</strong>
+              <strong class="num" data-crit-out="${idx}">≥ ${esc(valText)}</strong>
               <button class="remove-btn" type="button" data-remove-crit="${idx}" title="Remove filter">×</button>
             </span>
           </div>
@@ -727,7 +727,7 @@ function renderExtraCriteria() {
       crit.minScore = Number(slider.value);
       const text = fmtThreshold(crit.minScore, crit.benchKey);
       const outEl = barHost.querySelector(`[data-crit-out="${idx}"]`);
-      if (outEl) outEl.textContent = text;
+      if (outEl) outEl.textContent = `≥ ${text}`;
       const listOutEl = listHost.querySelector(`[data-crit-list-out="${idx}"]`);
       if (listOutEl) listOutEl.textContent = text;
       render();
@@ -757,7 +757,7 @@ function render() {
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
-  $("minScoreOut").textContent = fmtThreshold(state.minScore, state.benchKey);
+  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
