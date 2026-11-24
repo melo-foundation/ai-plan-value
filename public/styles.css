@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --outer-bg: #dce3ec;
   --shell-bg: #ffffff;
   --shell-border: #8fa3b8;
@@ -29,6 +30,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --outer-bg: #161b22;
   --shell-bg: #1f2630;
   --shell-border: #3a495c;
@@ -315,6 +317,51 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 1px 0 var(--thumb-shine), 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
+/* Classic 2003 recessed square checkboxes */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin: 0;
+  vertical-align: middle;
+  background: #ffffff;
+  border: 1px solid var(--btn-border);
+  border-radius: 2px;
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--title-top);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 1px dotted var(--muted);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:checked {
+  background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.2 4.8 8.9 9.8 3.1' fill='none' stroke='%231f4673' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E") center / 11px 11px no-repeat;
+}
+
+[data-theme="dark"] input[type="checkbox"] {
+  background-color: #181f28;
+  border-color: #536882;
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] input[type="checkbox"]:hover {
+  border-color: var(--link);
+}
+
+[data-theme="dark"] input[type="checkbox"]:checked {
+  background: #181f28 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.2 4.8 8.9 9.8 3.1' fill='none' stroke='%237cb5f5' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E") center / 11px 11px no-repeat;
+}
+
 .filter-actions {
   display: flex;
   align-items: center;
@@ -523,7 +570,6 @@ tr.is-extrapolated .real-cell,
 
 .settings-check input[type="checkbox"] {
   margin: 0;
-  transform: scale(1.1);
   cursor: pointer;
 }
 
