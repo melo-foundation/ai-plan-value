@@ -985,6 +985,7 @@ function parseGithubCopilotPlansHtml(html) {
   ];
 
   const parsed = [];
+  const cumulativeModels = new Set();
   for (const t of tiers) {
     const pm = html.match(t.priceRe);
     const cm = html.match(t.creditRe);
@@ -1003,17 +1004,19 @@ function parseGithubCopilotPlansHtml(html) {
     }
     const braceIdx = html.indexOf("{", fieldPos);
     const doc = extractBalancedJsonObject(html, braceIdx);
-    const availableModels = extractCopilotAvailableModels(doc);
-    if (availableModels.length === 0) {
+    const tierModels = extractCopilotAvailableModels(doc);
+    if (tierModels.length === 0) {
       throw new Error(`Parsed 0 available models for ${t.name}`);
     }
+    // Pro+ ("Everything in Pro, plus...") and Max inherit all lower-tier models
+    for (const m of tierModels) cumulativeModels.add(m);
 
     parsed.push({
       plan: t.name,
       feeUsd,
       creditsUsd,
       multiple: creditsUsd / feeUsd,
-      availableModels,
+      availableModels: [...cumulativeModels],
     });
   }
   return parsed;
@@ -2989,88 +2992,124 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  // Shared-pool carryover for Google AI Pro / Ultra 5x / Ultra 20x:
-  // one.google.com/about/google-ai-plans confirms Gemini 4 Carbon, Neon, and Hydrogen share the
-  // compute-based tier pool. Carry over each tier's Gemini 4 Neon subsidy multiple to Carbon and
-  // Hydrogen (marked * as assumed) whenever Fei2411/Priors doesn't have a direct measurement yet.
-  const googleSharedPoolPlans = ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"];
-  const googleSharedPoolModels = ["gemini-4-carbon", "gemini-4-hydrogen"];
+  // Shared-pool carryover for first-party subscription tiers where upstream only measured a
+  // subset of the sibling models included in the same compute/quota pool (marked * as assumed,
+  // and automatically skipped whenever Fei2411/Priors adds a direct measurement).
+  const sharedPoolRules = [
+    {
+      plans: ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"],
+      anchorModel: "gemini-4-neon",
+      targets: ["gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-argon"],
+      vendor: "Google",
+      fallbackUrl: "https://one.google.com/about/google-ai-plans/",
+    },
+    {
+      plans: ["Claude Max", "Claude Ultra"],
+      anchorModel: "claude-fable-5-1",
+      targets: ["claude-fable-5-2"],
+      vendor: "Anthropic",
+      fallbackUrl: "https://claude.com/pricing",
+    },
+    {
+      plans: ["ChatGPT Pro 20x"],
+      anchorModel: "gpt-6-1-sol",
+      targets: ["gpt-6-sol"],
+      vendor: "OpenAI",
+      fallbackUrl: "https://openai.com/chatgpt/pricing/",
+    },
+    {
+      plans: ["ChatGPT Pro 20x"],
+      anchorModel: "gpt-5-6-luna",
+      targets: ["gpt-6-luna"],
+      vendor: "OpenAI",
+      fallbackUrl: "https://openai.com/chatgpt/pricing/",
+    },
+    {
+      plans: ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"],
+      anchorModel: "kimi-k3",
+      targets: ["kimi-k3-1-pro"],
+      vendor: "Moonshot",
+      fallbackUrl: "https://kimi.ai",
+    },
+  ];
   const replacedIds = new Set(entries.filter((e) => e.replacesId).map((e) => e.replacesId));
-  let googleSharedCount = 0;
-  for (const planName of googleSharedPoolPlans) {
-    const anchor = entries.find(
-      (e) =>
-        e.billing === "subscription" &&
-        e.plan === planName &&
-        e.modelId === "gemini-4-neon" &&
-        !replacedIds.has(e.id) &&
-        e.subsidyMultiple > 0
-    );
-    if (!anchor) continue;
-    for (const targetSlug of googleSharedPoolModels) {
-      const alreadyPresent = entries.some(
+  let sharedPoolCount = 0;
+  for (const rule of sharedPoolRules) {
+    for (const planName of rule.plans) {
+      const anchor = entries.find(
         (e) =>
           e.billing === "subscription" &&
           e.plan === planName &&
-          e.modelId === targetSlug &&
-          !replacedIds.has(e.id)
+          e.modelId === rule.anchorModel &&
+          !replacedIds.has(e.id) &&
+          e.subsidyMultiple > 0
       );
-      if (alreadyPresent) continue;
+      if (!anchor) continue;
+      for (const targetSlug of rule.targets) {
+        const alreadyPresent = entries.some(
+          (e) =>
+            e.billing === "subscription" &&
+            e.plan === planName &&
+            e.modelId === targetSlug &&
+            !replacedIds.has(e.id)
+        );
+        if (alreadyPresent) continue;
 
-      const aaModel = aaByNorm.get(targetSlug);
-      const priorsVar = !aaModel ? bestPriorsVariantFor(targetSlug) : null;
-      const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(targetSlug) : null;
-      const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-      const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
-      if (intel === null || cpt === null || cpt <= 0) continue;
+        const aaModel = aaByNorm.get(targetSlug);
+        const priorsVar = !aaModel ? bestPriorsVariantFor(targetSlug) : null;
+        const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(targetSlug) : null;
+        const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+        const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+        if (intel === null || cpt === null || cpt <= 0) continue;
 
-      googleSharedCount++;
-      entries.push({
-        id: `shared-pool::${normSlug(planName)}::${targetSlug}`,
-        origin: "shared-pool-assumed",
-        isPreliminary: true,
-        estimateType: "assumed",
-        replacesId: null,
-        billing: "subscription",
-        vendor: "Google",
-        modelCreator: "Google",
-        color: vendorColor("Google", aaModel),
-        plan: planName,
-        planLocal: planName,
-        planUrl: anchor.planUrl || "https://one.google.com/about/google-ai-plans/",
-        isOffPeak: false,
-        isLegacy: false,
-        isCnPortal: false,
-        unmetered: false,
-        modelId: targetSlug,
-        modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || targetSlug,
-        aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
-        aaLive: Boolean(aaModel),
-        aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || `https://artificialanalysis.ai/models/${targetSlug}`,
-        isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
-        contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
-        priceUsd: anchor.priceUsd,
-        monthlyTokens: null,
-        realUsdPerMtok: null,
-        listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? fallbackModel?.listBlendedUsdPerMtok ?? null,
-        subsidyMultiple: anchor.subsidyMultiple,
-        intelligenceIndex: Number(intel.toFixed(2)),
-        benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
-        aaCostPerTaskUsd: Number(cpt.toFixed(4)),
-        aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
-        aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
-        aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
-        aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
-        confidence: "low",
-        dataDate: anchor.dataDate || nowIso.slice(0, 10),
-        sourceNote: `Shared compute pool carryover from ${planName} Gemini 4 Neon (${anchor.subsidyMultiple.toFixed(2)}×)`,
-        decisionNote: `Estimated using ${planName}'s shared compute pool multiplier from Gemini 4 Neon until directly measured.`,
-        preliminary: null,
-      });
+        sharedPoolCount++;
+        entries.push({
+          id: `shared-pool::${normSlug(planName)}::${targetSlug}`,
+          origin: "shared-pool-assumed",
+          isPreliminary: true,
+          estimateType: "assumed",
+          replacesId: null,
+          billing: "subscription",
+          vendor: rule.vendor,
+          modelCreator: aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || rule.vendor,
+          color: vendorColor(rule.vendor, aaModel),
+          plan: planName,
+          planLocal: planName,
+          planUrl: anchor.planUrl || rule.fallbackUrl,
+          isOffPeak: false,
+          isLegacy: false,
+          isCnPortal: false,
+          unmetered: false,
+          modelId: targetSlug,
+          modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || targetSlug,
+          aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
+          aaLive: Boolean(aaModel),
+          aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || `https://artificialanalysis.ai/models/${targetSlug}`,
+          isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
+          contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
+          priceUsd: anchor.priceUsd,
+          monthlyTokens: null,
+          realUsdPerMtok: null,
+          listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? fallbackModel?.listBlendedUsdPerMtok ?? null,
+          subsidyMultiple: anchor.subsidyMultiple,
+          intelligenceIndex: Number(intel.toFixed(2)),
+          benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
+          aaCostPerTaskUsd: Number(cpt.toFixed(4)),
+          aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
+          aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
+          aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
+          aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
+          confidence: "low",
+          dataDate: anchor.dataDate || nowIso.slice(0, 10),
+          sourceNote: `Shared quota pool carryover from ${planName} ${anchor.modelDisplay} (${anchor.subsidyMultiple.toFixed(2)}×)`,
+          decisionNote: `Estimated using ${planName}'s shared quota pool multiplier from ${anchor.modelDisplay} until directly measured.`,
+          preliminary: null,
+        });
+      }
     }
   }
-  if (googleSharedCount > 0) {
-    log(`Added ${googleSharedCount} Google AI shared-pool carryover entries (Gemini 4 Carbon & Hydrogen)`);
+  if (sharedPoolCount > 0) {
+    log(`Added ${sharedPoolCount} shared-pool carryover entries across Google AI, Claude, ChatGPT, and Kimi`);
   }
 
   // Helper to apply OpenRouter model-level backfill + plan access/window metadata
