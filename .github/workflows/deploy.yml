@@ -40,19 +40,30 @@ jobs:
           AA_API_KEY: ${{ secrets.AA_API_KEY }}
         run: node scripts/refresh-data.mjs
 
-      - name: Check for fetch failures and new important models
+      - name: Run automated site and data tests
+        id: tests
+        if: steps.refresh.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node --check public/app.js && node --check scripts/refresh-data.mjs && node --check scripts/check-alerts.mjs && node scripts/test-site.mjs 2>&1 | tee /tmp/test-output.txt
+
+      - name: Check for fetch failures, test failures, new plans, and new important models
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          TESTS_OUTPUT_PATH: /tmp/test-output.txt
           PREV_SNAPSHOT_PATH: /tmp/prev-combined.json
           IMPORTANT_INTEL_THRESHOLD: "45"
         run: node scripts/check-alerts.mjs
 
-      - name: Abort deploy if refresh completely failed
-        if: steps.refresh.outcome == 'failure'
+      - name: Abort deploy if refresh or tests failed
+        if: steps.refresh.outcome == 'failure' || steps.tests.outcome == 'failure'
         run: |
-          echo "Refresh failed; keeping previous live Pages deployment intact."
+          echo "Refresh or automated tests failed; keeping previous live Pages deployment intact."
           exit 1
 
       - name: Stamp cache-busting asset versions

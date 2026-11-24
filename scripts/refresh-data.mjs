@@ -228,6 +228,80 @@ function detectPlanFlags(planName, planLocal = "") {
   return { isOffPeak, isLegacy, isCnPortal };
 }
 
+const QUOTA_WINDOW_LABELS = {
+  monthly: "Monthly pool",
+  weekly: "Weekly cap",
+  rolling: "5h / daily",
+  payg: "Pay-as-you-go",
+};
+
+function detectPlanAccessAndWindow(planName, billing) {
+  if (billing === "metered") {
+    return {
+      openEndpoint: true,
+      harness: "Any API / CLI",
+      quotaWindow: "payg",
+      quotaWindowLabel: QUOTA_WINDOW_LABELS.payg,
+    };
+  }
+  const p = String(planName || "");
+  if (/^kilo pass\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Kilo / OpenAI API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^ollama\s+team\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^ollama\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+  }
+  if (/^opencode\b/i.test(p)) {
+    return { openEndpoint: true, harness: "OpenCode / API", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+  }
+  if (/^glm coding\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+  }
+  if (/^minimax\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+  }
+  if (/^kimi\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+  }
+  if (/qwen token plan|alibaba|阿里云百炼|^tencent token|^mimo token|^step plan|^deeprelay\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^claude\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Claude Code / Web", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+  }
+  if (/^chatgpt\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Codex / Web", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+  }
+  if (/^devin\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Devin Agent", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+  }
+  if (/^github copilot\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Copilot IDE / CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^cursor\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Cursor IDE", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^command code\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Command Code CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^droid\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Factory Droid CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+  }
+  if (/^google ai\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+  }
+  if (/^supergrok\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+  }
+  if (/^mistral\b/i.test(p)) {
+    return { openEndpoint: false, harness: "Le Chat / Vibe", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly, matched: true };
+  }
+  return { openEndpoint: false, harness: "First-party app", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly, matched: false };
+}
+
 function resolvePlanUrl(planName, vendor, billing) {
   if (billing === "metered") {
     const key = normSlug(vendor);
@@ -2017,9 +2091,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  // Helper to apply OpenRouter model-level backfill (context window, open-weights, pricing, headline AA domain scores)
+  // Helper to apply OpenRouter model-level backfill + plan access/window metadata
   const backfilledContextSlugs = new Set();
+  const unclassifiedPlans = new Set();
   function applyOpenRouterBackfill(entry, allowDomainBackfill) {
+    const accessMeta = detectPlanAccessAndWindow(entry.plan, entry.billing);
+    entry.openEndpoint = accessMeta.openEndpoint;
+    entry.harness = accessMeta.harness;
+    entry.quotaWindow = accessMeta.quotaWindow;
+    entry.quotaWindowLabel = accessMeta.quotaWindowLabel;
+    if (accessMeta.matched === false) {
+      unclassifiedPlans.add(entry.plan);
+    }
+
     if (!openRouterIndex) return entry;
     const orModel = resolveOpenRouterModel(entry.baseModelId, openRouterIndex, aaByNorm);
     if (!orModel) return entry;
@@ -2152,13 +2236,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       uniqueVariants: new Set(expandedEntries.map((e) => e.modelId)).size,
       liveAaModels: aaByNorm.size,
       openRouterBackfilledContext: backfilledContextSlugs.size,
+      unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
     entries: expandedEntries,
   };
 
   fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   const tmpPath = `${OUTPUT_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), "utf8");
+  fs.writeFileSync(tmpPath, JSON.stringify(payload), "utf8");
   fs.renameSync(tmpPath, OUTPUT_PATH);
 
   log(

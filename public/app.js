@@ -53,12 +53,19 @@ const BENCHMARKS = {
   outputSpeed: { label: "Output Speed", unit: " tok/s", min: 0, max: 350, step: 10, def: 80 },
 };
 
+const USAGE_PRESETS = new Set(["20", "50", "100", "250", "500", "1000"]);
+const ACCESS_FILTERS = new Set(["any", "open", "locked"]);
+const WINDOW_FILTERS = new Set(["any", "monthly", "weekly", "rolling"]);
+
 const state = {
   dataset: null,
   benchKey: "intelligenceIndex",
   costMode: "task", // "task" | "tokens"
+  monthlyApiUsage: null, // null ("max" = 100% quota) | number ($/mo API-equivalent workload)
   minEffort: "any", // "any" | "none" | "low" | "medium" | "high" | "xhigh" | "max"
   maxEffort: "any",
+  accessFilter: "any", // "any" | "open" | "locked"
+  windowFilter: "any", // "any" | "monthly" | "noweekly" | "rolling" | "weekly"
   minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
@@ -140,7 +147,57 @@ function cleanPlan(r) {
 }
 
 function feeText(r) {
-  return r.isApi ? "API" : `$${r.priceUsd >= 100 ? Math.round(r.priceUsd) : r.priceUsd}/mo`;
+  if (r.isApi) {
+    return state.monthlyApiUsage ? `$${state.monthlyApiUsage}/mo API` : "API";
+  }
+  const base = r.priceUsd >= 100 ? Math.round(r.priceUsd) : r.priceUsd;
+  if (state.monthlyApiUsage && r.overageUsd >= 1) {
+    return `$${base} + $${Math.round(r.overageUsd)} API`;
+  }
+  return `$${base}/mo`;
+}
+
+function getPlanAccessMeta(r) {
+  if (typeof r.openEndpoint === "boolean" && r.harness && r.quotaWindow && r.quotaWindowLabel) {
+    return {
+      openEndpoint: r.openEndpoint,
+      harness: r.harness,
+      quotaWindow: r.quotaWindow,
+      quotaWindowLabel: r.quotaWindowLabel,
+    };
+  }
+  if (r.billing === "metered" || r.isApi) {
+    return { openEndpoint: true, harness: "Any API / CLI", quotaWindow: "payg", quotaWindowLabel: "Pay-as-you-go" };
+  }
+  const p = String(r.plan || "");
+  if (/^kilo pass\b/i.test(p)) return { openEndpoint: true, harness: "Kilo / OpenAI API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^ollama\s+team\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^ollama\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
+  if (/^opencode\b/i.test(p)) return { openEndpoint: true, harness: "OpenCode / API", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
+  if (/^glm coding\b|^minimax\b|^kimi\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
+  if (/qwen token plan|alibaba|阿里云百炼|^tencent token|^mimo token|^step plan|^deeprelay\b/i.test(p)) {
+    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  }
+  if (/^claude\b/i.test(p)) return { openEndpoint: false, harness: "Claude Code / Web", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
+  if (/^chatgpt\b/i.test(p)) return { openEndpoint: false, harness: "Codex / Web", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
+  if (/^devin\b/i.test(p)) return { openEndpoint: false, harness: "Devin Agent", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
+  if (/^github copilot\b/i.test(p)) return { openEndpoint: false, harness: "Copilot IDE / CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^cursor\b/i.test(p)) return { openEndpoint: false, harness: "Cursor IDE", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^command code\b/i.test(p)) return { openEndpoint: false, harness: "Command Code CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^droid\b/i.test(p)) return { openEndpoint: false, harness: "Factory Droid CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  if (/^google ai\b/i.test(p)) return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
+  if (/^supergrok\b/i.test(p)) return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
+  if (/^mistral\b/i.test(p)) return { openEndpoint: false, harness: "Le Chat / Vibe", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  return { openEndpoint: false, harness: "First-party app", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+}
+
+function passesAccessAndWindow(r) {
+  if (state.accessFilter === "open" && !r.openEndpoint) return false;
+  if (state.accessFilter === "locked" && r.openEndpoint) return false;
+  if (state.windowFilter !== "any" && !r.isApi && r.quotaWindow !== state.windowFilter) {
+    return false;
+  }
+  return true;
 }
 
 function getScore(entry, benchKey) {
@@ -233,39 +290,70 @@ function getAllEntriesResolved() {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
   const isTokens = state.costMode === "tokens";
+  const usageUsd = state.monthlyApiUsage;
 
   return raw
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
-      const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
+      const rawSubsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
+      const accessMeta = getPlanAccessMeta(e);
+
+      let subsidy = rawSubsidy;
+      let overageUsd = 0;
+      let effectiveMonthlySpend = isApi ? (usageUsd ?? 0) : e.priceUsd;
+
+      if (usageUsd != null && usageUsd > 0) {
+        if (isApi) {
+          subsidy = 1;
+          effectiveMonthlySpend = usageUsd;
+        } else if (e.unmetered && e.priceUsd > 0) {
+          subsidy = usageUsd / e.priceUsd;
+          effectiveMonthlySpend = e.priceUsd;
+        } else if (e.priceUsd > 0 && rawSubsidy > 0) {
+          const capUsd = e.priceUsd * rawSubsidy;
+          overageUsd = Math.max(0, usageUsd - capUsd);
+          effectiveMonthlySpend = e.priceUsd + overageUsd;
+          subsidy = usageUsd / effectiveMonthlySpend;
+        }
+      }
+
       const score = getScore(e, state.benchKey);
       const taskCost = e.aaCostPerTaskUsd;
+      const unmeteredFree = !usageUsd && e.unmetered;
 
       const p = e.aaPricing || {};
       const apiMtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok ?? null;
-      const realMtok = e.unmetered
+      const realMtok = unmeteredFree
         ? 0
         : apiMtok != null && subsidy > 0
           ? apiMtok / subsidy
           : e.realUsdPerMtok ?? null;
 
       const realTaskCost =
-        taskCost == null ? null : e.unmetered ? 0 : taskCost / (subsidy || 1);
+        taskCost == null ? null : unmeteredFree ? 0 : taskCost / (subsidy || 1);
 
       const apiMetric = isTokens ? apiMtok : taskCost;
       const effectiveCost = isTokens ? realMtok : realTaskCost;
 
       const volumePerMonth =
-        !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
-          ? e.priceUsd / effectiveCost
-          : null;
+        usageUsd != null
+          ? apiMetric != null && apiMetric > 0
+            ? usageUsd / apiMetric
+            : null
+          : !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
+            ? e.priceUsd / effectiveCost
+            : null;
 
       return {
         ...e,
+        ...accessMeta,
         isApi,
         score,
         subsidy,
+        rawSubsidy,
+        overageUsd,
+        effectiveMonthlySpend,
         apiMetric,
         effectiveCost,
         realTaskCost,
@@ -284,6 +372,7 @@ function getFilteredRows(allResolved) {
     if (!passesExtraCriteria(r)) continue;
     if (!passesModelSpecs(r)) continue;
     if (!passesEffortBounds(r)) continue;
+    if (!passesAccessAndWindow(r)) continue;
     if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
     if (!r.isApi && state.hideLegacy && isLegacyEntry(r)) continue;
@@ -422,8 +511,9 @@ function renderBarChart(rows, allResolved) {
           : r.color || "#3a6ea5";
 
       const planName = cleanPlan(r);
-      const planText = `${planName}${r.isPreliminary ? "*" : ""}${r.isApi ? "" : ` · ${feeText(r)}`}`;
-      const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}${r.isApi ? "" : ` · ${esc(feeText(r))}`}`;
+      const planFee = r.isApi && !state.monthlyApiUsage ? "" : ` · ${feeText(r)}`;
+      const planText = `${planName}${r.isPreliminary ? "*" : ""}${planFee} · ${r.harness} · ${r.quotaWindowLabel}`;
+      const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}${planFee ? esc(planFee) : ""}`;
       const note = `${benchMeta.label} ${fmtScore(r.score, scoreKey)}`;
       const expKey = `${r.id}`;
       const isExpanded = !r.isApi && state.expandedPlans.has(expKey);
@@ -461,7 +551,11 @@ function renderBarChart(rows, allResolved) {
 function renderTable(rows) {
   const q = state.tableQuery.trim().toLowerCase();
   const visible = q
-    ? rows.filter((r) => `${r.modelDisplay} ${cleanPlan(r)} ${r.vendor || ""}`.toLowerCase().includes(q))
+    ? rows.filter((r) =>
+        `${r.modelDisplay} ${cleanPlan(r)} ${r.vendor || ""} ${r.harness || ""} ${r.quotaWindowLabel || ""}`
+          .toLowerCase()
+          .includes(q)
+      )
     : rows;
 
   const benchMeta = activeBenchMeta();
@@ -477,7 +571,8 @@ function renderTable(rows) {
       cls: "num-col col-hide-sm",
       benchKey: c.benchKey,
     })),
-    { key: "fee", label: "Fee", cls: "num-col" },
+    { key: "access", label: "Harness / Reset", cls: "col-hide-sm" },
+    { key: "fee", label: state.monthlyApiUsage ? "Spend" : "Fee", cls: "num-col" },
     { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
     { key: "apiCost", label: isTokens ? "API $/1M" : "API $/task", cls: "num-col col-hide-sm" },
     { key: "effectiveCost", label: isTokens ? "Real $/1M" : "Real $/task", cls: "num-col" },
@@ -522,6 +617,9 @@ function renderTable(rows) {
     if (state.sortKey === "model") {
       return dir * `${a.modelDisplay} ${a.plan}`.localeCompare(`${b.modelDisplay} ${b.plan}`);
     }
+    if (state.sortKey === "access") {
+      return dir * `${a.quotaWindowLabel} ${a.harness}`.localeCompare(`${b.quotaWindowLabel} ${b.harness}`);
+    }
     const val = (r) => {
       if (state.sortKey.startsWith("extra:")) {
         return getScore(r, state.sortKey.slice(6)) ?? -1;
@@ -530,7 +628,7 @@ function renderTable(rows) {
         case "score": return r.score ?? -1;
         case "context": return r.contextWindowTokens ?? -1;
         case "speed": return r.aaSpeed?.outputTokPerSec ?? -1;
-        case "fee": return r.isApi ? 0 : (r.priceUsd ?? 1e9);
+        case "fee": return r.effectiveMonthlySpend ?? (r.isApi ? 0 : (r.priceUsd ?? 1e9));
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
         case "apiCost": return r.apiMetric ?? 1e9;
         case "tasksPerMonth": return r.tasksPerMonth ?? -1;
@@ -547,11 +645,12 @@ function renderTable(rows) {
   }
 
   const renderRow = (r, grouped) => {
-    const tasksLabel = r.unmetered
-      ? "∞"
-      : r.tasksPerMonth
-        ? Math.round(r.tasksPerMonth).toLocaleString()
-        : "—";
+    const tasksLabel =
+      !state.monthlyApiUsage && r.unmetered
+        ? "∞"
+        : r.tasksPerMonth
+          ? Math.round(r.tasksPerMonth).toLocaleString()
+          : "—";
 
     const extraCells = state.extraCriteria
       .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
@@ -561,13 +660,18 @@ function renderTable(rows) {
       ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>`
       : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>`;
 
+    const accessCell = grouped
+      ? `<td class="meta-cell col-hide-sm"></td>`
+      : `<td class="meta-cell col-hide-sm"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
+
     return `
       <tr${grouped ? ' class="grouped-item"' : ""}>
         <td>${nameCell}</td>
         <td class="num-col">${fmtScore(r.score, scoreKey)}</td>
         ${extraCells}
+        ${accessCell}
         <td class="num-col">${feeText(r)}</td>
-        <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
+        <td class="num-col col-hide-sm">${!state.monthlyApiUsage && r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
         <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
         <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
@@ -588,7 +692,7 @@ function renderTable(rows) {
       const maxScore = Math.max(...g.rows.map((r) => r.score ?? -Infinity));
       const minCost = Math.min(...g.rows.map((r) => r.effectiveCost ?? Infinity));
       const maxTasks = Math.max(...g.rows.map((r) => r.tasksPerMonth ?? -1));
-      const hasUnmetered = g.rows.some((r) => r.unmetered);
+      const hasUnmetered = !state.monthlyApiUsage && g.rows.some((r) => r.unmetered);
       const hasEst = g.rows.some((r) => r.isPreliminary);
       const finiteSubs = g.rows.map((r) => r.subsidy).filter((s) => Number.isFinite(s));
       let subText = hasUnmetered ? "∞" : "—";
@@ -613,12 +717,19 @@ function renderTable(rows) {
           ? Math.round(maxTasks).toLocaleString()
           : "—";
 
+      const spends = g.rows.map((r) => r.effectiveMonthlySpend).filter((v) => Number.isFinite(v));
+      const groupFeeText =
+        state.monthlyApiUsage && !g.sample.isApi && spends.length > 1 && Math.max(...spends) - Math.min(...spends) >= 1
+          ? `$${Math.round(Math.min(...spends))}–$${Math.round(Math.max(...spends))}`
+          : feeText(g.sample);
+
       html.push(`
         <tr class="group-row" data-group="${esc(pName)}">
           <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}${groupEst}</td>
           <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, scoreKey)}</td>
           ${extraSummary}
-          <td class="num-col">${feeText(g.sample)}</td>
+          <td class="meta-cell col-hide-sm">${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>
+          <td class="num-col">${groupFeeText}</td>
           <td class="num-col col-hide-sm">${subText}${groupEst}</td>
           <td class="num-col col-hide-sm">—</td>
           <td class="num-col real-cell">${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
@@ -811,6 +922,17 @@ function loadStateFromUrl() {
     state.costMode = "tokens";
   }
 
+  const usageRaw = params.get("usage");
+  if (usageRaw && USAGE_PRESETS.has(usageRaw)) {
+    state.monthlyApiUsage = Number(usageRaw);
+  }
+
+  const accessRaw = params.get("access");
+  if (accessRaw && ACCESS_FILTERS.has(accessRaw)) state.accessFilter = accessRaw;
+
+  const windowRaw = params.get("window");
+  if (windowRaw && WINDOW_FILTERS.has(windowRaw)) state.windowFilter = windowRaw;
+
   const minEff = params.get("minEffort");
   if (minEff && NAMED_EFFORTS.has(minEff)) state.minEffort = minEff;
   const maxEff = params.get("maxEffort");
@@ -875,8 +997,11 @@ function syncControlsFromState() {
   syncBenchSlider(false);
   $("maxBudget").value = String(state.budgetIdx);
   $("costMode").value = state.costMode;
-  $("minEffort").value = state.minEffort;
-  $("maxEffort").value = state.maxEffort;
+  if ($("usagePreset")) $("usagePreset").value = state.monthlyApiUsage ? String(state.monthlyApiUsage) : "max";
+  if ($("accessFilter")) $("accessFilter").value = state.accessFilter;
+  if ($("windowFilter")) $("windowFilter").value = state.windowFilter;
+  if ($("minEffort")) $("minEffort").value = state.minEffort;
+  if ($("maxEffort")) $("maxEffort").value = state.maxEffort;
   $("maxCost").value = String(state.maxCostIdx);
   $("cheapestEffortOnly").checked = state.cheapestEffortOnly;
   $("hideLegacy").checked = state.hideLegacy;
@@ -897,6 +1022,9 @@ function syncUrlFromState() {
     if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
     if (state.minScore !== meta.def) params.set("min", String(state.minScore));
     if (state.costMode !== "task") params.set("mode", state.costMode);
+    if (state.monthlyApiUsage) params.set("usage", String(state.monthlyApiUsage));
+    if (state.accessFilter !== "any") params.set("access", state.accessFilter);
+    if (state.windowFilter !== "any") params.set("window", state.windowFilter);
     if (state.minEffort !== "any") params.set("minEffort", state.minEffort);
     if (state.maxEffort !== "any") params.set("maxEffort", state.maxEffort);
     if (state.budgetIdx !== 5) {
@@ -942,9 +1070,10 @@ function syncUrlFromState() {
 
 function render() {
   const isTokens = state.costMode === "tokens";
-  $("chartHeading").textContent = isTokens
+  const usageSuffix = state.monthlyApiUsage ? ` ($${state.monthlyApiUsage.toLocaleString()}/mo usage)` : "";
+  $("chartHeading").textContent = (isTokens
     ? "Best Real Cost per 1M Tokens"
-    : "Best Real Cost per Task";
+    : "Best Real Cost per Task") + usageSuffix;
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
@@ -988,19 +1117,74 @@ function initTheme() {
   applyTheme(initial);
 }
 
+const DATA_CACHE_NAME = "ai-plan-value-data-v1";
+const DATA_CACHE_KEY = "./data/combined.json";
+
+async function readCachedDataset() {
+  if (typeof caches === "undefined") return null;
+  try {
+    const cache = await caches.open(DATA_CACHE_NAME);
+    const cached = await cache.match(DATA_CACHE_KEY);
+    return cached ? await cached.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedDataset(dataset) {
+  if (typeof caches === "undefined" || !dataset) return;
+  try {
+    const cache = await caches.open(DATA_CACHE_NAME);
+    await cache.put(
+      DATA_CACHE_KEY,
+      new Response(JSON.stringify(dataset), {
+        headers: { "content-type": "application/json" },
+      })
+    );
+  } catch {
+    // Ignore storage quota or private-mode cache errors
+  }
+}
+
 async function loadData() {
-  const isLocal = location.hostname === "127.0.0.1" || location.hostname === "localhost";
-  let res = null;
-  if (isLocal) {
-    res = await fetch("/api/data", { cache: "no-store" }).catch(() => null);
+  const cached = await readCachedDataset();
+  if (cached && Array.isArray(cached.entries)) {
+    state.dataset = cached;
+    $("refreshBtn").hidden = !state.dataset?.server?.liveRefreshSupported;
+    renderMeta();
+    render();
   }
-  if (!res || !res.ok) {
-    res = await fetch("./data/combined.json", { cache: "no-store" });
+
+  try {
+    const isLocal = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+    let res = null;
+    if (isLocal) {
+      res = await fetch("/api/data", { cache: "no-store" }).catch(() => null);
+    }
+    if (!res || !res.ok) {
+      res = await fetch("./data/combined.json", { cache: "no-store" });
+    }
+    if (!res || !res.ok) {
+      throw new Error(`HTTP ${res?.status || "network error"}`);
+    }
+    const fresh = await res.json();
+    const changed =
+      !state.dataset ||
+      fresh.generatedAt !== state.dataset.generatedAt ||
+      Boolean(fresh.server?.liveRefreshSupported) !== Boolean(state.dataset.server?.liveRefreshSupported);
+    state.dataset = fresh;
+    $("refreshBtn").hidden = !state.dataset?.server?.liveRefreshSupported;
+    writeCachedDataset(fresh);
+    if (changed) {
+      renderMeta();
+      render();
+    }
+  } catch {
+    if (!state.dataset) {
+      $("updatedAt").textContent = "Failed to load";
+      $("barChart").innerHTML = `<div class="empty">Could not load dataset. Please refresh.</div>`;
+    }
   }
-  state.dataset = await res.json();
-  $("refreshBtn").hidden = !state.dataset?.server?.liveRefreshSupported;
-  renderMeta();
-  render();
 }
 
 $("benchSelect").addEventListener("change", (e) => {
@@ -1062,6 +1246,9 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 
 $("resetSettingsBtn").addEventListener("click", () => {
   state.costMode = "task";
+  state.monthlyApiUsage = null;
+  state.accessFilter = "any";
+  state.windowFilter = "any";
   state.minEffort = "any";
   state.maxEffort = "any";
   state.maxCostIdx = 4;
@@ -1073,8 +1260,11 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.openWeightsOnly = false;
   state.extraCriteria = [];
   $("costMode").value = "task";
-  $("minEffort").value = "any";
-  $("maxEffort").value = "any";
+  if ($("usagePreset")) $("usagePreset").value = "max";
+  if ($("accessFilter")) $("accessFilter").value = "any";
+  if ($("windowFilter")) $("windowFilter").value = "any";
+  if ($("minEffort")) $("minEffort").value = "any";
+  if ($("maxEffort")) $("maxEffort").value = "any";
   $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
@@ -1117,7 +1307,29 @@ $("costMode").addEventListener("change", (e) => {
   render();
 });
 
-$("minEffort").addEventListener("change", (e) => {
+$("usagePreset")?.addEventListener("change", (e) => {
+  const val = e.target.value;
+  const wasMax = state.monthlyApiUsage == null;
+  state.monthlyApiUsage = val === "max" ? null : Number(val);
+  // Automatically show Pay-as-you-go API when switching to a finite usage level so break-even is visible
+  if (wasMax && state.monthlyApiUsage != null && !state.showApi) {
+    state.showApi = true;
+    $("showApi").checked = true;
+  }
+  render();
+});
+
+$("accessFilter")?.addEventListener("change", (e) => {
+  state.accessFilter = e.target.value;
+  render();
+});
+
+$("windowFilter")?.addEventListener("change", (e) => {
+  state.windowFilter = e.target.value;
+  render();
+});
+
+$("minEffort")?.addEventListener("change", (e) => {
   state.minEffort = e.target.value;
   if (
     state.minEffort !== "any" &&
@@ -1125,12 +1337,12 @@ $("minEffort").addEventListener("change", (e) => {
     EFFORT_ORDER[state.minEffort] > EFFORT_ORDER[state.maxEffort]
   ) {
     state.maxEffort = state.minEffort;
-    $("maxEffort").value = state.maxEffort;
+    if ($("maxEffort")) $("maxEffort").value = state.maxEffort;
   }
   render();
 });
 
-$("maxEffort").addEventListener("change", (e) => {
+$("maxEffort")?.addEventListener("change", (e) => {
   state.maxEffort = e.target.value;
   if (
     state.minEffort !== "any" &&
@@ -1138,7 +1350,7 @@ $("maxEffort").addEventListener("change", (e) => {
     EFFORT_ORDER[state.maxEffort] < EFFORT_ORDER[state.minEffort]
   ) {
     state.minEffort = state.maxEffort;
-    $("minEffort").value = state.minEffort;
+    if ($("minEffort")) $("minEffort").value = state.minEffort;
   }
   render();
 });
@@ -1171,6 +1383,7 @@ $("refreshBtn").addEventListener("click", async () => {
       const data = await res.json();
       if (res.ok && data.ok !== false) {
         state.dataset = data;
+        writeCachedDataset(data);
         renderMeta();
         render();
       }

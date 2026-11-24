@@ -33,6 +33,8 @@ const LIVE_DATA_URL = process.env.LIVE_DATA_URL || (REPO
 
 const DRY_RUN = process.argv.includes("--dry-run") || !TOKEN || !REPO;
 const REFRESH_FAILED = process.env.REFRESH_OUTCOME === "failure";
+const TESTS_FAILED = process.env.TESTS_OUTCOME === "failure";
+const TESTS_OUTPUT_PATH = process.env.TESTS_OUTPUT_PATH || "";
 const PREV_SNAPSHOT_PATH = process.env.PREV_SNAPSHOT_PATH || "";
 
 async function ghApi(endpoint, { method = "GET", body = null } = {}) {
@@ -162,6 +164,9 @@ async function main() {
   const openDataAlerts = existingIssues.filter(
     (i) => i.state === "open" && !i.pull_request && i.title.startsWith("[Data Alert]")
   );
+  const openTestAlerts = existingIssues.filter(
+    (i) => i.state === "open" && !i.pull_request && i.title.startsWith("[Test Failure]")
+  );
 
   let current = null;
   if (fs.existsSync(CURRENT_DATA_PATH)) {
@@ -196,6 +201,26 @@ async function main() {
           error: src.error || "Returned 0 records",
         });
       }
+    }
+  }
+
+  // --- 1b. Dataset Integrity Checks (harness, quota window, valid numbers) ---
+  if (current && !REFRESH_FAILED) {
+    const entries = current.entries || [];
+    const validWindows = new Set(["monthly", "weekly", "rolling", "payg"]);
+    const badMeta = entries.filter(
+      (e) =>
+        typeof e.openEndpoint !== "boolean" ||
+        !e.harness ||
+        !validWindows.has(e.quotaWindow) ||
+        !Number.isFinite(e.aaCostPerTaskUsd) ||
+        e.aaCostPerTaskUsd <= 0
+    );
+    if (badMeta.length > 0) {
+      failedSources.push({
+        name: "Dataset integrity check",
+        error: `${badMeta.length} entry(s) missing valid harness/quotaWindow metadata or aaCostPerTaskUsd`,
+      });
     }
   }
 
@@ -236,7 +261,91 @@ async function main() {
     console.log("[alerts] All upstream sources healthy.");
   }
 
-  // --- 2. New Important Model Released Check ---
+  // --- 1c. Automated Site & Feature Test Suite Alert ---
+  if (TESTS_FAILED) {
+    let testLog = "";
+    if (TESTS_OUTPUT_PATH && fs.existsSync(TESTS_OUTPUT_PATH)) {
+      testLog = fs.readFileSync(TESTS_OUTPUT_PATH, "utf8").trim().slice(-3000);
+    }
+    const title = "[Test Failure] Automated site/data test suite failed";
+    const body = [
+      `Automated verification (\`scripts/test-site.mjs\`) failed on \`${new Date().toISOString()}\`:`,
+      "",
+      testLog ? "```\n" + testLog + "\n```" : "_No test output captured._",
+      "",
+      RUN_URL ? `Workflow run: ${RUN_URL}` : "",
+      "",
+      `*(This issue will auto-close once \`scripts/test-site.mjs\` passes again.)*`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (openTestAlerts.length > 0) {
+      await commentIssue(
+        openTestAlerts[0].number,
+        `Still failing on \`${new Date().toISOString()}\`:\n\n${testLog ? "```\n" + testLog + "\n```" : ""}${RUN_URL ? `\n\nWorkflow run: ${RUN_URL}` : ""}`
+      );
+    } else {
+      await createIssue(title, body);
+    }
+  } else if (process.env.TESTS_OUTCOME === "success" && openTestAlerts.length > 0) {
+    for (const alert of openTestAlerts) {
+      await closeIssue(
+        alert.number,
+        `Automated site/data tests recovered and passed on \`${new Date().toISOString()}\`.${RUN_URL ? ` Run: ${RUN_URL}` : ""}`
+      );
+    }
+  }
+
+  // --- 2. Unclassified New Plan Check (harness / quota window / URL) ---
+  if (current && !REFRESH_FAILED) {
+    const unclassified = Array.isArray(current.stats?.unclassifiedPlans)
+      ? current.stats.unclassifiedPlans
+      : [];
+    const missingUrls = [
+      ...new Set(
+        (current.entries || [])
+          .filter((e) => e.billing === "subscription" && !e.planUrl)
+          .map((e) => e.plan)
+      ),
+    ];
+    const needsClassification = [...new Set([...unclassified, ...missingUrls])].sort();
+
+    for (const planName of needsClassification) {
+      const alreadyFiled = existingIssues.some(
+        (i) =>
+          !i.pull_request &&
+          i.title.startsWith("[New Plan]") &&
+          i.title.toLowerCase().includes(planName.toLowerCase())
+      );
+      if (alreadyFiled) {
+        console.log(`[alerts] [New Plan] issue already exists for ${planName}; skipping.`);
+        continue;
+      }
+      const reasons = [];
+      if (unclassified.includes(planName)) reasons.push("harness & quota reset window fell back to defaults");
+      if (missingUrls.includes(planName)) reasons.push("missing official pricing URL");
+
+      const title = `[New Plan] Classify ${planName}`;
+      const body = [
+        `A new subscription plan appeared in \`combined.json\` that needs explicit classification:`,
+        "",
+        `- **Plan:** ${planName}`,
+        `- **Reason:** ${reasons.join("; ")}`,
+        "",
+        `### Follow-up checklist`,
+        `- [ ] Add \`detectPlanAccessAndWindow\` rule (harness + quota reset window) in \`scripts/refresh-data.mjs\``,
+        `- [ ] Verify official pricing URL in \`PLAN_URL_PATTERNS\` in \`scripts/refresh-data.mjs\``,
+        RUN_URL ? `\nDetected during workflow run: ${RUN_URL}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      await createIssue(title, body);
+    }
+  }
+
+  // --- 3. New Important Model Released Check ---
   if (!current || REFRESH_FAILED) {
     console.log("[alerts] Skipping new-model check because refresh failed.");
     return;

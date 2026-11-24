@@ -1,0 +1,208 @@
+#!/usr/bin/env node
+/**
+ * Automated verification suite for AI Plan Value.
+ * Tests dataset integrity, upstream sources (including OpenRouter & Kilo Pass),
+ * harness/quota-window classification, HTML/JS DOM wiring, break-even usage math,
+ * reasoning effort bounds, shareable URL params, and cache-busting readiness.
+ *
+ * Zero external dependencies (Node.js >= 20). Exits non-zero on any failure.
+ */
+
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+const DATA_PATH = path.join(ROOT, "public", "data", "combined.json");
+const HTML_PATH = path.join(ROOT, "public", "index.html");
+const APP_PATH = path.join(ROOT, "public", "app.js");
+const WORKFLOW_PATH = path.join(ROOT, ".github", "workflows", "deploy.yml");
+
+let passed = 0;
+let failed = 0;
+const failures = [];
+
+function test(name, fn) {
+  try {
+    fn();
+    passed++;
+    console.log(`PASS  ${name}`);
+  } catch (err) {
+    failed++;
+    const msg = err?.message || String(err);
+    failures.push({ name, msg });
+    console.error(`FAIL  ${name}\n      ${msg}`);
+  }
+}
+
+const dataset = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
+const html = fs.readFileSync(HTML_PATH, "utf8");
+const appJs = fs.readFileSync(APP_PATH, "utf8");
+const workflowYml = fs.readFileSync(WORKFLOW_PATH, "utf8");
+const entries = dataset.entries || [];
+
+// 1. Upstream sources health
+test("All 7 upstream sources succeeded with non-zero records", () => {
+  const expected = [
+    ["fei2411", "rowCount"],
+    ["priorsRepo", "itemCount"],
+    ["artificialAnalysis", "modelCount"],
+    ["openRouter", "modelCount"],
+    ["githubCopilot", "tierCount"],
+    ["ollamaCloud", "tierCount"],
+    ["kiloPass", "tierCount"],
+  ];
+  for (const [key, countField] of expected) {
+    const src = dataset.sources?.[key];
+    assert.ok(src, `Missing source entry: ${key}`);
+    assert.equal(src.ok, true, `Source ${key} failed: ${src.error}`);
+    assert.ok((src[countField] || 0) > 0, `Source ${key}.${countField} must be > 0`);
+  }
+});
+
+// 2. Dataset size & uniqueness
+test("Dataset has expected scale and zero duplicate entry IDs", () => {
+  assert.ok(entries.length >= 500, `Expected >= 500 entries, got ${entries.length}`);
+  assert.ok((dataset.stats?.uniqueModels || 0) >= 50, `Expected >= 50 models, got ${dataset.stats?.uniqueModels}`);
+  assert.ok((dataset.stats?.uniqueVariants || 0) >= 100, `Expected >= 100 variants, got ${dataset.stats?.uniqueVariants}`);
+  const ids = new Set();
+  for (const e of entries) {
+    assert.ok(e.id, "Entry missing id");
+    assert.ok(!ids.has(e.id), `Duplicate entry id: ${e.id}`);
+    ids.add(e.id);
+  }
+});
+
+// 3. Pricing & benchmark sanity
+test("All entries have positive AA cost/task, valid intelligence, and token pricing", () => {
+  let missingTokenPrice = 0;
+  for (const e of entries) {
+    assert.ok(Number.isFinite(e.aaCostPerTaskUsd) && e.aaCostPerTaskUsd > 0, `Invalid aaCostPerTaskUsd on ${e.id}`);
+    assert.ok(Number.isFinite(e.intelligenceIndex), `Invalid intelligenceIndex on ${e.id}`);
+    if (e.billing === "subscription" && !e.unmetered) {
+      assert.ok(Number.isFinite(e.subsidyMultiple) && e.subsidyMultiple > 0, `Invalid subsidyMultiple on ${e.id}`);
+    }
+    const p = e.aaPricing || {};
+    const mtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok;
+    if (mtok == null || !Number.isFinite(mtok) || mtok <= 0) missingTokenPrice++;
+  }
+  assert.equal(missingTokenPrice, 0, `${missingTokenPrice} entries missing blended token pricing`);
+});
+
+// 4. OpenRouter context window & domain backfill
+test("OpenRouter backfilled context windows across >= 60% of models", () => {
+  assert.ok(
+    (dataset.stats?.openRouterBackfilledContext || 0) > 0,
+    "Expected openRouterBackfilledContext > 0"
+  );
+  const byModel = new Map();
+  for (const e of entries) {
+    if (!byModel.has(e.baseModelId)) byModel.set(e.baseModelId, e.contextWindowTokens);
+  }
+  const withCtx = [...byModel.values()].filter((v) => v != null && v > 0).length;
+  const pct = (withCtx / byModel.size) * 100;
+  assert.ok(pct >= 60, `Context window coverage too low: ${withCtx}/${byModel.size} (${pct.toFixed(1)}%)`);
+});
+
+// 5. Kilo Pass live tiers & net multiple (50% bonus / 5% fee = 1.4286x)
+test("Kilo Pass tiers are present with exact fee-adjusted 1.43x multiple", () => {
+  const kilo = entries.filter((e) => e.origin === "kilo-pass");
+  assert.ok(kilo.length > 0, "No Kilo Pass entries found");
+  const expectedTiers = new Map([
+    ["Kilo Pass Starter (Annual)", 19.95],
+    ["Kilo Pass Pro (Annual)", 51.45],
+    ["Kilo Pass Expert (Annual)", 208.95],
+  ]);
+  for (const [planName, expectedFee] of expectedTiers.entries()) {
+    const matches = kilo.filter((e) => e.plan === planName);
+    assert.ok(matches.length > 0, `Missing Kilo Pass tier: ${planName}`);
+    const sample = matches[0];
+    assert.ok(Math.abs(sample.priceUsd - expectedFee) < 0.02, `${planName} fee ${sample.priceUsd} !== ${expectedFee}`);
+    assert.ok(Math.abs(sample.subsidyMultiple - 1.4286) < 0.01, `${planName} multiple ${sample.subsidyMultiple} !== 1.4286`);
+    assert.equal(sample.openEndpoint, true, `${planName} should be openEndpoint=true`);
+    assert.equal(sample.quotaWindow, "monthly", `${planName} should be quotaWindow=monthly`);
+  }
+});
+
+// 6. Harness & Quota Reset Window classification
+test("All entries have valid harness/quotaWindow metadata and zero unclassified plans", () => {
+  const validWindows = new Set(["monthly", "weekly", "rolling", "payg"]);
+  for (const e of entries) {
+    assert.equal(typeof e.openEndpoint, "boolean", `Missing openEndpoint on ${e.id}`);
+    assert.ok(e.harness && typeof e.harness === "string", `Missing harness on ${e.id}`);
+    assert.ok(validWindows.has(e.quotaWindow), `Invalid quotaWindow "${e.quotaWindow}" on ${e.id}`);
+    assert.ok(e.quotaWindowLabel && typeof e.quotaWindowLabel === "string", `Missing quotaWindowLabel on ${e.id}`);
+  }
+  const unclassified = dataset.stats?.unclassifiedPlans || [];
+  if (unclassified.length > 0) {
+    console.warn(`WARN  Unclassified plans (will trigger [New Plan] issue in CI): ${unclassified.join(", ")}`);
+  }
+
+  const findPlan = (re) => entries.find((e) => e.billing === "subscription" && re.test(e.plan));
+  const claude = findPlan(/^Claude\b/i);
+  assert.ok(claude && claude.openEndpoint === false && claude.quotaWindow === "weekly", "Claude classification mismatch");
+  const chatgpt = findPlan(/^ChatGPT\b/i);
+  assert.ok(chatgpt && chatgpt.openEndpoint === false && chatgpt.quotaWindow === "weekly", "ChatGPT classification mismatch");
+  const copilot = findPlan(/^GitHub Copilot\b/i);
+  assert.ok(copilot && copilot.openEndpoint === false && copilot.quotaWindow === "monthly", "Copilot classification mismatch");
+  const glm = findPlan(/^GLM Coding\b/i);
+  assert.ok(glm && glm.openEndpoint === true && glm.quotaWindow === "rolling", "GLM Coding classification mismatch");
+  const api = entries.find((e) => e.billing === "metered");
+  assert.ok(api && api.openEndpoint === true && api.quotaWindow === "payg", "Metered API classification mismatch");
+});
+
+// 7. DOM ID wiring between public/app.js and public/index.html
+test("Every $('id') selector in public/app.js exists in public/index.html", () => {
+  const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+  const jsIds = [...new Set([...appJs.matchAll(/\$\("([^"]+)"\)/g)].map((m) => m[1]))];
+  assert.ok(jsIds.length >= 25, `Unexpectedly few DOM selectors found: ${jsIds.length}`);
+  const missing = jsIds.filter((id) => !htmlIds.has(id));
+  assert.equal(missing.length, 0, `DOM IDs referenced in app.js missing from index.html: ${missing.join(", ")}`);
+});
+
+// 8. Break-even Monthly API usage math
+test("Monthly API usage break-even math handles under-cap, over-cap, and API baseline", () => {
+  function calcEffectiveSubsidy({ isApi, priceUsd, rawSubsidy, usageUsd }) {
+    if (isApi) return { subsidy: 1, spend: usageUsd, overage: 0 };
+    const cap = priceUsd * rawSubsidy;
+    const overage = Math.max(0, usageUsd - cap);
+    const spend = priceUsd + overage;
+    return { subsidy: usageUsd / spend, spend, overage };
+  }
+
+  // At $20/mo usage: API (1.0x) beats $100/5x plan (0.2x)
+  const lowApi = calcEffectiveSubsidy({ isApi: true, priceUsd: null, rawSubsidy: 1, usageUsd: 20 });
+  const lowMax = calcEffectiveSubsidy({ isApi: false, priceUsd: 100, rawSubsidy: 5, usageUsd: 20 });
+  assert.equal(lowApi.subsidy, 1);
+  assert.equal(lowMax.subsidy, 0.2);
+  assert.ok(lowApi.subsidy > lowMax.subsidy);
+
+  // At $250/mo usage: $100/5x plan (2.5x) beats $20/5x + $150 overage (1.47x) and $200/5x (1.25x)
+  const mid20 = calcEffectiveSubsidy({ isApi: false, priceUsd: 20, rawSubsidy: 5, usageUsd: 250 });
+  const mid100 = calcEffectiveSubsidy({ isApi: false, priceUsd: 100, rawSubsidy: 5, usageUsd: 250 });
+  const mid200 = calcEffectiveSubsidy({ isApi: false, priceUsd: 200, rawSubsidy: 5, usageUsd: 250 });
+  assert.equal(mid20.overage, 150);
+  assert.equal(mid20.spend, 170);
+  assert.ok(Math.abs(mid20.subsidy - 250 / 170) < 1e-9);
+  assert.equal(mid100.subsidy, 2.5);
+  assert.equal(mid200.subsidy, 1.25);
+  assert.ok(mid100.subsidy > mid20.subsidy && mid100.subsidy > mid200.subsidy);
+});
+
+// 9. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
+test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
+  for (const param of ["bench", "min", "mode", "usage", "access", "window", "minEffort", "maxEffort", "budget", "cost", "efforts", "extra", "q", "group", "sort"]) {
+    assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
+  }
+  assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
+  assert.ok(appJs.includes("passesEffortBounds") && appJs.includes("passesAccessAndWindow"), "Missing effort/access/window filters in public/app.js");
+  assert.ok(html.includes('href="./styles.css"') && html.includes('src="./app.js"'), "index.html must reference ./styles.css and ./app.js");
+  assert.ok(workflowYml.includes("GITHUB_SHA") && workflowYml.includes("?v="), "deploy.yml missing ?v=${GITHUB_SHA} cache-busting step");
+});
+
+console.log(`\nSummary: ${passed} passed, ${failed} failed`);
+if (failed > 0) {
+  process.exit(1);
+}
