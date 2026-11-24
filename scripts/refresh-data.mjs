@@ -355,7 +355,18 @@ function vendorFromPlan(planName, fallbackVendor) {
   if (/^tencent\b/i.test(p)) return "Tencent";
   if (/^mimo\b/i.test(p)) return "Xiaomi";
   if (/^step plan/i.test(p)) return "StepFun";
+  if (/^kimi\b/i.test(p)) return "Moonshot";
   return fallbackVendor || "Other";
+}
+
+function planVendorFeeKey(planName, fallbackVendor, feeUsd, aaSlug, flags) {
+  const seller = vendorFromPlan(planName, fallbackVendor);
+  const quals = [...String(planName || "").matchAll(/\(([^)]+)\)/g)]
+    .map((m) => normSlug(m[1]))
+    .filter((q) => q && q !== "cn" && q !== "global")
+    .sort()
+    .join("+");
+  return `${normSlug(seller)}::${Math.round(feeUsd)}::${aaSlug}::${flags.isOffPeak ? "off" : "std"}::${flags.isLegacy ? "leg" : "cur"}::${quals}`;
 }
 
 function cleanVendorName(vendor, creatorName) {
@@ -2605,7 +2616,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (billing === "subscription") {
       feiSubIndex.set(`${normPlanSlug(planName)}::${aaSlug}`, entryId);
       if (priceUsd !== null) {
-        feiVendorFeeModelIndex.set(`${normSlug(vendor)}::${Math.round(priceUsd)}::${aaSlug}`, entryId);
+        feiVendorFeeModelIndex.set(
+          planVendorFeeKey(planName, vendor, priceUsd, aaSlug, { isOffPeak, isLegacy }),
+          entryId
+        );
       }
     }
   }
@@ -2744,10 +2758,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (/^ollama\b/i.test(item.plan)) ollamaHostedSlugs.add(aaSlug);
 
     const sellerVendor = vendorFromPlan(item.plan, aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator);
+    const priorsFlags = detectPlanFlags(item.plan, item.planRaw);
     const existingId =
       feiSubIndex.get(dedupeKey) ||
       (item.feeUsd !== null
-        ? feiVendorFeeModelIndex.get(`${normSlug(sellerVendor)}::${Math.round(item.feeUsd)}::${aaSlug}`)
+        ? feiVendorFeeModelIndex.get(planVendorFeeKey(item.plan, sellerVendor, item.feeUsd, aaSlug, priorsFlags))
         : null);
 
     // Skip duplicates already covered by Fei2411 unless Priors has a newer preliminary measurement
@@ -2770,7 +2785,6 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const isEstimated = item.isPrelim || item.isAssumed;
     const replacesId = item.isPrelim ? existingId : null;
     const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
-    const priorsFlags = detectPlanFlags(item.plan, item.planRaw);
 
     entries.push({
       id: `${origin}::${planSlug}::${aaSlug}`,
