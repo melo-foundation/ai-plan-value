@@ -153,7 +153,10 @@ function feeText(r) {
   if (r.isApi) {
     return state.monthlyApiUsage ? `$${state.monthlyApiUsage}/mo API` : "API";
   }
-  const base = r.priceUsd >= 100 ? Math.round(r.priceUsd) : r.priceUsd;
+  const base =
+    r.priceUsd >= 100 || Number.isInteger(r.priceUsd)
+      ? Math.round(r.priceUsd)
+      : r.priceUsd.toFixed(2);
   if (state.monthlyApiUsage && r.overageUsd >= 1) {
     return `$${base} + $${Math.round(r.overageUsd)} API`;
   }
@@ -544,8 +547,8 @@ function renderBarChart(rows, allResolved) {
           : r.color || "#3a6ea5";
 
       const planName = cleanPlan(r);
-      const planFee = r.isApi && !state.monthlyApiUsage ? "" : ` · ${feeText(r)}`;
-      const planText = `${planName}${r.isPreliminary ? "*" : ""}${planFee} · ${r.harness} · ${r.quotaWindowLabel}`;
+      const planFee = state.monthlyApiUsage ? ` · ${feeText(r)}` : "";
+      const planText = `${planName}${r.isPreliminary ? "*" : ""}${r.isApi && !state.monthlyApiUsage ? "" : ` · ${feeText(r)}`} · ${r.harness} · ${r.quotaWindowLabel}`;
       const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}${planFee ? esc(planFee) : ""}`;
       const note = `${benchMeta.label} ${fmtScore(r.score, scoreKey)}`;
       const expKey = `${r.id}`;
