@@ -59,6 +59,7 @@ const MODEL_ALIASES = {
   "aa-muse-ember": "muse-ember",
   "aa-step-5": "step-5-preview",
   "minimax-m3-1": "minimax-m3-1-flash",
+  "minimax-m3-1-flash-preview": "minimax-m3-1-flash",
   "gemini-4": "gemini-4-argon",
 };
 
@@ -598,7 +599,7 @@ function parseAaApiV2(json) {
  *   2. All multi-effort Artificial Analysis `(model, effort)` variants with
  *      AA Intelligence Index v5.0.1, AA Cost per Task, and per-variant test scores.
  */
-function parsePriorsSnapshot(snapshot, aaByNorm) {
+function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
   const modelsById = new Map();
   for (const m of snapshot.models || []) {
     modelsById.set(m.id, m);
@@ -777,7 +778,19 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
     const modelId = String(obs.variantId || "").split("@")[0];
     const det = obs.details || {};
     const sameAsDet = det.sameAs ? subDetailsByModel.get(det.sameAs) : null;
-    const lp = det.listPrice || sameAsDet?.listPrice || {};
+    let lp = det.listPrice || sameAsDet?.listPrice || {};
+    if (lp.input == null || lp.output == null) {
+      const aaHead = resolveAaModel(modelId, aaByNorm);
+      const orMod = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
+      const pSrc = aaHead?.pricing?.inputPer1M != null ? aaHead.pricing : orMod?.pricing;
+      if (pSrc && pSrc.inputPer1M != null && pSrc.outputPer1M != null) {
+        lp = {
+          input: pSrc.inputPer1M,
+          output: pSrc.outputPer1M,
+          cached: pSrc.cacheHitPer1M ?? pSrc.inputPer1M * 0.1,
+        };
+      }
+    }
     const mix = det.mix || sameAsDet?.mix || { cache: 0.97, input: 0.025, output: 0.005 };
     const poolRate = toNum(det.poolRate) || 1;
 
@@ -2293,7 +2306,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   if (priorsGzBuf) {
     try {
       const rawJson = zlib.gunzipSync(priorsGzBuf).toString("utf8");
-      priorsParsed = parsePriorsSnapshot(JSON.parse(rawJson), aaByNorm);
+      priorsParsed = parsePriorsSnapshot(JSON.parse(rawJson), aaByNorm, openRouterIndex);
       sourceStatus.priorsRepo.ok = true;
       sourceStatus.priorsRepo.fetchedAt = nowIso;
       sourceStatus.priorsRepo.itemCount = priorsParsed.items.length;
@@ -2469,10 +2482,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const priceUsd = toNum(r.price_usd);
     const monthlyYi = toNum(r.monthly_yi);
     const realUsdPerMtok = toNum(r.real_usd_per_mtok);
-    const aaP = aaModel?.pricing;
+    const orModel = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
+    const aaP = aaModel?.pricing?.inputPer1M != null ? aaModel.pricing : orModel?.pricing;
+    const isLowCache = String(r.workload || "").toLowerCase() === "lowcache";
     const aaCodingBlended =
-      aaP && aaP.cacheHitPer1M != null && aaP.inputPer1M != null && aaP.outputPer1M != null
-        ? 0.97 * aaP.cacheHitPer1M + 0.025 * aaP.inputPer1M + 0.005 * aaP.outputPer1M
+      aaP && aaP.inputPer1M != null && aaP.outputPer1M != null
+        ? isLowCache
+          ? 0.8 * (aaP.cacheHitPer1M ?? aaP.inputPer1M * 0.1) + 0.15 * aaP.inputPer1M + 0.05 * aaP.outputPer1M
+          : 0.97 * (aaP.cacheHitPer1M ?? aaP.inputPer1M * 0.1) + 0.025 * aaP.inputPer1M + 0.005 * aaP.outputPer1M
         : null;
     const listBlendedUsdPerMtok = toNum(r.list_blended_usd_per_mtok) ?? aaCodingBlended;
     const discountRatio = toNum(r.d);

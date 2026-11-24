@@ -238,6 +238,16 @@ test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI 
   assert.ok(workflowYml.includes("GITHUB_SHA") && workflowYml.includes("?v="), "deploy.yml missing ?v=${GITHUB_SHA} cache-busting step");
 });
 
+// 11. Regression guard: pricing fallbacks recover rows missing upstream listPrice
+test("Pricing fallbacks recover Fei2411 and Priors rows with omitted listPrice", () => {
+  const has = (planRe, baseModel) =>
+    entries.some((e) => e.billing === "subscription" && planRe.test(e.plan) && e.baseModelId === baseModel);
+  assert.ok(has(/^Google AI Ultra 20x$/i, "gemini-3-8-flash"), "Missing gemini-3-8-flash on Google AI Ultra 20x");
+  assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-astra"), "Missing gpt-6-astra on ChatGPT Pro 500");
+  assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-sol"), "Missing gpt-6-sol on ChatGPT Pro 500");
+  assert.ok(has(/^ChatGPT Pro 20x$/i, "gpt-6-1-sol"), "Missing gpt-6-1-sol on ChatGPT Pro 20x");
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
