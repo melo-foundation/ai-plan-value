@@ -185,8 +185,10 @@ async function main() {
         (key === "fei2411" && !src.rowCount) ||
         (key === "priorsRepo" && !src.itemCount) ||
         (key === "artificialAnalysis" && !src.modelCount) ||
+        (key === "openRouter" && !src.modelCount) ||
         (key === "githubCopilot" && !src.tierCount) ||
-        (key === "ollamaCloud" && !src.tierCount);
+        (key === "ollamaCloud" && !src.tierCount) ||
+        (key === "kiloPass" && !src.tierCount);
       if (!src.ok || empty) {
         failedSources.push({
           name: src.name || key,

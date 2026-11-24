@@ -124,7 +124,7 @@
           </div>
         </section>
 
-        <details class="panel" aria-label="Full comparison table">
+        <details id="tableDetails" class="panel" aria-label="Full comparison table">
           <summary class="panel-head panel-toggle">
             <h2>Full Comparison Table</h2>
           </summary>
@@ -163,6 +163,35 @@
               <option value="task" selected>Per task</option>
               <option value="tokens">Per 1M tokens</option>
             </select>
+          </div>
+          <div class="settings-head-row">
+            <span class="settings-heading">Reasoning effort</span>
+            <div class="effort-range">
+              <label class="effort-pick">
+                <span>Min</span>
+                <select id="minEffort" class="select" aria-label="Minimum reasoning effort">
+                  <option value="any" selected>Any</option>
+                  <option value="none">Non-reasoning</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="xhigh">XHigh</option>
+                  <option value="max">Max</option>
+                </select>
+              </label>
+              <label class="effort-pick">
+                <span>Max</span>
+                <select id="maxEffort" class="select" aria-label="Maximum reasoning effort">
+                  <option value="any" selected>Any</option>
+                  <option value="none">Non-reasoning</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="xhigh">XHigh</option>
+                  <option value="max">Max</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -215,13 +244,15 @@
         <p>
           <strong>Benchmarks &amp; API $/task</strong> come from
           <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>,
-          including the overall Intelligence Index, domain capability scores, individual tests, and average API cost per benchmark task.
+          including the overall Intelligence Index, domain capability scores, individual tests, and average API cost per benchmark task, with model specs (context window, open-weights status, and domain index backfill) from
+          <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>.
         </p>
         <p>
           <strong>Plan subsidies</strong> come primarily from upstream
           <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>
           and first-party published credit pools (<a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a>,
-          <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>),
+          <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>,
+          <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a>),
           with secondary backfill from
           <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a>
           for per-effort sub-tests and unmeasured recent releases. Subsidies measure how many dollars of API usage a subscription provides per $1 of monthly fee at full usage.

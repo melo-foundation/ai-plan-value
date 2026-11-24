@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Fetches and merges live data from 5 upstream sources:
- *   1. Fei2411/real-api-pricing (derived/points.csv) — empirical subscription quotas & workloads
- *   2. adamholter/priors (data/snapshots/latest.json.gz) — clean raw-GitHub snapshot for Priors subsidies
+ * Fetches and merges live data from 7 upstream sources:
+ *   1. Fei2411/real-api-pricing (derived/points.csv + benchmark-configurations.csv) — empirical subscription quotas & workloads
+ *   2. adamholter/priors (data/snapshots/latest.json.gz) — clean raw-GitHub snapshot for secondary backfill
  *   3. artificialanalysis.ai/models (#price-cost SSR payload + optional AA_API_KEY v2 API)
- *   4. GitHub Copilot Plans (https://github.com/features/copilot/plans) — live-verified AI Credit pools
- *   5. Ollama Pricing (https://ollama.com/pricing) — live-verified Ollama Cloud Team credit pool
+ *   4. OpenRouter Models API (https://openrouter.ai/api/v1/models) — context window, open-weights, domain scores & gateway catalog
+ *   5. GitHub Copilot Plans (https://github.com/features/copilot/plans) — live-verified AI Credit pools
+ *   6. Ollama Pricing (https://ollama.com/pricing) — live-verified Ollama Cloud Team credit pool
+ *   7. Kilo Pricing (https://kilo.ai/pricing) — live-verified Kilo Pass credit pools
  *
  * Writes normalized dataset to public/data/combined.json.
  * Zero external npm dependencies (requires Node.js >= 20).
@@ -29,8 +31,10 @@ const SOURCES = {
     "https://raw.githubusercontent.com/adamholter/priors/main/data/snapshots/latest.json.gz",
   aaModelsPage: "https://artificialanalysis.ai/models",
   aaApiV2: "https://artificialanalysis.ai/api/v2/data/llms/models",
+  openRouterModels: "https://openrouter.ai/api/v1/models",
   githubCopilotPlans: "https://github.com/features/copilot/plans",
   ollamaPricing: "https://ollama.com/pricing",
+  kiloPricing: "https://kilo.ai/pricing",
 };
 
 const USER_AGENT =
@@ -122,6 +126,7 @@ const VENDOR_COLORS = {
   "Thinking Machines": "#0891B2",
   "Ant Group": "#0284C7",
   GitHub: "#24292F",
+  Kilo: "#CA8A04",
 };
 
 // Verified first-party subscription plan & API pricing URLs
@@ -130,6 +135,7 @@ const PLAN_URL_PATTERNS = [
   [/^chatgpt\b/i, "https://openai.com/chatgpt/pricing/"],
   [/^google ai\b/i, "https://one.google.com/about/google-ai-plans/"],
   [/^github copilot\b/i, "https://github.com/features/copilot/plans"],
+  [/^kilo pass\b/i, "https://kilo.ai/pricing"],
   [/^supergrok\b/i, "https://grok.com"],
   [/^cursor\b/i, "https://cursor.com/pricing"],
   [/^devin\b/i, "https://devin.ai/pricing"],
@@ -241,6 +247,7 @@ function vendorFromPlan(planName, fallbackVendor) {
   if (/^chatgpt\b/i.test(p)) return "OpenAI";
   if (/^google ai\b/i.test(p)) return "Google";
   if (/^github copilot\b/i.test(p)) return "GitHub";
+  if (/^kilo\b/i.test(p)) return "Kilo";
   if (/^supergrok\b/i.test(p)) return "xAI";
   if (/^cursor\b/i.test(p)) return "Cursor";
   if (/^devin\b/i.test(p)) return "Devin";
@@ -947,6 +954,169 @@ function parseOllamaPricingHtml(html) {
   ];
 }
 
+/**
+ * Parse OpenRouter's free public catalog (https://openrouter.ai/api/v1/models)
+ * to backfill context windows, open-weights status, missing API pricing,
+ * AA domain indices, and confirm gateway model availability for Kilo Pass.
+ */
+function parseOpenRouterModels(json, aaByNorm) {
+  const list = Array.isArray(json?.data) ? json.data : [];
+  if (list.length === 0) {
+    throw new Error("OpenRouter models API returned 0 models");
+  }
+
+  const bySlug = new Map();
+  const byName = new Map();
+
+  for (const m of list) {
+    const rawId = String(m?.id || "").trim();
+    if (!rawId || rawId.includes(":") || rawId.startsWith("~") || rawId.startsWith("openrouter/")) {
+      continue;
+    }
+
+    const slugPart = rawId.includes("/") ? rawId.split("/").slice(1).join("/") : rawId;
+    const prompt = toNum(m.pricing?.prompt);
+    const completion = toNum(m.pricing?.completion);
+    const cacheRead = toNum(m.pricing?.input_cache_read);
+    const inputPer1M = prompt != null && prompt > 0 ? Number((prompt * 1e6).toFixed(4)) : null;
+    const outputPer1M = completion != null && completion > 0 ? Number((completion * 1e6).toFixed(4)) : null;
+    const cacheHitPer1M = cacheRead != null && cacheRead >= 0 ? Number((cacheRead * 1e6).toFixed(4)) : null;
+    const blended3to1Per1M =
+      inputPer1M != null && outputPer1M != null
+        ? Number(((3 * inputPer1M + outputPer1M) / 4).toFixed(4))
+        : null;
+
+    const aa = m.benchmarks?.artificial_analysis;
+    const domainBenchmarks = {};
+    if (aa && typeof aa === "object") {
+      if (toNum(aa.engineering_index) != null) domainBenchmarks.engineering = round1(aa.engineering_index);
+      if (toNum(aa.finance_and_accounting_index) != null) {
+        domainBenchmarks.financeAndAccounting = round1(aa.finance_and_accounting_index);
+      }
+      if (toNum(aa.strategy_and_ops_index) != null) {
+        domainBenchmarks.strategyAndOps = round1(aa.strategy_and_ops_index);
+      }
+      if (toNum(aa.legal_index) != null) domainBenchmarks.legal = round1(aa.legal_index);
+      if (toNum(aa.healthcare_and_medical_index) != null) {
+        domainBenchmarks.healthcareAndMedical = round1(aa.healthcare_and_medical_index);
+      }
+      if (toNum(aa.economics_index) != null) domainBenchmarks.economics = round1(aa.economics_index);
+    }
+
+    const rec = {
+      id: rawId,
+      contextWindowTokens: toNum(m.context_length ?? m.top_provider?.context_length),
+      isOpenWeights: Boolean(m.hugging_face_id),
+      isPaid: inputPer1M != null && outputPer1M != null,
+      aaIntelligenceIndex: aa && typeof aa === "object" ? toNum(aa.intelligence_index) : null,
+      pricing:
+        inputPer1M != null || outputPer1M != null
+          ? {
+              inputPer1M,
+              outputPer1M,
+              cacheHitPer1M,
+              blended3to1Per1M,
+              blended7to2to1Per1M: null,
+            }
+          : null,
+      domainBenchmarks: Object.keys(domainBenchmarks).length > 0 ? domainBenchmarks : null,
+    };
+
+    const keys = [canonicalBaseSlug(slugPart, aaByNorm), normSlug(slugPart), normSlug(rawId)];
+    for (const k of keys) {
+      if (k && !bySlug.has(k)) bySlug.set(k, rec);
+    }
+
+    const nameNoVendor = String(m.name || "").replace(/^[^:]+:\s*/, "").trim();
+    const nameKey = normSlug(nameNoVendor);
+    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, rec);
+  }
+
+  return { totalCount: list.length, bySlug, byName };
+}
+
+function resolveOpenRouterModel(slug, openRouterIndex, aaByNorm) {
+  if (!openRouterIndex) return null;
+  const norm = normSlug(slug);
+  const canon = canonicalBaseSlug(slug, aaByNorm);
+  return (
+    openRouterIndex.bySlug.get(slug) ||
+    openRouterIndex.bySlug.get(canon) ||
+    openRouterIndex.bySlug.get(norm) ||
+    openRouterIndex.byName.get(canon) ||
+    openRouterIndex.byName.get(norm) ||
+    null
+  );
+}
+
+/**
+ * Live-parse deterministic Kilo Pass tiers, processing fee (5%), and annual bonus (50%)
+ * directly from https://kilo.ai/pricing.
+ * Throws if Kilo changes pricing, bonus, or fee structure so check-alerts.mjs opens a [Data Alert].
+ */
+function parseKiloPricingHtml(html) {
+  const text = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+
+  const annualBonusMatch = text.match(/Annual\s+(\d+(?:\.\d+)?)%\s+bonus/i);
+  const feeMatch = text.match(/Credit purchase processing fee\s+(\d+(?:\.\d+)?)%/i);
+  if (!annualBonusMatch || !feeMatch) {
+    throw new Error("Could not verify Kilo Pass annual bonus and credit processing fee on kilo.ai/pricing");
+  }
+
+  const annualBonusPct = Number(annualBonusMatch[1]);
+  const processingFeePct = Number(feeMatch[1]);
+  if (
+    !Number.isFinite(annualBonusPct) ||
+    !Number.isFinite(processingFeePct) ||
+    annualBonusPct <= 0 ||
+    processingFeePct < 0
+  ) {
+    throw new Error("Invalid parsed bonus or processing fee percentages for Kilo Pass");
+  }
+
+  const parsed = [];
+  for (const tierName of ["Starter", "Pro", "Expert"]) {
+    const re = new RegExp(
+      `\\b${tierName}\\s+\\$(\\d+(?:,\\d+)?)\\s*\\/\\s*mo\\s+Up to \\$(\\d+(?:,\\d+)?(?:\\.\\d+)?)\\s*\\/\\s*mo in credits`,
+      "i"
+    );
+    const m = text.match(re);
+    if (!m) {
+      throw new Error(`Could not verify Kilo Pass ${tierName} fee/credits on kilo.ai/pricing`);
+    }
+    const baseFeeUsd = Number(m[1].replace(/,/g, ""));
+    const monthlyMaxCreditsUsd = Number(m[2].replace(/,/g, ""));
+    if (
+      !Number.isFinite(baseFeeUsd) ||
+      !Number.isFinite(monthlyMaxCreditsUsd) ||
+      baseFeeUsd <= 0 ||
+      monthlyMaxCreditsUsd <= 0
+    ) {
+      throw new Error(`Invalid parsed numbers for Kilo Pass ${tierName}`);
+    }
+
+    const effectiveFeeUsd = Number((baseFeeUsd * (1 + processingFeePct / 100)).toFixed(2));
+    const annualCreditsUsd = Number((baseFeeUsd * (1 + annualBonusPct / 100)).toFixed(2));
+    const multiple = annualCreditsUsd / effectiveFeeUsd;
+
+    parsed.push({
+      plan: `Kilo Pass ${tierName} (Annual)`,
+      tierName,
+      baseFeeUsd,
+      effectiveFeeUsd,
+      annualCreditsUsd,
+      monthlyMaxCreditsUsd,
+      annualBonusPct,
+      processingFeePct,
+      multiple,
+    });
+  }
+  return parsed;
+}
+
 function parseListPriceDict(raw) {
   if (!raw) return null;
   try {
@@ -1018,6 +1188,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       usedApiV2: false,
       error: null,
     },
+    openRouter: {
+      name: "OpenRouter Models API",
+      url: SOURCES.openRouterModels,
+      ok: false,
+      fetchedAt: null,
+      modelCount: 0,
+      backfilledContextCount: 0,
+      error: null,
+    },
     githubCopilot: {
       name: "GitHub Copilot Plans",
       url: SOURCES.githubCopilotPlans,
@@ -1034,6 +1213,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       tierCount: 0,
       error: null,
     },
+    kiloPass: {
+      name: "Kilo Pass Pricing",
+      url: SOURCES.kiloPricing,
+      ok: false,
+      fetchedAt: null,
+      tierCount: 0,
+      error: null,
+    },
   };
 
   let feiCsvText = null;
@@ -1041,8 +1228,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let priorsGzBuf = null;
   let aaHtml = null;
   let aaV2Json = null;
+  let openRouterJson = null;
   let copilotHtml = null;
   let ollamaHtml = null;
+  let kiloHtml = null;
 
   if (fromLocal) {
     log("Reading local fixture snapshots from /tmp ...");
@@ -1050,8 +1239,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (fs.existsSync("/tmp/fei_bench_configs.csv")) feiBenchCsvText = fs.readFileSync("/tmp/fei_bench_configs.csv", "utf8");
     if (fs.existsSync("/tmp/priors_latest.json.gz")) priorsGzBuf = fs.readFileSync("/tmp/priors_latest.json.gz");
     if (fs.existsSync("/tmp/aa_models.html")) aaHtml = fs.readFileSync("/tmp/aa_models.html", "utf8");
+    if (fs.existsSync("/tmp/openrouter_models.json")) {
+      openRouterJson = JSON.parse(fs.readFileSync("/tmp/openrouter_models.json", "utf8"));
+    }
     if (fs.existsSync("/tmp/copilot_plans.html")) copilotHtml = fs.readFileSync("/tmp/copilot_plans.html", "utf8");
     if (fs.existsSync("/tmp/ollama_pricing.html")) ollamaHtml = fs.readFileSync("/tmp/ollama_pricing.html", "utf8");
+    if (fs.existsSync("/tmp/kilo_pricing.html")) kiloHtml = fs.readFileSync("/tmp/kilo_pricing.html", "utf8");
   } else {
     const tasks = [
       fetchText(SOURCES.feiPointsCsv)
@@ -1066,12 +1259,18 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.aaModelsPage)
         .then((t) => { aaHtml = t; })
         .catch((err) => { sourceStatus.artificialAnalysis.error = err.message; }),
+      fetchText(SOURCES.openRouterModels)
+        .then((t) => { openRouterJson = JSON.parse(t); })
+        .catch((err) => { sourceStatus.openRouter.error = err.message; }),
       fetchText(SOURCES.githubCopilotPlans)
         .then((t) => { copilotHtml = t; })
         .catch((err) => { sourceStatus.githubCopilot.error = err.message; }),
       fetchText(SOURCES.ollamaPricing)
         .then((t) => { ollamaHtml = t; })
         .catch((err) => { sourceStatus.ollamaCloud.error = err.message; }),
+      fetchText(SOURCES.kiloPricing)
+        .then((t) => { kiloHtml = t; })
+        .catch((err) => { sourceStatus.kiloPass.error = err.message; }),
     ];
 
     if (process.env.AA_API_KEY) {
@@ -1112,6 +1311,21 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceStatus.artificialAnalysis.modelCount = aaByNorm.size;
     } catch (err) {
       log("AA API v2 parse error:", err.message);
+    }
+  }
+
+  // 1b. Parse OpenRouter public model catalog (context window, open-weights, AA domain backfill & gateway catalog)
+  let openRouterIndex = null;
+  if (openRouterJson) {
+    try {
+      openRouterIndex = parseOpenRouterModels(openRouterJson, aaByNorm);
+      sourceStatus.openRouter.ok = true;
+      sourceStatus.openRouter.fetchedAt = nowIso;
+      sourceStatus.openRouter.modelCount = openRouterIndex.totalCount;
+      log(`Parsed ${openRouterIndex.totalCount} models from OpenRouter public catalog`);
+    } catch (err) {
+      sourceStatus.openRouter.error = err.message;
+      log("OpenRouter parse error:", err.message);
     }
   }
 
@@ -1231,6 +1445,26 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     } catch (err) {
       sourceStatus.ollamaCloud.error = err.message;
       log("Ollama Cloud parse error:", err.message);
+    }
+  }
+
+  // 6. Live-parse Kilo Pass pricing (Starter/Pro/Expert annual 50% bonus net of 5% fee)
+  let kiloTiers = [];
+  if (kiloHtml) {
+    try {
+      kiloTiers = parseKiloPricingHtml(kiloHtml);
+      sourceStatus.kiloPass.ok = true;
+      sourceStatus.kiloPass.fetchedAt = nowIso;
+      sourceStatus.kiloPass.tierCount = kiloTiers.length;
+      log(
+        `Verified ${kiloTiers.length} Kilo Pass tiers: ` +
+          kiloTiers
+            .map((t) => `${t.plan} ($${t.effectiveFeeUsd}→$${t.annualCreditsUsd} = ${t.multiple.toFixed(2)}×)`)
+            .join(", ")
+      );
+    } catch (err) {
+      sourceStatus.kiloPass.error = err.message;
+      log("Kilo Pass parse error:", err.message);
     }
   }
 
@@ -1720,17 +1954,125 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
+  // Layer live-verified first-party Kilo Pass annual tiers across models confirmed on OpenRouter/Kilo Gateway
+  let kiloPassEntryCount = 0;
+  if (kiloTiers.length > 0 && openRouterIndex) {
+    for (const tier of kiloTiers) {
+      for (const [aaSlug, fallbackModel] of modelInfoBySlug.entries()) {
+        const orModel = resolveOpenRouterModel(aaSlug, openRouterIndex, aaByNorm);
+        if (!orModel || !orModel.isPaid) continue;
+
+        const aaModel = aaByNorm.get(aaSlug);
+        const priorsVar = !aaModel ? bestPriorsVariantFor(aaSlug) : null;
+        const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+        const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+        if (intel === null || cpt === null || cpt <= 0) continue;
+
+        const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || "Kilo";
+        kiloPassEntryCount++;
+        entries.push({
+          id: `first-party::${normSlug(tier.plan)}::${aaSlug}`,
+          origin: "kilo-pass",
+          isPreliminary: false,
+          estimateType: null,
+          replacesId: null,
+          billing: "subscription",
+          vendor: "Kilo",
+          modelCreator: creator,
+          color: vendorColor(creator, aaModel),
+          plan: tier.plan,
+          planLocal: tier.plan,
+          planUrl: SOURCES.kiloPricing,
+          isOffPeak: false,
+          isLegacy: false,
+          isCnPortal: false,
+          unmetered: false,
+          modelId: aaSlug,
+          modelDisplay: aaModel?.shortName || fallbackModel?.modelDisplay || aaSlug,
+          aaVariant: aaModel?.name || fallbackModel?.aaVariant || null,
+          aaLive: Boolean(aaModel),
+          aaUrl: aaModel?.sourceUrl || fallbackModel?.aaUrl || "https://artificialanalysis.ai/models#price-cost",
+          isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights ?? orModel.isOpenWeights),
+          contextWindowTokens:
+            aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? orModel.contextWindowTokens ?? null,
+          priceUsd: tier.effectiveFeeUsd,
+          monthlyTokens: null,
+          realUsdPerMtok: null,
+          listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? null,
+          subsidyMultiple: Number(tier.multiple.toFixed(4)),
+          intelligenceIndex: Number(intel.toFixed(2)),
+          benchmarks: aaModel?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
+          aaCostPerTaskUsd: Number(cpt.toFixed(4)),
+          aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
+          aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
+          aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || orModel.pricing || null,
+          aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
+          confidence: "high",
+          dataDate: nowIso.slice(0, 10),
+          sourceNote: `Kilo Pass Pricing ($${tier.baseFeeUsd}/mo + ${tier.processingFeePct}% fee = $${tier.effectiveFeeUsd}/mo → $${tier.annualCreditsUsd} credits)`,
+          decisionNote: `Deterministic first-party credit pool on Annual billing (${tier.annualBonusPct}% bonus net of ${tier.processingFeePct}% processing fee = ${tier.multiple.toFixed(2)}× across provider-rate gateway models; monthly billing ramps 10%→40% = 1.33× steady state).`,
+          preliminary: null,
+        });
+      }
+    }
+  }
+
+  // Helper to apply OpenRouter model-level backfill (context window, open-weights, pricing, headline AA domain scores)
+  const backfilledContextSlugs = new Set();
+  function applyOpenRouterBackfill(entry, allowDomainBackfill) {
+    if (!openRouterIndex) return entry;
+    const orModel = resolveOpenRouterModel(entry.baseModelId, openRouterIndex, aaByNorm);
+    if (!orModel) return entry;
+
+    if ((entry.contextWindowTokens == null || entry.contextWindowTokens <= 0) && orModel.contextWindowTokens > 0) {
+      entry.contextWindowTokens = orModel.contextWindowTokens;
+      backfilledContextSlugs.add(entry.baseModelId);
+    }
+    if (!entry.isOpenWeights && orModel.isOpenWeights) {
+      entry.isOpenWeights = true;
+    }
+    if (orModel.pricing) {
+      if (!entry.aaPricing) {
+        entry.aaPricing = { ...orModel.pricing };
+      } else {
+        entry.aaPricing = {
+          ...entry.aaPricing,
+          inputPer1M: entry.aaPricing.inputPer1M ?? orModel.pricing.inputPer1M,
+          outputPer1M: entry.aaPricing.outputPer1M ?? orModel.pricing.outputPer1M,
+          cacheHitPer1M: entry.aaPricing.cacheHitPer1M ?? orModel.pricing.cacheHitPer1M,
+          blended3to1Per1M: entry.aaPricing.blended3to1Per1M ?? orModel.pricing.blended3to1Per1M,
+        };
+      }
+    }
+    const matchesOrHeadline =
+      allowDomainBackfill ||
+      (orModel.aaIntelligenceIndex != null &&
+        entry.intelligenceIndex != null &&
+        Math.abs(orModel.aaIntelligenceIndex - entry.intelligenceIndex) < 0.35);
+    if (matchesOrHeadline && orModel.domainBenchmarks) {
+      const merged = { ...(entry.benchmarks || {}) };
+      for (const [k, v] of Object.entries(orModel.domainBenchmarks)) {
+        if (merged[k] == null && v != null) merged[k] = v;
+      }
+      entry.benchmarks = merged;
+    }
+    return entry;
+  }
+
   // Expand base-model entries across all Artificial Analysis reasoning effort variants (low/medium/high/xhigh/max)
   const expandedEntries = [];
   const seenExpandedIds = new Set();
   for (const baseEntry of entries) {
     const effortMap = aaVariantsByBase.get(baseEntry.modelId);
     if (!effortMap || effortMap.size === 0) {
-      const e = {
-        ...baseEntry,
-        baseModelId: baseEntry.modelId,
-        effort: "default",
-      };
+      const e = applyOpenRouterBackfill(
+        {
+          ...baseEntry,
+          baseModelId: baseEntry.modelId,
+          effort: "default",
+        },
+        true
+      );
       if (!seenExpandedIds.has(e.id)) {
         seenExpandedIds.add(e.id);
         expandedEntries.push(e);
@@ -1738,6 +2080,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       continue;
     }
 
+    const allowSingleVariantDomain = effortMap.size === 1;
     for (const v of effortMap.values()) {
       const effId = v.effortLabel ? `${baseEntry.id}@${v.effort}` : baseEntry.id;
       if (seenExpandedIds.has(effId)) continue;
@@ -1748,27 +2091,40 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           ? `${baseEntry.replacesId}@${v.effort}`
           : baseEntry.replacesId;
 
-      expandedEntries.push({
-        ...baseEntry,
-        id: effId,
-        replacesId,
-        baseModelId: baseEntry.modelId,
-        modelId: v.variantKey,
-        effort: v.effort,
-        modelDisplay: v.displayName,
-        aaUrl: v.aaUrl || baseEntry.aaUrl,
-        aaLive: v.aaLive || baseEntry.aaLive,
-        intelligenceIndex: Number(v.intelligenceIndex.toFixed(2)),
-        benchmarks: {
-          ...(baseEntry.benchmarks && v.isHeadline ? baseEntry.benchmarks : {}),
-          ...v.benchmarks,
-        },
-        aaCostPerTaskUsd: Number(v.costPerTaskUsd.toFixed(4)),
-        aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
-        aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
-        aaPricing: baseEntry.aaPricing?.blended3to1Per1M != null ? baseEntry.aaPricing : (v.pricing || baseEntry.aaPricing || null),
-      });
+      expandedEntries.push(
+        applyOpenRouterBackfill(
+          {
+            ...baseEntry,
+            id: effId,
+            replacesId,
+            baseModelId: baseEntry.modelId,
+            modelId: v.variantKey,
+            effort: v.effort,
+            modelDisplay: v.displayName,
+            aaUrl: v.aaUrl || baseEntry.aaUrl,
+            aaLive: v.aaLive || baseEntry.aaLive,
+            intelligenceIndex: Number(v.intelligenceIndex.toFixed(2)),
+            benchmarks: {
+              ...(baseEntry.benchmarks && v.isHeadline ? baseEntry.benchmarks : {}),
+              ...v.benchmarks,
+            },
+            aaCostPerTaskUsd: Number(v.costPerTaskUsd.toFixed(4)),
+            aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
+            aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
+            aaPricing:
+              baseEntry.aaPricing?.blended3to1Per1M != null
+                ? baseEntry.aaPricing
+                : v.pricing || baseEntry.aaPricing || null,
+          },
+          Boolean(v.isHeadline || allowSingleVariantDomain)
+        )
+      );
     }
+  }
+
+  sourceStatus.openRouter.backfilledContextCount = backfilledContextSlugs.size;
+  if (backfilledContextSlugs.size > 0) {
+    log(`Backfilled contextWindowTokens for ${backfilledContextSlugs.size} models from OpenRouter`);
   }
 
   expandedEntries.sort((a, b) => {
@@ -1791,9 +2147,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       priorsExtraMeasured: priorsExtraCount,
       githubCopilotEntries: copilotEntryCount,
       ollamaTeamEntries: ollamaTeamEntryCount,
+      kiloPassEntries: kiloPassEntryCount,
       uniqueModels: new Set(expandedEntries.map((e) => e.baseModelId)).size,
       uniqueVariants: new Set(expandedEntries.map((e) => e.modelId)).size,
       liveAaModels: aaByNorm.size,
+      openRouterBackfilledContext: backfilledContextSlugs.size,
     },
     entries: expandedEntries,
   };

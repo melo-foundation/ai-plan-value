@@ -55,6 +55,11 @@ jobs:
           echo "Refresh failed; keeping previous live Pages deployment intact."
           exit 1
 
+      - name: Stamp cache-busting asset versions
+        run: |
+          SHORT_SHA="${GITHUB_SHA::8}"
+          sed -i -E "s|(\./styles\.css)(\?v=[^\"']*)?|\1?v=${SHORT_SHA}|g; s|(\./app\.js)(\?v=[^\"']*)?|\1?v=${SHORT_SHA}|g" public/index.html
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 

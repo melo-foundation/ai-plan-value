@@ -57,6 +57,8 @@ const state = {
   dataset: null,
   benchKey: "intelligenceIndex",
   costMode: "task", // "task" | "tokens"
+  minEffort: "any", // "any" | "none" | "low" | "medium" | "high" | "xhigh" | "max"
+  maxEffort: "any",
   minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
@@ -202,6 +204,7 @@ function passesModelSpecs(entry) {
 }
 
 const EFFORT_ORDER = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, default: 6 };
+const NAMED_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh", "max"]);
 const EFFORT_COL_TITLE = {
   none: "Non-reasoning",
   low: "Low",
@@ -211,6 +214,16 @@ const EFFORT_COL_TITLE = {
   max: "Max",
   default: "Default",
 };
+
+function passesEffortBounds(entry) {
+  if (state.minEffort === "any" && state.maxEffort === "any") return true;
+  const eff = entry.effort || "default";
+  if (!NAMED_EFFORTS.has(eff)) return false;
+  const rank = EFFORT_ORDER[eff];
+  if (state.minEffort !== "any" && rank < EFFORT_ORDER[state.minEffort]) return false;
+  if (state.maxEffort !== "any" && rank > EFFORT_ORDER[state.maxEffort]) return false;
+  return true;
+}
 
 function getAllEntriesResolved() {
   if (!state.dataset) return [];
@@ -237,14 +250,11 @@ function getAllEntriesResolved() {
           ? apiMtok / subsidy
           : e.realUsdPerMtok ?? null;
 
+      const realTaskCost =
+        taskCost == null ? null : e.unmetered ? 0 : taskCost / (subsidy || 1);
+
       const apiMetric = isTokens ? apiMtok : taskCost;
-      const effectiveCost = isTokens
-        ? realMtok
-        : taskCost == null
-          ? null
-          : e.unmetered
-            ? 0
-            : taskCost / (subsidy || 1);
+      const effectiveCost = isTokens ? realMtok : realTaskCost;
 
       const volumePerMonth =
         !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
@@ -258,6 +268,7 @@ function getAllEntriesResolved() {
         subsidy,
         apiMetric,
         effectiveCost,
+        realTaskCost,
         tasksPerMonth: volumePerMonth,
       };
     });
@@ -272,6 +283,7 @@ function getFilteredRows(allResolved) {
     if (r.score == null || r.score < state.minScore) continue;
     if (!passesExtraCriteria(r)) continue;
     if (!passesModelSpecs(r)) continue;
+    if (!passesEffortBounds(r)) continue;
     if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
     if (!r.isApi && state.hideLegacy && isLegacyEntry(r)) continue;
@@ -335,6 +347,7 @@ function renderPlanDrawer(planName, allResolved) {
             e.score >= state.minScore &&
             passesExtraCriteria(e) &&
             passesModelSpecs(e) &&
+            passesEffortBounds(e) &&
             (!Number.isFinite(maxCost) || e.effectiveCost <= maxCost);
           const scoreStr =
             e.score != null
@@ -766,6 +779,167 @@ function renderExtraCriteria() {
   updateSettingsBadge();
 }
 
+function stopIdxFromParam(raw, stops, defaultIdx) {
+  if (raw == null || raw === "") return defaultIdx;
+  if (String(raw).toLowerCase() === "any") return stops.length - 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return defaultIdx;
+  const exact = stops.findIndex((s) => Number.isFinite(s.max) && Math.abs(s.max - n) < 1e-6);
+  if (exact !== -1) return exact;
+  const next = stops.findIndex((s) => s.max >= n);
+  return next !== -1 ? next : stops.length - 1;
+}
+
+function loadStateFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const bench = params.get("bench");
+  if (bench && BENCHMARKS[bench]) {
+    state.benchKey = bench;
+    state.minScore = BENCHMARKS[bench].def;
+  }
+
+  const meta = activeBenchMeta();
+  const minRaw = params.get("min");
+  if (minRaw !== null && minRaw !== "") {
+    const n = Number(minRaw);
+    if (Number.isFinite(n)) {
+      state.minScore = Math.max(meta.min, Math.min(meta.max, n));
+    }
+  }
+
+  if (params.get("mode") === "tokens") {
+    state.costMode = "tokens";
+  }
+
+  const minEff = params.get("minEffort");
+  if (minEff && NAMED_EFFORTS.has(minEff)) state.minEffort = minEff;
+  const maxEff = params.get("maxEffort");
+  if (maxEff && NAMED_EFFORTS.has(maxEff)) state.maxEffort = maxEff;
+  if (
+    state.minEffort !== "any" &&
+    state.maxEffort !== "any" &&
+    EFFORT_ORDER[state.minEffort] > EFFORT_ORDER[state.maxEffort]
+  ) {
+    state.maxEffort = state.minEffort;
+  }
+
+  state.budgetIdx = stopIdxFromParam(params.get("budget"), BUDGET_STOPS, 5);
+  state.maxCostIdx = stopIdxFromParam(params.get("cost"), currentCostStops(), 4);
+
+  if (params.get("efforts") === "all") state.cheapestEffortOnly = false;
+  if (params.get("legacy") === "1") state.hideLegacy = false;
+  if (params.get("offpeak") === "1") state.hideOffPeak = false;
+  if (params.get("noest") === "1") state.hideEstimated = true;
+  if (params.get("nocn") === "1") state.hideCnPortal = true;
+  if (params.get("api") === "1") state.showApi = true;
+  if (params.get("open") === "1") state.openWeightsOnly = true;
+
+  const extraRaw = params.get("extra");
+  if (extraRaw) {
+    const parsed = [];
+    for (const token of extraRaw.split(",")) {
+      const [key, valStr] = token.split(":");
+      const m = BENCHMARKS[key];
+      const val = Number(valStr);
+      if (m && Number.isFinite(val)) {
+        parsed.push({ benchKey: key, minScore: Math.max(m.min, Math.min(m.max, val)) });
+      }
+    }
+    state.extraCriteria = parsed;
+  }
+
+  const q = params.get("q");
+  const group = params.get("group");
+  if (q) state.tableQuery = q;
+  if (group === "1") state.groupByPlan = true;
+  if ((q || group === "1") && $("tableDetails")) {
+    $("tableDetails").open = true;
+  }
+
+  const sortRaw = params.get("sort");
+  if (sortRaw) {
+    const splitIdx = sortRaw.lastIndexOf(":");
+    if (splitIdx > 0) {
+      const key = sortRaw.slice(0, splitIdx);
+      const dir = sortRaw.slice(splitIdx + 1);
+      if (key && (dir === "asc" || dir === "desc")) {
+        state.sortKey = key;
+        state.sortDir = dir;
+      }
+    }
+  }
+}
+
+function syncControlsFromState() {
+  $("benchSelect").value = state.benchKey;
+  syncBenchSlider(false);
+  $("maxBudget").value = String(state.budgetIdx);
+  $("costMode").value = state.costMode;
+  $("minEffort").value = state.minEffort;
+  $("maxEffort").value = state.maxEffort;
+  $("maxCost").value = String(state.maxCostIdx);
+  $("cheapestEffortOnly").checked = state.cheapestEffortOnly;
+  $("hideLegacy").checked = state.hideLegacy;
+  $("hideOffPeak").checked = state.hideOffPeak;
+  $("hideEstimated").checked = state.hideEstimated;
+  $("hideCnPortal").checked = state.hideCnPortal;
+  $("showApi").checked = state.showApi;
+  $("openWeightsOnly").checked = state.openWeightsOnly;
+  $("tableSearch").value = state.tableQuery;
+  $("groupByPlan").checked = state.groupByPlan;
+  renderExtraCriteria();
+}
+
+function syncUrlFromState() {
+  try {
+    const params = new URLSearchParams();
+    const meta = activeBenchMeta();
+    if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
+    if (state.minScore !== meta.def) params.set("min", String(state.minScore));
+    if (state.costMode !== "task") params.set("mode", state.costMode);
+    if (state.minEffort !== "any") params.set("minEffort", state.minEffort);
+    if (state.maxEffort !== "any") params.set("maxEffort", state.maxEffort);
+    if (state.budgetIdx !== 5) {
+      const stop = BUDGET_STOPS[state.budgetIdx];
+      params.set("budget", Number.isFinite(stop.max) ? String(stop.max) : "any");
+    }
+    if (state.maxCostIdx !== 4) {
+      const stop = currentCostStops()[state.maxCostIdx];
+      params.set("cost", Number.isFinite(stop.max) ? String(stop.max) : "any");
+    }
+    if (!state.cheapestEffortOnly) params.set("efforts", "all");
+    if (!state.hideLegacy) params.set("legacy", "1");
+    if (!state.hideOffPeak) params.set("offpeak", "1");
+    if (state.hideEstimated) params.set("noest", "1");
+    if (state.hideCnPortal) params.set("nocn", "1");
+    if (state.showApi) params.set("api", "1");
+    if (state.openWeightsOnly) params.set("open", "1");
+    if (state.extraCriteria.length) {
+      params.set(
+        "extra",
+        state.extraCriteria.map((c) => `${c.benchKey}:${c.minScore}`).join(",")
+      );
+    }
+    if (state.tableQuery.trim()) params.set("q", state.tableQuery.trim());
+    if (state.groupByPlan) params.set("group", "1");
+    if (state.sortKey !== "effectiveCost" || state.sortDir !== "asc") {
+      params.set("sort", `${state.sortKey}:${state.sortDir}`);
+    }
+
+    const qs = params.toString();
+    const nextSearch = qs ? `?${qs}` : "";
+    if (window.location.search !== nextSearch) {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${nextSearch}${window.location.hash}`
+      );
+    }
+  } catch {
+    // Ignore history API restrictions in embedded/file contexts
+  }
+}
+
 function render() {
   const isTokens = state.costMode === "tokens";
   $("chartHeading").textContent = isTokens
@@ -783,6 +957,7 @@ function render() {
   renderBarChart(rows, allResolved);
   renderTable(rows);
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
+  syncUrlFromState();
 }
 
 function renderMeta() {
@@ -887,6 +1062,8 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 
 $("resetSettingsBtn").addEventListener("click", () => {
   state.costMode = "task";
+  state.minEffort = "any";
+  state.maxEffort = "any";
   state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
@@ -896,6 +1073,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.openWeightsOnly = false;
   state.extraCriteria = [];
   $("costMode").value = "task";
+  $("minEffort").value = "any";
+  $("maxEffort").value = "any";
   $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
@@ -935,6 +1114,32 @@ $("costMode").addEventListener("change", (e) => {
   state.costMode = e.target.value;
   state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
   $("maxCost").value = "4";
+  render();
+});
+
+$("minEffort").addEventListener("change", (e) => {
+  state.minEffort = e.target.value;
+  if (
+    state.minEffort !== "any" &&
+    state.maxEffort !== "any" &&
+    EFFORT_ORDER[state.minEffort] > EFFORT_ORDER[state.maxEffort]
+  ) {
+    state.maxEffort = state.minEffort;
+    $("maxEffort").value = state.maxEffort;
+  }
+  render();
+});
+
+$("maxEffort").addEventListener("change", (e) => {
+  state.maxEffort = e.target.value;
+  if (
+    state.minEffort !== "any" &&
+    state.maxEffort !== "any" &&
+    EFFORT_ORDER[state.maxEffort] < EFFORT_ORDER[state.minEffort]
+  ) {
+    state.minEffort = state.maxEffort;
+    $("minEffort").value = state.minEffort;
+  }
   render();
 });
 
@@ -993,7 +1198,8 @@ async function loadStarCount() {
   }
 }
 
-syncBenchSlider(true);
+loadStateFromUrl();
+syncControlsFromState();
 initTheme();
 loadData();
 loadStarCount();
