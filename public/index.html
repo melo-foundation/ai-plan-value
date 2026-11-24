@@ -131,11 +131,15 @@
               <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
               <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
             </svg>
-            <span class="infobar-text"><strong>Notice:</strong> Extrapolated reasoning levels (‡ / faded bars) are estimated from same-family models or ARC-AGI-2, not directly benchmarked.</span>
+            <span class="infobar-text"><strong>Notice:</strong> Showing rough estimates (‡ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.</span>
             <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
           </div>
           <div class="panel-body">
             <div id="barChart" class="bar-chart"></div>
+          </div>
+          <div id="extrapFooter" class="panel-foot" hidden>
+            <span id="extrapFooterText">Unmeasured reasoning levels are hidden.</span>
+            <button id="enableExtrapBtn" class="infobar-link" type="button">Show rough estimates (‡)</button>
           </div>
         </section>
 
@@ -264,7 +268,7 @@
             </label>
             <label class="settings-check">
               <input id="showExtrapolated" type="checkbox" />
-              <span>Show extrapolated efforts (‡)</span>
+              <span>Show rough effort estimates (‡)</span>
             </label>
             <label class="settings-check">
               <input id="hideCnPortal" type="checkbox" />

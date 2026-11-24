@@ -439,6 +439,23 @@ input[type="range"]::-moz-range-thumb {
   filter: brightness(1.1);
 }
 
+.panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--filter-bg);
+  border-top: 1px solid var(--panel-border);
+}
+
+.panel-foot[hidden] {
+  display: none;
+}
+
 .bar-fill.is-extrapolated {
   opacity: 0.45;
 }

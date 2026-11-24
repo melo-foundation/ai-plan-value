@@ -381,9 +381,10 @@ function getAllEntriesResolved() {
     });
 }
 
-function getFilteredRows(allResolved) {
+function getFilteredRows(allResolved, includeExtrapOverride = null) {
   const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
   const maxCost = currentCostStops()[state.maxCostIdx].max;
+  const allowExtrap = includeExtrapOverride ?? state.showExtrapolated;
 
   const out = [];
   for (const r of allResolved) {
@@ -399,7 +400,7 @@ function getFilteredRows(allResolved) {
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
     if (state.hideEstimated && r.isPreliminary) continue;
     if (state.hideInterpolated && r.effortEstimate === "interpolated") continue;
-    if (!state.showExtrapolated && r.effortEstimate === "extrapolated") continue;
+    if (!allowExtrap && r.effortEstimate === "extrapolated") continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
@@ -1140,6 +1141,21 @@ function render() {
   if ($("extrapBanner")) {
     $("extrapBanner").hidden = !state.showExtrapolated;
   }
+  if ($("extrapFooter")) {
+    const hasAnyExtrap = allResolved.some((r) => r.effortEstimate === "extrapolated");
+    $("extrapFooter").hidden = state.showExtrapolated || !hasAnyExtrap;
+    if (!state.showExtrapolated && hasAnyExtrap && $("extrapFooterText")) {
+      const hiddenVariants = new Set(
+        getFilteredRows(allResolved, true)
+          .filter((r) => r.effortEstimate === "extrapolated")
+          .map((r) => r.modelId)
+      ).size;
+      $("extrapFooterText").textContent =
+        hiddenVariants > 0
+          ? `${hiddenVariants} unmeasured reasoning ${hiddenVariants === 1 ? "level matches" : "levels match"} these filters (hidden).`
+          : "Unmeasured reasoning levels are hidden.";
+    }
+  }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
   if ($("interpFootnote")) {
     $("interpFootnote").hidden = !rows.some((r) => r.effortEstimate === "interpolated");
@@ -1316,6 +1332,13 @@ $("showExtrapolated")?.addEventListener("change", (e) => {
 $("disableExtrapBtn")?.addEventListener("click", () => {
   state.showExtrapolated = false;
   if ($("showExtrapolated")) $("showExtrapolated").checked = false;
+  updateSettingsBadge();
+  render();
+});
+
+$("enableExtrapBtn")?.addEventListener("click", () => {
+  state.showExtrapolated = true;
+  if ($("showExtrapolated")) $("showExtrapolated").checked = true;
   updateSettingsBadge();
   render();
 });
