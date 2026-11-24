@@ -1152,8 +1152,8 @@ function render() {
       ).size;
       $("extrapFooterText").textContent =
         hiddenVariants > 0
-          ? `${hiddenVariants} unmeasured reasoning ${hiddenVariants === 1 ? "level matches" : "levels match"} these filters (hidden).`
-          : "Unmeasured reasoning levels are hidden.";
+          ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
+          : "Rough estimates for unmeasured reasoning levels are hidden.";
     }
   }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
