@@ -162,36 +162,7 @@ test("Every $('id') selector in public/app.js exists in public/index.html", () =
   assert.equal(missing.length, 0, `DOM IDs referenced in app.js missing from index.html: ${missing.join(", ")}`);
 });
 
-// 8. Break-even Monthly API usage math
-test("Monthly API usage break-even math handles under-cap, over-cap, and API baseline", () => {
-  function calcEffectiveSubsidy({ isApi, priceUsd, rawSubsidy, usageUsd }) {
-    if (isApi) return { subsidy: 1, spend: usageUsd, overage: 0 };
-    const cap = priceUsd * rawSubsidy;
-    const overage = Math.max(0, usageUsd - cap);
-    const spend = priceUsd + overage;
-    return { subsidy: usageUsd / spend, spend, overage };
-  }
-
-  // At $20/mo usage: API (1.0x) beats $100/5x plan (0.2x)
-  const lowApi = calcEffectiveSubsidy({ isApi: true, priceUsd: null, rawSubsidy: 1, usageUsd: 20 });
-  const lowMax = calcEffectiveSubsidy({ isApi: false, priceUsd: 100, rawSubsidy: 5, usageUsd: 20 });
-  assert.equal(lowApi.subsidy, 1);
-  assert.equal(lowMax.subsidy, 0.2);
-  assert.ok(lowApi.subsidy > lowMax.subsidy);
-
-  // At $250/mo usage: $100/5x plan (2.5x) beats $20/5x + $150 overage (1.47x) and $200/5x (1.25x)
-  const mid20 = calcEffectiveSubsidy({ isApi: false, priceUsd: 20, rawSubsidy: 5, usageUsd: 250 });
-  const mid100 = calcEffectiveSubsidy({ isApi: false, priceUsd: 100, rawSubsidy: 5, usageUsd: 250 });
-  const mid200 = calcEffectiveSubsidy({ isApi: false, priceUsd: 200, rawSubsidy: 5, usageUsd: 250 });
-  assert.equal(mid20.overage, 150);
-  assert.equal(mid20.spend, 170);
-  assert.ok(Math.abs(mid20.subsidy - 250 / 170) < 1e-9);
-  assert.equal(mid100.subsidy, 2.5);
-  assert.equal(mid200.subsidy, 1.25);
-  assert.ok(mid100.subsidy > mid20.subsidy && mid100.subsidy > mid200.subsidy);
-});
-
-// 9. Interpolated & extrapolated reasoning effort invariants
+// 8. Interpolated & extrapolated reasoning effort invariants
 test("Interpolated efforts are strictly bracketed and extrapolated efforts are valid", () => {
   const rank = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
   const measuredByModel = new Map();
@@ -229,7 +200,7 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
 
 // 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
 test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
-  for (const param of ["bench", "min", "mode", "usage", "access", "window", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "extra", "q", "group", "sort"]) {
+  for (const param of ["bench", "min", "mode", "access", "window", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "extra", "q", "group", "sort"]) {
     assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
   }
   assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
@@ -243,6 +214,8 @@ test("Pricing fallbacks recover Fei2411 and Priors rows with omitted listPrice",
   const has = (planRe, baseModel) =>
     entries.some((e) => e.billing === "subscription" && planRe.test(e.plan) && e.baseModelId === baseModel);
   assert.ok(has(/^Google AI Ultra 20x$/i, "gemini-3-8-flash"), "Missing gemini-3-8-flash on Google AI Ultra 20x");
+  assert.ok(has(/^Google AI Ultra 20x$/i, "gemini-4-carbon"), "Missing gemini-4-carbon on Google AI Ultra 20x");
+  assert.ok(has(/^Google AI Ultra 20x$/i, "gemini-4-hydrogen"), "Missing gemini-4-hydrogen on Google AI Ultra 20x");
   assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-astra"), "Missing gpt-6-astra on ChatGPT Pro 500");
   assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-sol"), "Missing gpt-6-sol on ChatGPT Pro 500");
   assert.ok(has(/^ChatGPT Pro 20x$/i, "gpt-6-1-sol"), "Missing gpt-6-1-sol on ChatGPT Pro 20x");
