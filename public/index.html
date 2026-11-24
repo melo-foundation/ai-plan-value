@@ -131,7 +131,7 @@
               <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
               <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
             </svg>
-            <span class="infobar-text"><strong>Notice:</strong> Extrapolated reasoning levels (‡ / faded bars) are estimated from other measured models in the same family, not directly benchmarked.</span>
+            <span class="infobar-text"><strong>Notice:</strong> Extrapolated reasoning levels (‡ / faded bars) are estimated from same-family models or ARC-AGI-2, not directly benchmarked.</span>
             <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
           </div>
           <div class="panel-body">
@@ -160,7 +160,7 @@
 
         <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
         <p id="interpFootnote" class="footnote" hidden>† Interpolated reasoning effort (bracketed between lower and higher measured efforts on the same model).</p>
-        <p id="extrapFootnote" class="footnote" hidden>‡ Extrapolated reasoning effort (estimated from other measured models in the same family, not directly benchmarked).</p>
+        <p id="extrapFootnote" class="footnote" hidden>‡ Extrapolated reasoning effort (estimated from same-family models or ARC-AGI-2, not directly benchmarked).</p>
       </main>
     </div>
 
@@ -303,9 +303,11 @@
             <li>
               <strong>Benchmarks &amp; specs:</strong>
               <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>
-              (Intelligence Index, domains, tests, API $/task) and
+              (Intelligence Index, domains, tests, API $/task),
               <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>
-              (context windows, open weights, supported efforts, domain backfill).
+              (context windows, open weights, supported efforts, domain backfill), and
+              <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a>
+              (ARC-AGI-2 fallback for unmeasured effort ratios).
             </li>
             <li>
               <strong>Plan subsidies:</strong>
@@ -331,14 +333,17 @@
         </div>
 
         <div class="settings-section">
-          <div class="settings-heading">Footnotes</div>
+          <div class="settings-head-row">
+            <span class="settings-heading">Footnotes</span>
+            <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/EFFORT-ESTIMATES.md" target="_blank" rel="noopener noreferrer">Accuracy report</a>
+          </div>
           <dl class="method-markers">
             <dt>*</dt>
             <dd><strong>Estimated subsidy:</strong> preliminary user report or prior-generation quota carryover.</dd>
             <dt>†</dt>
             <dd><strong>Interpolated effort:</strong> missing reasoning level bracketed between a lower and higher measured effort on the same model<span id="interpErrNote"> (typical error ~±1.1 pts / ±12% $/task)</span>.</dd>
             <dt>‡</dt>
-            <dd><strong>Extrapolated effort:</strong> unmeasured reasoning level estimated from measured effort steps on other models in the same family<span id="extrapErrNote"> (typical error ~±2–3.5 pts / ±14–26% $/task)</span>.</dd>
+            <dd><strong>Extrapolated effort:</strong> unmeasured reasoning level estimated from measured effort steps on other models in the same family, or ARC-AGI-2 effort ratios where a family lacks multi-effort AA data<span id="extrapErrNote"> (typical error ~±2–3.5 pts / ±14–26% $/task)</span>.</dd>
           </dl>
         </div>
 

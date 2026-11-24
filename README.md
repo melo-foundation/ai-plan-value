@@ -15,8 +15,11 @@ Data refreshes automatically every 6 hours via GitHub Actions (`.github/workflow
 5. **[Ollama Cloud Pricing](https://ollama.com/pricing):** Live-parsed first-party Ollama Team credit pool.
 6. **[Kilo Pass Pricing](https://kilo.ai/pricing):** Live-parsed first-party Kilo Pass annual credit pools (net of the 5% credit purchase processing fee).
 7. **[adamholter/priors](https://github.com/adamholter/priors):** Secondary backfill only (`data/snapshots/latest.json.gz`) for per-effort sub-tests and preliminary/carryover estimates (marked with `*`).
+8. **[ARC Prize](https://arcprize.org/leaderboard):** Optional ARC-AGI-2 (`v2_Semi_Private`) fallback for opt-in extrapolated reasoning efforts (`‡`) on model families without multi-effort AA data.
 
-Automated monitoring (`scripts/check-alerts.mjs`) opens deduplicated GitHub Issues on upstream fetch/parse failures (`[Data Alert]`, auto-closed on recovery) and when new frontier models (`Intelligence >= 45`) appear (`[New Model]`).
+See **[docs/EFFORT-ESTIMATES.md](./docs/EFFORT-ESTIMATES.md)** for leave-one-out cross-validation error and confidence scores by degree of separation (`†` interpolation vs `‡` extrapolation).
+
+Automated monitoring (`scripts/check-alerts.mjs` + `scripts/test-site.mjs`) runs on every refresh and opens deduplicated GitHub Issues on test failures (`[Test Failure]`), upstream fetch/parse failures (`[Data Alert]`, auto-closed on recovery), unclassified plans (`[New Plan]`), and new frontier models (`[New Model]`).
 
 ## Local Preview
 

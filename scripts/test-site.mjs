@@ -222,8 +222,9 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
   }
   const interpModels = [...new Map(interpEntries.map((e) => [e.modelId, `${e.modelDisplay} (II ${e.intelligenceIndex})`])).values()];
   const extrapModels = new Set(extrapEntries.map((e) => e.modelId));
+  const arcModels = [...new Map(extrapEntries.filter((e) => e.effortEstimateSource === "arc-agi-2").map((e) => [e.modelId, e.modelDisplay])).values()];
   console.log(`     Interpolated (${interpModels.length}): ${interpModels.join(", ") || "none"}`);
-  console.log(`     Extrapolated (${extrapModels.size} variants across ${extrapEntries.length} rows)`);
+  console.log(`     Extrapolated (${extrapModels.size} variants across ${extrapEntries.length} rows; ARC-AGI-2 fallback: ${arcModels.length}${arcModels.length ? " — " + arcModels.join(", ") : ""})`);
 });
 
 // 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring

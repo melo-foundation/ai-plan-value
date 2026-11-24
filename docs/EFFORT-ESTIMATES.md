@@ -1,0 +1,39 @@
+# Effort Estimate Accuracy & Confidence
+
+Generated from live leave-one-out cross-validation (LOOCV) against real multi-effort Artificial Analysis measurements in `public/data/combined.json` (2026-11-24).
+
+Every held-out test point is excluded from both the scaling curves and regression slopes before prediction (zero data leakage).
+
+## Empirical Error by Degree of Separation
+
+| Degree / Method | Marker | Held-out `n` | Intelligence median err | Intelligence P75 err | `$/task` median err | `$/task` P75 err | Confidence |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 0 — Measured (Artificial Analysis) | — | — | ±0.0 pts | ±0.0 pts | ±0.0% | ±0.0% | **Ground truth** |
+| 1 — Bracketed interpolation (same model) | `†` | 45 | ±1.1 pts | ±1.8 pts | ±11.7% | ±18.5% | **High** |
+| 2 — Same-family AA, 1 effort step | `‡` | 112 | ±1.5 pts | ±2.8 pts | ±15.2% | ±34.0% | **Medium-High** |
+| 3 — Same-family AA, 2 effort steps | `‡` | 82 | ±2.4 pts | ±4.3 pts | ±28.2% | ±52.0% | **Medium** |
+| 4 — Same-family AA, 3 effort steps | `‡` | 52 | ±3.0 pts | ±6.6 pts | ±37.9% | ±69.7% | **Low** |
+| 5 — Same-family AA, 4+ effort steps | `‡` | 30 | ±4.4 pts | ±6.2 pts | ±60.2% | ±108.6% | **Very Low** |
+| 6 — Exact-model ARC-AGI-2 transfer | `‡` | 222 | ±2.7 pts | ±5.3 pts | ±30.0% | ±56.3% | **Medium** |
+| 7 — Same-family ARC-AGI-2 transfer | `‡` | 294 | ±3.1 pts | ±5.4 pts | ±30.5% | ±67.1% | **Medium** |
+
+## How Each Method Works
+
+- **Bracketed interpolation (`†`, on by default):** Only fills missing efforts strictly between a lower and higher measured effort on the *same* model, using empirical cumulative Intelligence and log-cost step weights. Gated on OpenRouter's `reasoning.supported_efforts` (and `mandatory` flag).
+- **Same-family AA extrapolation (`‡`, off by default):** Uses median additive Intelligence point deltas (`+Δ`) and multiplicative `$/task` ratios measured on other multi-effort models in the *same* canonical family (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `alibaba`, `zhipu`, `mistral`, `meta`). No cross-family global fallback.
+- **ARC-AGI-2 (`v2_Semi_Private`) fallback (`‡`, off by default):** Only used for model families with no multi-effort AA data (e.g. `moonshot` / Kimi, `thinking machines` / Inkling). Transfers exact-model ARC-AGI-2 cost ratios and a live-fitted IRT logit-space slope (`Δlogit(ARC) → Δlogit(AA)`, following Truong et al., arXiv:2606.07616) first, then pools same-family ARC-AGI-2 step curves for sibling models (e.g. `Kimi K3.1 Pro` from `Kimi K3`).
+
+## Reproducing These Numbers
+
+```bash
+node scripts/eval-effort-estimates.mjs --write-doc
+```
+
+## Relevant Literature
+
+- Snell et al. (2024), *Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters* — https://arxiv.org/abs/2408.03314
+- Muennighoff et al. (2025), *s1: Simple test-time scaling* — https://arxiv.org/abs/2501.19393
+- Agarwal et al. (2025), *The Art of Scaling Test-Time Compute for Large Language Models* — https://arxiv.org/abs/2512.02008
+- Zhou et al. (ACL 2026), *When More Thinking Hurts: Overthinking in LLM Test-Time Compute Scaling* — https://arxiv.org/abs/2604.10739
+- Truong et al. (ICLR 2026), *Item Response Scaling Laws* — https://arxiv.org/abs/2606.07616
+- Jiang et al. (2026), *Can We Trust Item Response Theory for AI Evaluation?* — https://arxiv.org/abs/2607.15190

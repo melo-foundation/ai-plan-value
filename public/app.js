@@ -236,7 +236,10 @@ function interpMark(r) {
     return `<span class="est-star" title="Interpolated reasoning effort (bracketed between measured efforts on this model)">†</span>`;
   }
   if (r.effortEstimate === "extrapolated") {
-    return `<span class="est-star" title="Extrapolated reasoning effort (estimated from other measured models in the same family, not directly benchmarked)">‡</span>`;
+    const src = r.effortEstimateSource === "arc-agi-2"
+      ? "ARC-AGI-2 effort ratios"
+      : "other measured models in the same family";
+    return `<span class="est-star" title="Extrapolated reasoning effort (estimated from ${src}, not directly benchmarked)">‡</span>`;
   }
   return "";
 }

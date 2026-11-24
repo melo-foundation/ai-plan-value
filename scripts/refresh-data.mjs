@@ -35,6 +35,8 @@ const SOURCES = {
   githubCopilotPlans: "https://github.com/features/copilot/plans",
   ollamaPricing: "https://ollama.com/pricing",
   kiloPricing: "https://kilo.ai/pricing",
+  arcPrizeEvals: "https://arcprize.org/media/data/evaluations.json",
+  arcPrizeModels: "https://arcprize.org/media/data/models.json",
 };
 
 const USER_AGENT =
@@ -51,6 +53,7 @@ const MODEL_ALIASES = {
   "qwen-4-max": "qwen4-max",
   "qwen-3-8-27b": "qwen3-8-27b",
   "qwen3-8-max": "qwen-3-8-max",
+  "qwen3-8-max-0902": "qwen-3-8-max",
   "qwen3-8-flash": "qwen-3-8-flash",
   "aa-muse-wonder": "muse-wonder",
   "aa-muse-ember": "muse-ember",
@@ -200,6 +203,16 @@ function pctFromFraction(v) {
 function round1(v) {
   const n = toNum(v);
   return n === null ? null : Number(n.toFixed(1));
+}
+
+function normalizeBaseDisplay(name) {
+  let s = String(name || "")
+    .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
+    .trim();
+  if (/^(?:Opus|Sonnet|Haiku)\s+\d/i.test(s)) {
+    s = `Claude ${s}`;
+  }
+  return s;
 }
 
 function normalizePlanName(name) {
@@ -666,9 +679,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
       continue;
     }
 
-    const baseDisplay = (aaHeadline?.shortName || modelMeta?.name || rawModelId)
-      .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
-      .trim();
+    const baseDisplay = normalizeBaseDisplay(aaHeadline?.shortName || modelMeta?.name || rawModelId);
     const effortSuffix = EFFORT_LABELS[effort];
     const displayName = effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay;
 
@@ -733,9 +744,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm) {
       const mEff = String(aaModel.name || "").match(/\((max|xhigh|high|medium|low)/i);
       const effort = mEff ? mEff[1].toLowerCase() : "default";
       const effortSuffix = EFFORT_LABELS[effort] || "";
-      const baseDisplay = (aaModel.shortName || aaModel.name)
-        .replace(/\s*\((?:max|xhigh|high|medium|low|default fallback)[^)]*\)\s*$/i, "")
-        .trim();
+      const baseDisplay = normalizeBaseDisplay(aaModel.shortName || aaModel.name);
       effortMap.set(effort, {
         variantKey: effortSuffix ? `${aaModel.slug}--${effort}` : aaModel.slug,
         baseSlug: aaModel.slug,
@@ -868,9 +877,7 @@ function parseFeiBenchConfigs(csvText, aaByNorm) {
     }
 
     const effortSuffix = EFFORT_LABELS[effort];
-    const baseDisplay = (aaHeadline?.shortName || r.variant || r.model)
-      .replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning|default fallback)[^)]*\)\s*$/i, "")
-      .trim();
+    const baseDisplay = normalizeBaseDisplay(aaHeadline?.shortName || r.variant || r.model);
     const displayName = effortSuffix ? `${baseDisplay} (${effortSuffix})` : baseDisplay;
 
     const isHeadlineEffort =
@@ -1077,14 +1084,24 @@ function parseOpenRouterModels(json, aaByNorm) {
       if (toNum(aa.economics_index) != null) domainBenchmarks.economics = round1(aa.economics_index);
     }
 
-    const rawEfforts = Array.isArray(m.reasoning?.supported_efforts) ? m.reasoning.supported_efforts : [];
-    const supportedEfforts = [
-      ...new Set(
-        rawEfforts
-          .map((e) => String(e || "").toLowerCase().trim())
-          .filter((e) => ["none", "low", "medium", "high", "xhigh", "max"].includes(e))
-      ),
-    ];
+    const hasReasoningObj = Boolean(m.reasoning && typeof m.reasoning === "object");
+    const mandatoryReasoning = Boolean(m.reasoning?.mandatory);
+    let supportedEfforts = [];
+    if (Array.isArray(m.reasoning?.supported_efforts)) {
+      supportedEfforts = [
+        ...new Set(
+          m.reasoning.supported_efforts
+            .map((e) => String(e || "").toLowerCase().trim())
+            .filter((e) => ["none", "low", "medium", "high", "xhigh", "max"].includes(e))
+            .filter((e) => !(mandatoryReasoning && e === "none"))
+        ),
+      ];
+    } else if (hasReasoningObj && m.reasoning.supported_efforts === null) {
+      // Per OpenRouter API spec: supported_efforts: null inside reasoning means all gateway effort levels are accepted
+      supportedEfforts = mandatoryReasoning
+        ? ["low", "medium", "high", "xhigh", "max"]
+        : ["none", "low", "medium", "high", "xhigh", "max"];
+    }
     const rawDefEff = String(m.reasoning?.default_effort || "").toLowerCase().trim();
     const defaultEffort = ["none", "low", "medium", "high", "xhigh", "max"].includes(rawDefEff)
       ? rawDefEff
@@ -1213,6 +1230,15 @@ function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function logitProb(p) {
+  const c = Math.max(0.005, Math.min(0.995, p));
+  return Math.log(c / (1 - c));
+}
+
+function sigmoidProb(x) {
+  return 1 / (1 + Math.exp(-x));
 }
 
 function canonicalModelFamily(slug, creatorName) {
@@ -1362,16 +1388,69 @@ function interpolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
 }
 
 /**
+ * Parse ARC Prize ARC-AGI-2 (v2_Semi_Private) multi-effort evaluations as a
+ * secondary fallback for extrapolating effort ratios on model families that
+ * have no multi-effort Artificial Analysis measurements.
+ */
+function extractArcEffort(rawName) {
+  const s = String(rawName || "").toLowerCase();
+  if (/\b(?:xhigh|extra[-_\s]?high)\b/.test(s)) return "xhigh";
+  if (/\b(?:max|maximum)\b/.test(s)) return "max";
+  if (/\b(?:non[-_\s]?reasoning|no[-_\s]?thinking|thinking[-_\s]?off|effort[=:\s_-]*none|\(none\))\b/.test(s)) {
+    return "none";
+  }
+  if (/\b(?:low|minimal)\b/.test(s)) return "low";
+  if (/\b(?:medium|med)\b/.test(s)) return "medium";
+  if (/\bhigh\b/.test(s)) return "high";
+  return null;
+}
+
+function parseArcPrizeV2(evalsJson, modelsJson, aaByNorm) {
+  const evalArr = Array.isArray(evalsJson) ? evalsJson : Object.values(evalsJson || {});
+  const modelArr = Array.isArray(modelsJson) ? modelsJson : Object.values(modelsJson || {});
+  const modelMap = new Map(modelArr.map((m) => [m.id || m.modelId || m.slug, m]));
+  const byBase = new Map();
+
+  for (const r of evalArr) {
+    if ((r.datasetId || r.dataset) !== "v2_Semi_Private") continue;
+    const m = modelMap.get(r.modelId) || {};
+    const label = m.displayName || m.name || r.modelId || "";
+    const eff = extractArcEffort(r.modelId) || extractArcEffort(label) || extractArcEffort(m.reasoningEffort);
+    if (!eff) continue;
+    const stripped = String(label || r.modelId)
+      .replace(/\([^)]*(?:reasoning|thinking|effort|low|medium|high|xhigh|max|none|minimal|default)[^)]*\)/gi, " ")
+      .replace(/[-_\s]+(?:xhigh|extra[-_\s]?high|high|medium|med|low|minimal|max|none|non[-_\s]?reasoning|thinking[-_\s]?\d+k?)\b/gi, " ")
+      .replace(/\b202\d[-_]?\d{2}[-_]?\d{2}\b/g, " ");
+    const baseSlug = canonicalBaseSlug(stripped, aaByNorm);
+    const score = toNum(r.score ?? r.accuracy);
+    const cost = toNum(r.costPerTask ?? r.cost_per_task ?? r.cost);
+    if (!baseSlug || score == null) continue;
+    if (!byBase.has(baseSlug)) byBase.set(baseSlug, new Map());
+    byBase.get(baseSlug).set(eff, {
+      score,
+      cost: cost != null && cost > 0 ? cost : null,
+    });
+  }
+
+  let multiCount = 0;
+  for (const effMap of byBase.values()) {
+    if (effMap.size >= 2) multiCount++;
+  }
+  return { byBase, multiCount };
+}
+
+/**
  * Option B (OFF by default in UI):
  * Extrapolate remaining supported reasoning efforts (gated strictly by OpenRouter's
  * reasoning.supported_efforts) from the nearest measured effort on the same model
- * using strictly same-family measured step scaling ratios (models from families
- * without multi-effort benchmark data are skipped).
+ * using strictly same-family measured step scaling ratios, with ARC-AGI-2
+ * (v2_Semi_Private) effort ratios as fallback for families without multi-effort AA data.
  */
-function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) {
-  if (!openRouterIndex) return 0;
+function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, arcByBase = null) {
+  if (!openRouterIndex) return { total: 0, arcCount: 0 };
 
-  const familyIntelRatios = new Map();
+  // Additive Intelligence deltas (+pts) and multiplicative Cost/Task ratios per same-family step
+  const familyIntelDeltas = new Map();
   const familyCostRatios = new Map();
   const familyAllIntel = new Map();
   const familyAllCost = new Map();
@@ -1384,14 +1463,14 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
       const family = canonicalModelFamily(baseSlug, b.creatorName || a.creatorName);
       if (!family) continue;
       if (a.intelligenceIndex > 1 && b.intelligenceIndex > 1) {
-        const rI = b.intelligenceIndex / a.intelligenceIndex;
-        if (rI >= 1.0 && rI <= 2.5) {
-          if (!familyIntelRatios.has(family)) {
-            familyIntelRatios.set(family, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+        const dI = b.intelligenceIndex - a.intelligenceIndex;
+        if (dI >= 0 && dI <= 25) {
+          if (!familyIntelDeltas.has(family)) {
+            familyIntelDeltas.set(family, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
             familyAllIntel.set(family, []);
           }
-          familyIntelRatios.get(family)[i].push(rI);
-          familyAllIntel.get(family).push(rI);
+          familyIntelDeltas.get(family)[i].push(dI);
+          familyAllIntel.get(family).push(dI);
         }
       }
       if (a.costPerTaskUsd > 0 && b.costPerTaskUsd > 0) {
@@ -1408,23 +1487,111 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
     }
   }
 
-  function stepRatio(family, idx, kind) {
+  function stepDeltaOrRatio(family, idx, kind) {
     if (!family) return null;
-    const fMap = kind === "intel" ? familyIntelRatios : familyCostRatios;
+    const fMap = kind === "intel" ? familyIntelDeltas : familyCostRatios;
     const fAll = kind === "intel" ? familyAllIntel : familyAllCost;
     const stepVals = fMap.has(family) ? fMap.get(family)[idx] : [];
     const anyVals = fAll.get(family) || [];
     const raw = stepVals.length >= 1 ? median(stepVals) : anyVals.length >= 1 ? median(anyVals) : null;
     if (raw == null) return null;
     return kind === "intel"
-      ? Math.max(1.01, Math.min(1.6, raw))
+      ? Math.max(0.2, Math.min(15, raw))
+      : Math.max(1.1, Math.min(4.0, raw));
+  }
+
+  // Fit live ARC-AGI-2 -> AA Intelligence IRT logit-space slope (Truong et al., arXiv:2606.07616)
+  // AND per-family ARC-AGI-2 step curves in logit space
+  let arcLogitSlope = null;
+  const arcFamLogitDeltas = new Map();
+  const arcFamCostRatios = new Map();
+  const arcFamAllLogit = new Map();
+  const arcFamAllCost = new Map();
+
+  if (arcByBase && arcByBase.size > 0) {
+    let num = 0;
+    let den = 0;
+    let pairCount = 0;
+    for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
+      const arcEffs = arcByBase.get(baseSlug);
+      if (!arcEffs || arcEffs.size < 2) continue;
+      const common = ORDERED_NAMED_EFFORTS.filter((e) => {
+        const av = effMap.get(e);
+        return av && !av.effortEstimate && av.intelligenceIndex > 0 && arcEffs.has(e);
+      });
+      for (let i = 0; i < common.length; i++) {
+        for (let j = i + 1; j < common.length; j++) {
+          const dArcLogit = logitProb(arcEffs.get(common[j]).score) - logitProb(arcEffs.get(common[i]).score);
+          const dAaLogit =
+            logitProb(effMap.get(common[j]).intelligenceIndex / 100) -
+            logitProb(effMap.get(common[i]).intelligenceIndex / 100);
+          num += dArcLogit * dAaLogit;
+          den += dArcLogit * dArcLogit;
+          pairCount++;
+        }
+      }
+    }
+    if (pairCount >= 5 && den > 1e-9 && num / den > 0) {
+      arcLogitSlope = num / den;
+    }
+
+    if (arcLogitSlope != null) {
+      for (const [arcSlug, arcEffs] of arcByBase.entries()) {
+        const fam = canonicalModelFamily(arcSlug, null);
+        if (!fam) continue;
+        const pts = ORDERED_NAMED_EFFORTS.map((e, idx) => ({ idx, v: arcEffs.get(e) }))
+          .filter((p) => p.v && p.v.cost > 0);
+        if (pts.length < 2) continue;
+        for (let p = 0; p < pts.length - 1; p++) {
+          const a = pts[p];
+          const b = pts[p + 1];
+          const steps = b.idx - a.idx;
+          if (steps <= 0) continue;
+          const perStepCost = Math.pow(b.v.cost / a.v.cost, 1 / steps);
+          const perStepLogit = (arcLogitSlope * (logitProb(b.v.score) - logitProb(a.v.score))) / steps;
+          if (!arcFamLogitDeltas.has(fam)) {
+            arcFamLogitDeltas.set(fam, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+            arcFamCostRatios.set(fam, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+            arcFamAllLogit.set(fam, []);
+            arcFamAllCost.set(fam, []);
+          }
+          if (perStepCost >= 1.0 && perStepCost <= 6.0) {
+            for (let i = a.idx; i < b.idx; i++) arcFamCostRatios.get(fam)[i].push(perStepCost);
+            arcFamAllCost.get(fam).push(perStepCost);
+          }
+          if (perStepLogit >= 0 && perStepLogit <= 1.5) {
+            for (let i = a.idx; i < b.idx; i++) arcFamLogitDeltas.get(fam)[i].push(perStepLogit);
+            arcFamAllLogit.get(fam).push(perStepLogit);
+          }
+        }
+      }
+    }
+  }
+
+  function arcFamilyStep(family, idx, kind) {
+    if (!family) return null;
+    const fMap = kind === "intel" ? arcFamLogitDeltas : arcFamCostRatios;
+    const fAll = kind === "intel" ? arcFamAllLogit : arcFamAllCost;
+    const stepVals = fMap.has(family) ? fMap.get(family)[idx] : [];
+    const anyVals = fAll.get(family) || [];
+    const raw = stepVals.length >= 1 ? median(stepVals) : anyVals.length >= 1 ? median(anyVals) : null;
+    if (raw == null) return null;
+    return kind === "intel"
+      ? Math.max(0.02, Math.min(0.8, raw))
       : Math.max(1.1, Math.min(4.0, raw));
   }
 
   let extrapolatedCount = 0;
+  let arcExtrapCount = 0;
   for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
     const orModel = resolveOpenRouterModel(baseSlug, openRouterIndex, aaByNorm);
-    if (!orModel?.supportedEfforts?.length) continue;
+    const arcEffs = arcByBase?.get(baseSlug) || null;
+    const targetEfforts = orModel?.supportedEfforts?.length
+      ? orModel.supportedEfforts
+      : arcEffs
+        ? [...arcEffs.keys()]
+        : [];
+    if (!targetEfforts.length) continue;
 
     // Gather real measured anchors (named efforts, or "default" anchored via OpenRouter default_effort)
     const anchors = [];
@@ -1434,7 +1601,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
         anchors.push({ idx, v });
       }
     }
-    if (anchors.length === 0 && effMap.has("default") && orModel.defaultEffort) {
+    if (anchors.length === 0 && effMap.has("default") && orModel?.defaultEffort) {
       const defV = effMap.get("default");
       const defIdx = ORDERED_NAMED_EFFORTS.indexOf(orModel.defaultEffort);
       if (defIdx !== -1 && defV && defV.intelligenceIndex > 0 && defV.costPerTaskUsd > 0) {
@@ -1444,9 +1611,11 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
     if (anchors.length === 0) continue;
 
     const family = canonicalModelFamily(baseSlug, anchors[0].v.creatorName);
-    if (!family || !familyAllIntel.has(family) || !familyAllCost.has(family)) continue;
+    const hasSameFamily = Boolean(family && familyAllIntel.has(family) && familyAllCost.has(family));
+    const hasArcFamily = Boolean(family && arcFamAllLogit.has(family) && arcFamAllCost.has(family));
+    if (!hasSameFamily && (!arcEffs || arcLogitSlope == null) && !hasArcFamily) continue;
 
-    for (const targetEff of orModel.supportedEfforts) {
+    for (const targetEff of targetEfforts) {
       const targetIdx = ORDERED_NAMED_EFFORTS.indexOf(targetEff);
       if (targetIdx === -1 || effMap.has(targetEff)) continue;
       // Don't duplicate a single default-anchored effort under its own default_effort name
@@ -1458,30 +1627,88 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
         if (Math.abs(a.idx - targetIdx) < Math.abs(anchor.idx - targetIdx)) anchor = a;
       }
 
+      let estIntel = null;
+      let estCpt = null;
       let intelMult = 1;
-      let costMult = 1;
-      let missingRatio = false;
-      if (targetIdx > anchor.idx) {
-        for (let i = anchor.idx; i < targetIdx; i++) {
-          const rI = stepRatio(family, i, "intel");
-          const rC = stepRatio(family, i, "cost");
-          if (rI == null || rC == null) { missingRatio = true; break; }
-          intelMult *= rI;
-          costMult *= rC;
+      let estimateSource = "same-family";
+
+      if (hasSameFamily) {
+        let intelDelta = 0;
+        let costMult = 1;
+        let missingRatio = false;
+        if (targetIdx > anchor.idx) {
+          for (let i = anchor.idx; i < targetIdx; i++) {
+            const dI = stepDeltaOrRatio(family, i, "intel");
+            const rC = stepDeltaOrRatio(family, i, "cost");
+            if (dI == null || rC == null) { missingRatio = true; break; }
+            intelDelta += dI;
+            costMult *= rC;
+          }
+        } else {
+          for (let i = targetIdx; i < anchor.idx; i++) {
+            const dI = stepDeltaOrRatio(family, i, "intel");
+            const rC = stepDeltaOrRatio(family, i, "cost");
+            if (dI == null || rC == null) { missingRatio = true; break; }
+            intelDelta -= dI;
+            costMult /= rC;
+          }
+        }
+        if (!missingRatio) {
+          estIntel = Number(Math.max(1, Math.min(95, anchor.v.intelligenceIndex + intelDelta)).toFixed(2));
+          intelMult = anchor.v.intelligenceIndex > 0 ? estIntel / anchor.v.intelligenceIndex : 1;
+          estCpt = Number(Math.max(0.001, anchor.v.costPerTaskUsd * costMult).toFixed(4));
         }
       } else {
-        for (let i = targetIdx; i < anchor.idx; i++) {
-          const rI = stepRatio(family, i, "intel");
-          const rC = stepRatio(family, i, "cost");
-          if (rI == null || rC == null) { missingRatio = true; break; }
-          intelMult /= rI;
-          costMult /= rC;
+        // Fallback 2a: exact-model ARC-AGI-2 (v2_Semi_Private) IRT logit-space transfer
+        if (arcEffs && arcLogitSlope != null) {
+          const arcAnchorEff = ORDERED_NAMED_EFFORTS[anchor.idx];
+          const arcA = arcEffs.get(arcAnchorEff);
+          const arcT = arcEffs.get(targetEff);
+          if (arcA && arcT && arcA.cost > 0 && arcT.cost > 0) {
+            const rawLogit =
+              logitProb(anchor.v.intelligenceIndex / 100) +
+              arcLogitSlope * (logitProb(arcT.score) - logitProb(arcA.score));
+            estIntel = Number(Math.max(1, Math.min(95, sigmoidProb(rawLogit) * 100)).toFixed(2));
+            intelMult = anchor.v.intelligenceIndex > 0 ? estIntel / anchor.v.intelligenceIndex : 1;
+            const costRatio = Math.max(0.15, Math.min(6.0, arcT.cost / arcA.cost));
+            estCpt = Number(Math.max(0.001, anchor.v.costPerTaskUsd * costRatio).toFixed(4));
+            estimateSource = "arc-agi-2";
+            arcExtrapCount++;
+          }
+        }
+        // Fallback 2b: same-family ARC-AGI-2 logit-space step curve (e.g. Kimi K3.1 Pro from Kimi K3)
+        if (estIntel == null && hasArcFamily) {
+          let logitDelta = 0;
+          let costMult = 1;
+          let missingRatio = false;
+          if (targetIdx > anchor.idx) {
+            for (let i = anchor.idx; i < targetIdx; i++) {
+              const dL = arcFamilyStep(family, i, "intel");
+              const rC = arcFamilyStep(family, i, "cost");
+              if (dL == null || rC == null) { missingRatio = true; break; }
+              logitDelta += dL;
+              costMult *= rC;
+            }
+          } else {
+            for (let i = targetIdx; i < anchor.idx; i++) {
+              const dL = arcFamilyStep(family, i, "intel");
+              const rC = arcFamilyStep(family, i, "cost");
+              if (dL == null || rC == null) { missingRatio = true; break; }
+              logitDelta -= dL;
+              costMult /= rC;
+            }
+          }
+          if (!missingRatio) {
+            const rawLogit = logitProb(anchor.v.intelligenceIndex / 100) + logitDelta;
+            estIntel = Number(Math.max(1, Math.min(95, sigmoidProb(rawLogit) * 100)).toFixed(2));
+            intelMult = anchor.v.intelligenceIndex > 0 ? estIntel / anchor.v.intelligenceIndex : 1;
+            estCpt = Number(Math.max(0.001, anchor.v.costPerTaskUsd * costMult).toFixed(4));
+            estimateSource = "arc-agi-2";
+            arcExtrapCount++;
+          }
         }
       }
-      if (missingRatio) continue;
-
-      const estIntel = Number(Math.max(1, Math.min(95, anchor.v.intelligenceIndex * intelMult)).toFixed(2));
-      const estCpt = Number(Math.max(0.001, anchor.v.costPerTaskUsd * costMult).toFixed(4));
+      if (estIntel == null || estCpt == null) continue;
 
       const benchmarks = { intelligenceIndex: round1(estIntel) };
       for (const [k, baseVal] of Object.entries(anchor.v.benchmarks || {})) {
@@ -1503,6 +1730,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
         effort: targetEff,
         effortLabel: effortSuffix,
         effortEstimate: "extrapolated",
+        effortEstimateSource: estimateSource,
         displayName: `${baseDisplay} (${effortSuffix})`,
         baseDisplay,
         creatorName: anchor.v.creatorName || null,
@@ -1555,8 +1783,8 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
     const cumIntelW = [0];
     const cumCostW = [0];
     for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
-      cumIntelW.push(cumIntelW[i] + Math.log(stepRatio(family, i, "intel") ?? 1.1));
-      cumCostW.push(cumCostW[i] + Math.log(stepRatio(family, i, "cost") ?? 1.65));
+      cumIntelW.push(cumIntelW[i] + (stepDeltaOrRatio(family, i, "intel") ?? 3.5));
+      cumCostW.push(cumCostW[i] + Math.log(stepDeltaOrRatio(family, i, "cost") ?? 1.65));
     }
 
     const minIdx = positioned[0].idx;
@@ -1606,6 +1834,10 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
         effort: eff,
         effortLabel: effortSuffix,
         effortEstimate: "extrapolated",
+        effortEstimateSource:
+          lo.effortEstimateSource === "arc-agi-2" || hi.effortEstimateSource === "arc-agi-2"
+            ? "arc-agi-2"
+            : "same-family",
         displayName: `${baseDisplay} (${effortSuffix})`,
         baseDisplay,
         creatorName: hi.creatorName || lo.creatorName || null,
@@ -1627,7 +1859,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) 
     }
   }
 
-  return extrapolatedCount;
+  return { total: extrapolatedCount, arcCount: arcExtrapCount };
 }
 
 /**
@@ -1680,15 +1912,15 @@ function computeEffortAccuracy(aaVariantsByBase) {
         if (b.cost > a.cost) stepLogC[i].push(Math.log(b.cost / a.cost));
         const f = b.family || a.family;
         if (f) {
-          const rI = b.intel / a.intel;
+          const dI = b.intel - a.intel;
           const rC = b.cost / a.cost;
-          if (rI >= 1.0 && rI <= 2.5) {
+          if (dI >= 0 && dI <= 25) {
             if (!famI.has(f)) {
               famI.set(f, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
               famAllI.set(f, []);
             }
-            famI.get(f)[i].push(rI);
-            famAllI.get(f).push(rI);
+            famI.get(f)[i].push(dI);
+            famAllI.get(f).push(dI);
           }
           if (rC >= 1.0 && rC <= 8.0) {
             if (!famC.has(f)) {
@@ -1735,26 +1967,26 @@ function computeEffortAccuracy(aaVariantsByBase) {
       const vals = m.get(f)[i];
       const raw = vals.length >= 1 ? median(vals) : median(all.get(f));
       if (raw == null) return null;
-      return kind === "intel" ? Math.max(1.01, Math.min(1.6, raw)) : Math.max(1.1, Math.min(4.0, raw));
+      return kind === "intel" ? Math.max(0.2, Math.min(15, raw)) : Math.max(1.1, Math.min(4.0, raw));
     };
 
     for (const target of pts) {
       for (const anchor of pts) {
         if (anchor.idx === target.idx) continue;
-        let multI = 1;
+        let deltaI = 0;
         let multC = 1;
         let bad = false;
         const lo = Math.min(anchor.idx, target.idx);
         const hi = Math.max(anchor.idx, target.idx);
         for (let i = lo; i < hi; i++) {
-          const rI = fStep(i, "intel");
+          const dI = fStep(i, "intel");
           const rC = fStep(i, "cost");
-          if (rI == null || rC == null) { bad = true; break; }
-          if (target.idx > anchor.idx) { multI *= rI; multC *= rC; }
-          else { multI /= rI; multC /= rC; }
+          if (dI == null || rC == null) { bad = true; break; }
+          if (target.idx > anchor.idx) { deltaI += dI; multC *= rC; }
+          else { deltaI -= dI; multC /= rC; }
         }
         if (bad) continue;
-        const predI = Math.max(1, Math.min(95, anchor.intel * multI));
+        const predI = Math.max(1, Math.min(95, anchor.intel + deltaI));
         const predC = Math.max(0.001, anchor.cost * multC);
         const errI = Math.abs(predI - target.intel);
         const errC = (Math.abs(predC - target.cost) / target.cost) * 100;
@@ -1889,6 +2121,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       tierCount: 0,
       error: null,
     },
+    arcPrize: {
+      name: "ARC Prize (ARC-AGI-2)",
+      url: "https://arcprize.org/leaderboard",
+      ok: false,
+      fetchedAt: null,
+      multiEffortModelCount: 0,
+      error: null,
+    },
   };
 
   let feiCsvText = null;
@@ -1900,6 +2140,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let copilotHtml = null;
   let ollamaHtml = null;
   let kiloHtml = null;
+  let arcEvalsJson = null;
+  let arcModelsJson = null;
 
   if (fromLocal) {
     log("Reading local fixture snapshots from /tmp ...");
@@ -1939,6 +2181,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.kiloPricing)
         .then((t) => { kiloHtml = t; })
         .catch((err) => { sourceStatus.kiloPass.error = err.message; }),
+      fetchText(SOURCES.arcPrizeEvals)
+        .then((t) => { arcEvalsJson = JSON.parse(t); })
+        .catch((err) => { sourceStatus.arcPrize.error = err.message; }),
+      fetchText(SOURCES.arcPrizeModels)
+        .then((t) => { arcModelsJson = JSON.parse(t); })
+        .catch((err) => { sourceStatus.arcPrize.error = sourceStatus.arcPrize.error || err.message; }),
     ];
 
     if (process.env.AA_API_KEY) {
@@ -1994,6 +2242,22 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     } catch (err) {
       sourceStatus.openRouter.error = err.message;
       log("OpenRouter parse error:", err.message);
+    }
+  }
+
+  // 1c. Parse optional ARC Prize ARC-AGI-2 (v2_Semi_Private) multi-effort fallback
+  let arcByBase = null;
+  if (arcEvalsJson && arcModelsJson) {
+    try {
+      const arcParsed = parseArcPrizeV2(arcEvalsJson, arcModelsJson, aaByNorm);
+      arcByBase = arcParsed.byBase;
+      sourceStatus.arcPrize.ok = true;
+      sourceStatus.arcPrize.fetchedAt = nowIso;
+      sourceStatus.arcPrize.multiEffortModelCount = arcParsed.multiCount;
+      log(`Parsed ${arcParsed.multiCount} multi-effort models from ARC Prize (v2_Semi_Private)`);
+    } catch (err) {
+      sourceStatus.arcPrize.error = err.message;
+      log("ARC Prize parse error:", err.message);
     }
   }
 
@@ -2086,10 +2350,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     log(`Interpolated ${interpolatedEffortVariants} bracketed intermediate reasoning effort variant(s)`);
   }
 
-  // Option B (OFF by default in UI): extrapolate remaining OpenRouter-supported efforts (same-family only)
-  const extrapolatedEffortVariants = extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm);
+  // Option B (OFF by default in UI): extrapolate remaining OpenRouter-supported efforts (same-family AA, ARC-AGI-2 fallback)
+  const extrapResult = extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, arcByBase);
+  const extrapolatedEffortVariants = extrapResult.total;
+  const arcExtrapolatedVariants = extrapResult.arcCount;
   if (extrapolatedEffortVariants > 0) {
-    log(`Extrapolated ${extrapolatedEffortVariants} same-family reasoning effort variant(s)`);
+    log(
+      `Extrapolated ${extrapolatedEffortVariants} reasoning effort variant(s) ` +
+        `(${extrapolatedEffortVariants - arcExtrapolatedVariants} same-family, ${arcExtrapolatedVariants} ARC-AGI-2 fallback)`
+    );
   }
 
   const effortAccuracy = computeEffortAccuracy(aaVariantsByBase);
@@ -2707,6 +2976,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const backfilledContextSlugs = new Set();
   const unclassifiedPlans = new Set();
   function applyOpenRouterBackfill(entry, allowDomainBackfill) {
+    if (/^(?:Opus|Sonnet|Haiku)\s+\d/i.test(String(entry.modelDisplay || ""))) {
+      entry.modelDisplay = `Claude ${entry.modelDisplay}`;
+    }
     const accessMeta = detectPlanAccessAndWindow(entry.plan, entry.billing);
     entry.openEndpoint = accessMeta.openEndpoint;
     entry.harness = accessMeta.harness;
@@ -2797,6 +3069,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
             modelId: v.variantKey,
             effort: v.effort,
             effortEstimate: v.effortEstimate || null,
+            effortEstimateSource: v.effortEstimateSource || null,
             modelDisplay: v.displayName,
             aaUrl: v.aaUrl || baseEntry.aaUrl,
             aaLive: v.aaLive || baseEntry.aaLive,
@@ -2851,6 +3124,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       openRouterBackfilledContext: backfilledContextSlugs.size,
       interpolatedEffortVariants,
       extrapolatedEffortVariants,
+      arcExtrapolatedVariants,
       effortAccuracy,
       unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
