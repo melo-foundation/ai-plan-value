@@ -189,6 +189,10 @@ function normSlug(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normPlanSlug(value) {
+  return normSlug(String(value || "").replace(/\+/g, " plus "));
+}
+
 function toNum(value) {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
@@ -2534,7 +2538,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     if (r.data_date && r.data_date > latestFeiDate) latestFeiDate = r.data_date;
 
-    const entryId = r.id || `${normSlug(planName)}::${normSlug(modelId)}`;
+    const entryId = r.id || `${normPlanSlug(planName)}::${normSlug(modelId)}`;
     const { isOffPeak, isLegacy, isCnPortal } = detectPlanFlags(planName, r.plan || "");
     const benchmarks = aaModel?.benchmarks
       ? {
@@ -2595,7 +2599,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (/^ollama\b/i.test(planName)) ollamaHostedSlugs.add(aaSlug);
 
     if (billing === "subscription") {
-      feiSubIndex.set(`${normSlug(planName)}::${aaSlug}`, entryId);
+      feiSubIndex.set(`${normPlanSlug(planName)}::${aaSlug}`, entryId);
       if (priceUsd !== null) {
         feiVendorFeeModelIndex.set(`${normSlug(vendor)}::${Math.round(priceUsd)}::${aaSlug}`, entryId);
       }
@@ -2728,7 +2732,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (intel === null || cpt === null || cpt <= 0) continue;
 
     const aaSlug = aaModel?.slug || priorsVar?.baseSlug || fallbackModel.modelId;
-    const planSlug = normSlug(item.plan);
+    const planSlug = normPlanSlug(item.plan);
     const dedupeKey = `${planSlug}::${aaSlug}`;
     if (priorsSeen.has(dedupeKey)) continue;
     priorsSeen.add(dedupeKey);
@@ -2827,7 +2831,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
       copilotEntryCount++;
       entries.push({
-        id: `first-party::${normSlug(tier.plan)}::${aaSlug}`,
+        id: `first-party::${normPlanSlug(tier.plan)}::${aaSlug}`,
         origin: "github-copilot",
         isPreliminary: false,
         estimateType: null,
@@ -2885,7 +2889,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || "Ollama";
       ollamaTeamEntryCount++;
       entries.push({
-        id: `first-party::${normSlug(tier.plan)}::${aaSlug}`,
+        id: `first-party::${normPlanSlug(tier.plan)}::${aaSlug}`,
         origin: "ollama-cloud",
         isPreliminary: false,
         estimateType: null,
@@ -2946,7 +2950,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || "Kilo";
         kiloPassEntryCount++;
         entries.push({
-          id: `first-party::${normSlug(tier.plan)}::${aaSlug}`,
+          id: `first-party::${normPlanSlug(tier.plan)}::${aaSlug}`,
           origin: "kilo-pass",
           isPreliminary: false,
           estimateType: null,
@@ -3064,7 +3068,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
         sharedPoolCount++;
         entries.push({
-          id: `shared-pool::${normSlug(planName)}::${targetSlug}`,
+          id: `shared-pool::${normPlanSlug(planName)}::${targetSlug}`,
           origin: "shared-pool-assumed",
           isPreliminary: true,
           estimateType: "assumed",
