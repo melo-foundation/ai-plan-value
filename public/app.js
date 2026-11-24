@@ -72,6 +72,8 @@ const state = {
   hideLegacy: true,
   hideOffPeak: true,
   hideEstimated: false,
+  hideInterpolated: false,
+  showExtrapolated: false,
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
@@ -79,6 +81,7 @@ const state = {
   tableQuery: "",
   groupByPlan: false,
   expandedTableGroups: new Set(),
+  cheapestPlanOnly: true,
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
   sortKey: "effectiveCost",
@@ -186,7 +189,7 @@ function getPlanAccessMeta(r) {
   if (/^command code\b/i.test(p)) return { openEndpoint: false, harness: "Command Code CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
   if (/^droid\b/i.test(p)) return { openEndpoint: false, harness: "Factory Droid CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
   if (/^google ai\b/i.test(p)) return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
-  if (/^supergrok\b/i.test(p)) return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
+  if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
   if (/^mistral\b/i.test(p)) return { openEndpoint: false, harness: "Le Chat / Vibe", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
   return { openEndpoint: false, harness: "First-party app", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
 }
@@ -226,6 +229,16 @@ function estMark(r) {
       ? "Estimated subsidy (prior-generation quota carryover)"
       : "Estimated subsidy (preliminary user report)";
   return `<span class="est-star" title="${esc(tip)}">*</span>`;
+}
+
+function interpMark(r) {
+  if (r.effortEstimate === "interpolated") {
+    return `<span class="est-star" title="Interpolated reasoning effort (bracketed between measured efforts on this model)">†</span>`;
+  }
+  if (r.effortEstimate === "extrapolated") {
+    return `<span class="est-star" title="Extrapolated reasoning effort (estimated from other measured models in the same family, not directly benchmarked)">‡</span>`;
+  }
+  return "";
 }
 
 function isLegacyEntry(r) {
@@ -379,6 +392,8 @@ function getFilteredRows(allResolved) {
     if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
     if (state.hideEstimated && r.isPreliminary) continue;
+    if (state.hideInterpolated && r.effortEstimate === "interpolated") continue;
+    if (!state.showExtrapolated && r.effortEstimate === "extrapolated") continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
@@ -395,7 +410,9 @@ function renderPlanDrawer(planName, allResolved) {
       !e.isApi &&
       cleanPlan(e) === planName &&
       e.effectiveCost != null &&
-      !(state.hideEstimated && e.isPreliminary)
+      !(state.hideEstimated && e.isPreliminary) &&
+      !(state.hideInterpolated && e.effortEstimate === "interpolated") &&
+      (state.showExtrapolated || e.effortEstimate !== "extrapolated")
   );
 
   // Collect effort columns actually present in this plan, ordered low -> max
@@ -444,7 +461,9 @@ function renderPlanDrawer(planName, allResolved) {
               : e.intelligenceIndex != null
                 ? `II ${e.intelligenceIndex.toFixed(1)}`
                 : "—";
-          return `<td class="pm-cell${passes ? "" : " dim"}"><span class="pm-cost">${fmtUsd(e.effectiveCost)}${estMark(e)}</span><span class="pm-score">${esc(scoreStr)}</span></td>`;
+          const isExtrap = e.effortEstimate === "extrapolated";
+          const costPrefix = isExtrap ? "~" : "";
+          return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costPrefix}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${costPrefix}${esc(scoreStr)}</span></td>`;
         })
         .join("");
 
@@ -475,22 +494,33 @@ function renderPlanDrawer(planName, allResolved) {
 function renderBarChart(rows, allResolved) {
   const host = $("barChart");
 
-  // Checked (default): 1 bar per base model (cheapest qualifying effort+plan; ties broken by higher score).
-  // Unchecked: 1 bar per (model, effort) variant.
-  const bestByModel = new Map();
-  for (const r of rows) {
-    const groupKey = state.cheapestEffortOnly ? (r.baseModelId || r.modelId) : r.modelId;
-    const prev = bestByModel.get(groupKey);
-    const isBetter =
-      !prev ||
-      r.effectiveCost < prev.effectiveCost - 1e-9 ||
-      (Math.abs(r.effectiveCost - prev.effectiveCost) <= 1e-9 && (r.score ?? 0) > (prev.score ?? 0));
-    if (isBetter) {
-      bestByModel.set(groupKey, r);
+  // Deduplicate bar chart according to cheapestPlanOnly & cheapestEffortOnly toggles:
+  // - both checked (default): 1 bar per base model (cheapest plan + cheapest qualifying effort)
+  // - cheapestPlanOnly only:  1 bar per (model, effort) variant (cheapest plan for each effort)
+  // - cheapestEffortOnly only: 1 bar per (plan, base model) (every plan, at its cheapest qualifying effort)
+  // - neither checked:        every qualifying (plan, model, effort) bar
+  let bars;
+  if (!state.cheapestPlanOnly && !state.cheapestEffortOnly) {
+    bars = [...rows];
+  } else {
+    const bestByKey = new Map();
+    for (const r of rows) {
+      const modelPart = state.cheapestEffortOnly ? (r.baseModelId || r.modelId) : r.modelId;
+      const planPart = state.cheapestPlanOnly ? "" : `${r.isApi ? "__api__" : r.plan}::`;
+      const groupKey = `${planPart}${modelPart}`;
+      const prev = bestByKey.get(groupKey);
+      const isBetter =
+        !prev ||
+        r.effectiveCost < prev.effectiveCost - 1e-9 ||
+        (Math.abs(r.effectiveCost - prev.effectiveCost) <= 1e-9 && (r.score ?? 0) > (prev.score ?? 0));
+      if (isBetter) {
+        bestByKey.set(groupKey, r);
+      }
     }
+    bars = [...bestByKey.values()];
   }
 
-  const bars = [...bestByModel.values()].sort((a, b) => a.effectiveCost - b.effectiveCost);
+  bars.sort((a, b) => a.effectiveCost - b.effectiveCost || (b.score ?? 0) - (a.score ?? 0));
 
   if (!bars.length) {
     host.innerHTML = `<div class="empty">No plans match these limits.</div>`;
@@ -521,16 +551,19 @@ function renderBarChart(rows, allResolved) {
         ? ""
         : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
+      const isExtrap = r.effortEstimate === "extrapolated";
+      const tilde = isExtrap ? "~" : "";
+
       return `
-        <div class="bar-row">
+        <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
           <div class="bar-label">
-            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
+            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
           </div>
           <div class="bar-track-wrap">
-            <span class="bar-fill" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
-            <span class="bar-val">${fmtUsd(r.effectiveCost)}</span>
-            <span class="bar-note">${esc(note)}</span>
+            <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
+            <span class="bar-val">${tilde}${fmtUsd(r.effectiveCost)}</span>
+            <span class="bar-note">${isExtrap ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
           ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
         </div>
@@ -657,23 +690,27 @@ function renderTable(rows) {
       .join("");
 
     const nameCell = grouped
-      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>`
-      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>`;
+      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div>`
+      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>`;
 
     const accessCell = grouped
       ? `<td class="meta-cell col-hide-sm"></td>`
       : `<td class="meta-cell col-hide-sm"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
 
+    const isExtrap = r.effortEstimate === "extrapolated";
+    const rowCls = [grouped ? "grouped-item" : "", isExtrap ? "is-extrapolated" : ""].filter(Boolean).join(" ");
+    const tilde = isExtrap ? "~" : "";
+
     return `
-      <tr${grouped ? ' class="grouped-item"' : ""}>
+      <tr${rowCls ? ` class="${rowCls}"` : ""}>
         <td>${nameCell}</td>
-        <td class="num-col">${fmtScore(r.score, scoreKey)}</td>
+        <td class="num-col">${tilde}${fmtScore(r.score, scoreKey)}</td>
         ${extraCells}
         ${accessCell}
         <td class="num-col">${feeText(r)}</td>
         <td class="num-col col-hide-sm">${!state.monthlyApiUsage && r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
-        <td class="num-col col-hide-sm">${fmtUsd(r.apiMetric)}</td>
-        <td class="num-col real-cell">${fmtUsd(r.effectiveCost)}</td>
+        <td class="num-col col-hide-sm">${tilde}${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col real-cell">${tilde}${fmtUsd(r.effectiveCost)}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
     `;
@@ -948,10 +985,13 @@ function loadStateFromUrl() {
   state.budgetIdx = stopIdxFromParam(params.get("budget"), BUDGET_STOPS, 5);
   state.maxCostIdx = stopIdxFromParam(params.get("cost"), currentCostStops(), 4);
 
+  if (params.get("plans") === "all") state.cheapestPlanOnly = false;
   if (params.get("efforts") === "all") state.cheapestEffortOnly = false;
   if (params.get("legacy") === "1") state.hideLegacy = false;
   if (params.get("offpeak") === "1") state.hideOffPeak = false;
   if (params.get("noest") === "1") state.hideEstimated = true;
+  if (params.get("nointerp") === "1") state.hideInterpolated = true;
+  if (params.get("extrap") === "1") state.showExtrapolated = true;
   if (params.get("nocn") === "1") state.hideCnPortal = true;
   if (params.get("api") === "1") state.showApi = true;
   if (params.get("open") === "1") state.openWeightsOnly = true;
@@ -1003,10 +1043,13 @@ function syncControlsFromState() {
   if ($("minEffort")) $("minEffort").value = state.minEffort;
   if ($("maxEffort")) $("maxEffort").value = state.maxEffort;
   $("maxCost").value = String(state.maxCostIdx);
+  if ($("cheapestPlanOnly")) $("cheapestPlanOnly").checked = state.cheapestPlanOnly;
   $("cheapestEffortOnly").checked = state.cheapestEffortOnly;
   $("hideLegacy").checked = state.hideLegacy;
   $("hideOffPeak").checked = state.hideOffPeak;
   $("hideEstimated").checked = state.hideEstimated;
+  if ($("hideInterpolated")) $("hideInterpolated").checked = state.hideInterpolated;
+  if ($("showExtrapolated")) $("showExtrapolated").checked = state.showExtrapolated;
   $("hideCnPortal").checked = state.hideCnPortal;
   $("showApi").checked = state.showApi;
   $("openWeightsOnly").checked = state.openWeightsOnly;
@@ -1035,10 +1078,13 @@ function syncUrlFromState() {
       const stop = currentCostStops()[state.maxCostIdx];
       params.set("cost", Number.isFinite(stop.max) ? String(stop.max) : "any");
     }
+    if (!state.cheapestPlanOnly) params.set("plans", "all");
     if (!state.cheapestEffortOnly) params.set("efforts", "all");
     if (!state.hideLegacy) params.set("legacy", "1");
     if (!state.hideOffPeak) params.set("offpeak", "1");
     if (state.hideEstimated) params.set("noest", "1");
+    if (state.hideInterpolated) params.set("nointerp", "1");
+    if (state.showExtrapolated) params.set("extrap", "1");
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
     if (state.openWeightsOnly) params.set("open", "1");
@@ -1085,7 +1131,16 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
+  if ($("extrapBanner")) {
+    $("extrapBanner").hidden = !state.showExtrapolated;
+  }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
+  if ($("interpFootnote")) {
+    $("interpFootnote").hidden = !rows.some((r) => r.effortEstimate === "interpolated");
+  }
+  if ($("extrapFootnote")) {
+    $("extrapFootnote").hidden = !rows.some((r) => r.effortEstimate === "extrapolated");
+  }
   syncUrlFromState();
 }
 
@@ -1097,6 +1152,20 @@ function renderMeta() {
     ? d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : ds.latestDataDate;
   $("updatedAt").textContent = `Updated ${stamp}`;
+
+  const acc = ds.stats?.effortAccuracy;
+  if (acc?.interp?.intelPts != null && acc?.interp?.costPct != null && $("interpErrNote")) {
+    $("interpErrNote").textContent = ` (typical error ~±${acc.interp.intelPts} pts / ±${acc.interp.costPct}% $/task)`;
+  }
+  if (
+    acc?.extrap?.intelPts1 != null &&
+    acc?.extrap?.intelPtsAll != null &&
+    acc?.extrap?.costPct1 != null &&
+    acc?.extrap?.costPctAll != null &&
+    $("extrapErrNote")
+  ) {
+    $("extrapErrNote").textContent = ` (typical error ~±${acc.extrap.intelPts1}–${acc.extrap.intelPtsAll} pts / ±${acc.extrap.costPct1}–${acc.extrap.costPctAll}% $/task)`;
+  }
 }
 
 function applyTheme(theme) {
@@ -1226,6 +1295,25 @@ $("hideEstimated").addEventListener("change", (e) => {
   render();
 });
 
+$("hideInterpolated")?.addEventListener("change", (e) => {
+  state.hideInterpolated = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("showExtrapolated")?.addEventListener("change", (e) => {
+  state.showExtrapolated = e.target.checked;
+  updateSettingsBadge();
+  render();
+});
+
+$("disableExtrapBtn")?.addEventListener("click", () => {
+  state.showExtrapolated = false;
+  if ($("showExtrapolated")) $("showExtrapolated").checked = false;
+  updateSettingsBadge();
+  render();
+});
+
 $("hideCnPortal").addEventListener("change", (e) => {
   state.hideCnPortal = e.target.checked;
   updateSettingsBadge();
@@ -1255,6 +1343,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
+  state.hideInterpolated = false;
+  state.showExtrapolated = false;
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
@@ -1269,6 +1359,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;
+  if ($("hideInterpolated")) $("hideInterpolated").checked = false;
+  if ($("showExtrapolated")) $("showExtrapolated").checked = false;
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;
@@ -1352,6 +1444,11 @@ $("maxEffort")?.addEventListener("change", (e) => {
     state.minEffort = state.maxEffort;
     if ($("minEffort")) $("minEffort").value = state.minEffort;
   }
+  render();
+});
+
+$("cheapestPlanOnly")?.addEventListener("change", (e) => {
+  state.cheapestPlanOnly = e.target.checked;
   render();
 });
 

@@ -136,7 +136,7 @@ const PLAN_URL_PATTERNS = [
   [/^google ai\b/i, "https://one.google.com/about/google-ai-plans/"],
   [/^github copilot\b/i, "https://github.com/features/copilot/plans"],
   [/^kilo pass\b/i, "https://kilo.ai/pricing"],
-  [/^supergrok\b/i, "https://grok.com"],
+  [/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i, "https://grok.com"],
   [/^cursor\b/i, "https://cursor.com/pricing"],
   [/^devin\b/i, "https://devin.ai/pricing"],
   [/^droid\b/i, "https://factory.com/pricing"],
@@ -293,7 +293,7 @@ function detectPlanAccessAndWindow(planName, billing) {
   if (/^google ai\b/i.test(p)) {
     return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
   }
-  if (/^supergrok\b/i.test(p)) {
+  if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) {
     return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
   }
   if (/^mistral\b/i.test(p)) {
@@ -322,7 +322,7 @@ function vendorFromPlan(planName, fallbackVendor) {
   if (/^google ai\b/i.test(p)) return "Google";
   if (/^github copilot\b/i.test(p)) return "GitHub";
   if (/^kilo\b/i.test(p)) return "Kilo";
-  if (/^supergrok\b/i.test(p)) return "xAI";
+  if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) return "xAI";
   if (/^cursor\b/i.test(p)) return "Cursor";
   if (/^devin\b/i.test(p)) return "Devin";
   if (/^droid\b/i.test(p)) return "Factory";
@@ -1077,12 +1077,27 @@ function parseOpenRouterModels(json, aaByNorm) {
       if (toNum(aa.economics_index) != null) domainBenchmarks.economics = round1(aa.economics_index);
     }
 
+    const rawEfforts = Array.isArray(m.reasoning?.supported_efforts) ? m.reasoning.supported_efforts : [];
+    const supportedEfforts = [
+      ...new Set(
+        rawEfforts
+          .map((e) => String(e || "").toLowerCase().trim())
+          .filter((e) => ["none", "low", "medium", "high", "xhigh", "max"].includes(e))
+      ),
+    ];
+    const rawDefEff = String(m.reasoning?.default_effort || "").toLowerCase().trim();
+    const defaultEffort = ["none", "low", "medium", "high", "xhigh", "max"].includes(rawDefEff)
+      ? rawDefEff
+      : null;
+
     const rec = {
       id: rawId,
       contextWindowTokens: toNum(m.context_length ?? m.top_provider?.context_length),
       isOpenWeights: Boolean(m.hugging_face_id),
       isPaid: inputPer1M != null && outputPer1M != null,
       aaIntelligenceIndex: aa && typeof aa === "object" ? toNum(aa.intelligence_index) : null,
+      supportedEfforts: supportedEfforts.length > 0 ? supportedEfforts : null,
+      defaultEffort,
       pricing:
         inputPer1M != null || outputPer1M != null
           ? {
@@ -1189,6 +1204,585 @@ function parseKiloPricingHtml(html) {
     });
   }
   return parsed;
+}
+
+const ORDERED_NAMED_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"];
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function canonicalModelFamily(slug, creatorName) {
+  const s = `${slug || ""} ${creatorName || ""}`.toLowerCase();
+  if (/\bclaude\b|anthropic/.test(s)) return "anthropic";
+  if (/\bgpt\b|\bo1\b|\bo3\b|\bo4\b|openai/.test(s)) return "openai";
+  if (/\bgemini\b|\bgemma\b|\bgoogle\b/.test(s)) return "google";
+  if (/\bgrok\b|\bxai\b|spacexai/.test(s)) return "xai";
+  if (/deepseek/.test(s)) return "deepseek";
+  if (/\bqwen|alibaba/.test(s)) return "alibaba";
+  if (/\bglm\b|zhipu|\bz[\s-]?ai\b/.test(s)) return "zhipu";
+  if (/\bkimi\b|moonshot/.test(s)) return "moonshot";
+  if (/mistral|devstral|codestral|pixtral|ministral/.test(s)) return "mistral";
+  if (/\bllama\b|\bmeta\b/.test(s)) return "meta";
+  if (/minimax/.test(s)) return "minimax";
+  if (/\bstep[-\s]?\d|stepfun/.test(s)) return "stepfun";
+  if (/\bmuse\b/.test(s)) return "muse";
+  if (/hunyuan|tencent/.test(s)) return "tencent";
+  if (/doubao|seed|bytedance/.test(s)) return "bytedance";
+  const c = String(creatorName || "").toLowerCase().trim();
+  return c || null;
+}
+
+/**
+ * Fill missing intermediate reasoning effort levels strictly bracketed between
+ * a lower and higher measured effort on the SAME model.
+ * Uses empirical median step curves fitted from measured multi-effort models
+ * (linear on Intelligence/test scores, log-linear on Cost/Task) and gates on
+ * OpenRouter's supported_efforts whenever available.
+ */
+function interpolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) {
+  const stepIntelDeltas = Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []);
+  const stepLogCostDeltas = Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []);
+
+  for (const effMap of aaVariantsByBase.values()) {
+    for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+      const a = effMap.get(ORDERED_NAMED_EFFORTS[i]);
+      const b = effMap.get(ORDERED_NAMED_EFFORTS[i + 1]);
+      if (!a || !b || a.effortEstimate || b.effortEstimate) continue;
+      if (a.intelligenceIndex != null && b.intelligenceIndex != null) {
+        const dIntel = b.intelligenceIndex - a.intelligenceIndex;
+        if (dIntel > 0) stepIntelDeltas[i].push(dIntel);
+      }
+      if (a.costPerTaskUsd > 0 && b.costPerTaskUsd > 0) {
+        const dLog = Math.log(b.costPerTaskUsd / a.costPerTaskUsd);
+        if (dLog > 0) stepLogCostDeltas[i].push(dLog);
+      }
+    }
+  }
+
+  const defaultIntelSteps = [6.0, 5.0, 4.0, 2.5, 1.5];
+  const defaultLogCostSteps = [0.6, 0.55, 0.5, 0.45, 0.45];
+  const cumIntel = [0];
+  const cumLogCost = [0];
+  for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+    const dI = median(stepIntelDeltas[i]) ?? defaultIntelSteps[i];
+    const dC = median(stepLogCostDeltas[i]) ?? defaultLogCostSteps[i];
+    cumIntel.push(cumIntel[i] + Math.max(0.5, dI));
+    cumLogCost.push(cumLogCost[i] + Math.max(0.1, dC));
+  }
+
+  let interpolatedCount = 0;
+  for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
+    const measuredRanks = ORDERED_NAMED_EFFORTS.map((eff, idx) => ({
+      eff,
+      idx,
+      v: effMap.get(eff),
+    })).filter((x) => x.v && !x.v.effortEstimate);
+
+    if (measuredRanks.length < 2) continue;
+
+    const orModel = resolveOpenRouterModel(baseSlug, openRouterIndex, aaByNorm);
+    const allowedSet = orModel?.supportedEfforts
+      ? new Set(orModel.supportedEfforts)
+      : new Set(["low", "medium", "high", "xhigh"]);
+
+    for (let idx = 1; idx < ORDERED_NAMED_EFFORTS.length - 1; idx++) {
+      const eff = ORDERED_NAMED_EFFORTS[idx];
+      if (effMap.has(eff) || !allowedSet.has(eff)) continue;
+
+      const loEntry = [...measuredRanks].reverse().find((x) => x.idx < idx);
+      const hiEntry = measuredRanks.find((x) => x.idx > idx);
+      if (!loEntry || !hiEntry) continue;
+
+      const lo = loEntry.v;
+      const hi = hiEntry.v;
+      if (
+        lo.intelligenceIndex == null ||
+        hi.intelligenceIndex == null ||
+        !(lo.costPerTaskUsd > 0) ||
+        !(hi.costPerTaskUsd > 0)
+      ) {
+        continue;
+      }
+
+      const denomI = cumIntel[hiEntry.idx] - cumIntel[loEntry.idx];
+      const denomC = cumLogCost[hiEntry.idx] - cumLogCost[loEntry.idx];
+      const rawTI = denomI > 0 ? (cumIntel[idx] - cumIntel[loEntry.idx]) / denomI : (idx - loEntry.idx) / (hiEntry.idx - loEntry.idx);
+      const rawTC = denomC > 0 ? (cumLogCost[idx] - cumLogCost[loEntry.idx]) / denomC : (idx - loEntry.idx) / (hiEntry.idx - loEntry.idx);
+      const tI = Math.max(0.15, Math.min(0.85, rawTI));
+      const tC = Math.max(0.15, Math.min(0.85, rawTC));
+
+      const estIntel = Number((lo.intelligenceIndex + tI * (hi.intelligenceIndex - lo.intelligenceIndex)).toFixed(2));
+      const estCpt = Number(
+        Math.exp(Math.log(lo.costPerTaskUsd) + tC * (Math.log(hi.costPerTaskUsd) - Math.log(lo.costPerTaskUsd))).toFixed(4)
+      );
+
+      const benchmarks = { intelligenceIndex: round1(estIntel) };
+      for (const [k, loVal] of Object.entries(lo.benchmarks || {})) {
+        if (k === "intelligenceIndex") continue;
+        const hiVal = hi.benchmarks?.[k];
+        if (toNum(loVal) != null && toNum(hiVal) != null) {
+          benchmarks[k] = round1(loVal + tI * (hiVal - loVal));
+        }
+      }
+
+      const effortSuffix = EFFORT_LABELS[eff];
+      const baseDisplay = hi.baseDisplay || lo.baseDisplay || baseSlug;
+
+      effMap.set(eff, {
+        variantKey: `${baseSlug}--${eff}`,
+        baseSlug,
+        effort: eff,
+        effortLabel: effortSuffix,
+        effortEstimate: "interpolated",
+        displayName: `${baseDisplay} (${effortSuffix})`,
+        baseDisplay,
+        creatorName: hi.creatorName || lo.creatorName || null,
+        creatorColor: hi.creatorColor || lo.creatorColor || null,
+        intelligenceIndex: estIntel,
+        costPerTaskUsd: estCpt,
+        benchmarks,
+        aaUrl: hi.aaUrl || lo.aaUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+        aaLive: Boolean(hi.aaLive || lo.aaLive),
+        isHeadline: false,
+        pricing: hi.pricing || lo.pricing || null,
+        costPerTaskBreakdown: null,
+        totalIndexCostUsd: null,
+        speed: hi.speed || lo.speed || null,
+        isOpenWeights: Boolean(hi.isOpenWeights || lo.isOpenWeights),
+        contextWindowTokens: hi.contextWindowTokens ?? lo.contextWindowTokens ?? null,
+      });
+      interpolatedCount++;
+    }
+  }
+  return interpolatedCount;
+}
+
+/**
+ * Option B (OFF by default in UI):
+ * Extrapolate remaining supported reasoning efforts (gated strictly by OpenRouter's
+ * reasoning.supported_efforts) from the nearest measured effort on the same model
+ * using strictly same-family measured step scaling ratios (models from families
+ * without multi-effort benchmark data are skipped).
+ */
+function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm) {
+  if (!openRouterIndex) return 0;
+
+  const familyIntelRatios = new Map();
+  const familyCostRatios = new Map();
+  const familyAllIntel = new Map();
+  const familyAllCost = new Map();
+
+  for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
+    for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+      const a = effMap.get(ORDERED_NAMED_EFFORTS[i]);
+      const b = effMap.get(ORDERED_NAMED_EFFORTS[i + 1]);
+      if (!a || !b || a.effortEstimate || b.effortEstimate) continue;
+      const family = canonicalModelFamily(baseSlug, b.creatorName || a.creatorName);
+      if (!family) continue;
+      if (a.intelligenceIndex > 1 && b.intelligenceIndex > 1) {
+        const rI = b.intelligenceIndex / a.intelligenceIndex;
+        if (rI >= 1.0 && rI <= 2.5) {
+          if (!familyIntelRatios.has(family)) {
+            familyIntelRatios.set(family, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+            familyAllIntel.set(family, []);
+          }
+          familyIntelRatios.get(family)[i].push(rI);
+          familyAllIntel.get(family).push(rI);
+        }
+      }
+      if (a.costPerTaskUsd > 0 && b.costPerTaskUsd > 0) {
+        const rC = b.costPerTaskUsd / a.costPerTaskUsd;
+        if (rC >= 1.0 && rC <= 8.0) {
+          if (!familyCostRatios.has(family)) {
+            familyCostRatios.set(family, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+            familyAllCost.set(family, []);
+          }
+          familyCostRatios.get(family)[i].push(rC);
+          familyAllCost.get(family).push(rC);
+        }
+      }
+    }
+  }
+
+  function stepRatio(family, idx, kind) {
+    if (!family) return null;
+    const fMap = kind === "intel" ? familyIntelRatios : familyCostRatios;
+    const fAll = kind === "intel" ? familyAllIntel : familyAllCost;
+    const stepVals = fMap.has(family) ? fMap.get(family)[idx] : [];
+    const anyVals = fAll.get(family) || [];
+    const raw = stepVals.length >= 1 ? median(stepVals) : anyVals.length >= 1 ? median(anyVals) : null;
+    if (raw == null) return null;
+    return kind === "intel"
+      ? Math.max(1.01, Math.min(1.6, raw))
+      : Math.max(1.1, Math.min(4.0, raw));
+  }
+
+  let extrapolatedCount = 0;
+  for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
+    const orModel = resolveOpenRouterModel(baseSlug, openRouterIndex, aaByNorm);
+    if (!orModel?.supportedEfforts?.length) continue;
+
+    // Gather real measured anchors (named efforts, or "default" anchored via OpenRouter default_effort)
+    const anchors = [];
+    for (let idx = 0; idx < ORDERED_NAMED_EFFORTS.length; idx++) {
+      const v = effMap.get(ORDERED_NAMED_EFFORTS[idx]);
+      if (v && !v.effortEstimate && v.intelligenceIndex > 0 && v.costPerTaskUsd > 0) {
+        anchors.push({ idx, v });
+      }
+    }
+    if (anchors.length === 0 && effMap.has("default") && orModel.defaultEffort) {
+      const defV = effMap.get("default");
+      const defIdx = ORDERED_NAMED_EFFORTS.indexOf(orModel.defaultEffort);
+      if (defIdx !== -1 && defV && defV.intelligenceIndex > 0 && defV.costPerTaskUsd > 0) {
+        anchors.push({ idx: defIdx, v: defV, isDefaultAnchor: true });
+      }
+    }
+    if (anchors.length === 0) continue;
+
+    const family = canonicalModelFamily(baseSlug, anchors[0].v.creatorName);
+    if (!family || !familyAllIntel.has(family) || !familyAllCost.has(family)) continue;
+
+    for (const targetEff of orModel.supportedEfforts) {
+      const targetIdx = ORDERED_NAMED_EFFORTS.indexOf(targetEff);
+      if (targetIdx === -1 || effMap.has(targetEff)) continue;
+      // Don't duplicate a single default-anchored effort under its own default_effort name
+      if (anchors.length === 1 && anchors[0].isDefaultAnchor && anchors[0].idx === targetIdx) continue;
+
+      // Pick nearest real measured anchor
+      let anchor = anchors[0];
+      for (const a of anchors) {
+        if (Math.abs(a.idx - targetIdx) < Math.abs(anchor.idx - targetIdx)) anchor = a;
+      }
+
+      let intelMult = 1;
+      let costMult = 1;
+      let missingRatio = false;
+      if (targetIdx > anchor.idx) {
+        for (let i = anchor.idx; i < targetIdx; i++) {
+          const rI = stepRatio(family, i, "intel");
+          const rC = stepRatio(family, i, "cost");
+          if (rI == null || rC == null) { missingRatio = true; break; }
+          intelMult *= rI;
+          costMult *= rC;
+        }
+      } else {
+        for (let i = targetIdx; i < anchor.idx; i++) {
+          const rI = stepRatio(family, i, "intel");
+          const rC = stepRatio(family, i, "cost");
+          if (rI == null || rC == null) { missingRatio = true; break; }
+          intelMult /= rI;
+          costMult /= rC;
+        }
+      }
+      if (missingRatio) continue;
+
+      const estIntel = Number(Math.max(1, Math.min(95, anchor.v.intelligenceIndex * intelMult)).toFixed(2));
+      const estCpt = Number(Math.max(0.001, anchor.v.costPerTaskUsd * costMult).toFixed(4));
+
+      const benchmarks = { intelligenceIndex: round1(estIntel) };
+      for (const [k, baseVal] of Object.entries(anchor.v.benchmarks || {})) {
+        if (k === "intelligenceIndex" || toNum(baseVal) == null) continue;
+        if (k === "gdpval") {
+          const delta = (estIntel - anchor.v.intelligenceIndex) * 10;
+          benchmarks[k] = round1(Math.max(500, Math.min(2200, baseVal + delta)));
+        } else {
+          benchmarks[k] = round1(Math.max(0, Math.min(100, baseVal * intelMult)));
+        }
+      }
+
+      const effortSuffix = EFFORT_LABELS[targetEff];
+      const baseDisplay = anchor.v.baseDisplay || baseSlug;
+
+      effMap.set(targetEff, {
+        variantKey: `${baseSlug}--${targetEff}`,
+        baseSlug,
+        effort: targetEff,
+        effortLabel: effortSuffix,
+        effortEstimate: "extrapolated",
+        displayName: `${baseDisplay} (${effortSuffix})`,
+        baseDisplay,
+        creatorName: anchor.v.creatorName || null,
+        creatorColor: anchor.v.creatorColor || null,
+        intelligenceIndex: estIntel,
+        costPerTaskUsd: estCpt,
+        benchmarks,
+        aaUrl: anchor.v.aaUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+        aaLive: Boolean(anchor.v.aaLive),
+        isHeadline: false,
+        pricing: anchor.v.pricing || null,
+        costPerTaskBreakdown: null,
+        totalIndexCostUsd: null,
+        speed: anchor.v.speed || null,
+        isOpenWeights: Boolean(anchor.v.isOpenWeights),
+        contextWindowTokens: anchor.v.contextWindowTokens ?? null,
+      });
+      extrapolatedCount++;
+    }
+  }
+
+  // Pass 2: Fill any remaining intermediate effort gaps between the lowest and highest
+  // present effort on a model (including extrapolated endpoints), tagged "extrapolated".
+  for (const [baseSlug, effMap] of aaVariantsByBase.entries()) {
+    const positioned = [];
+    for (let idx = 0; idx < ORDERED_NAMED_EFFORTS.length; idx++) {
+      const v = effMap.get(ORDERED_NAMED_EFFORTS[idx]);
+      if (v && v.intelligenceIndex > 0 && v.costPerTaskUsd > 0) {
+        positioned.push({ idx, v });
+      }
+    }
+    const orModel = resolveOpenRouterModel(baseSlug, openRouterIndex, aaByNorm);
+    if (effMap.has("default") && orModel?.defaultEffort) {
+      const defV = effMap.get("default");
+      const defIdx = ORDERED_NAMED_EFFORTS.indexOf(orModel.defaultEffort);
+      if (
+        defIdx !== -1 &&
+        !positioned.some((p) => p.idx === defIdx) &&
+        defV &&
+        defV.intelligenceIndex > 0 &&
+        defV.costPerTaskUsd > 0
+      ) {
+        positioned.push({ idx: defIdx, v: defV, isDefaultAnchor: true });
+      }
+    }
+    if (positioned.length < 2) continue;
+    positioned.sort((a, b) => a.idx - b.idx);
+
+    const family = canonicalModelFamily(baseSlug, positioned[0].v.creatorName);
+    const cumIntelW = [0];
+    const cumCostW = [0];
+    for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+      cumIntelW.push(cumIntelW[i] + Math.log(stepRatio(family, i, "intel") ?? 1.1));
+      cumCostW.push(cumCostW[i] + Math.log(stepRatio(family, i, "cost") ?? 1.65));
+    }
+
+    const minIdx = positioned[0].idx;
+    const maxIdx = positioned[positioned.length - 1].idx;
+    for (let idx = minIdx + 1; idx < maxIdx; idx++) {
+      const eff = ORDERED_NAMED_EFFORTS[idx];
+      if (effMap.has(eff) || positioned.some((p) => p.idx === idx)) continue;
+
+      const loEntry = [...positioned].reverse().find((p) => p.idx < idx);
+      const hiEntry = positioned.find((p) => p.idx > idx);
+      if (!loEntry || !hiEntry) continue;
+
+      const lo = loEntry.v;
+      const hi = hiEntry.v;
+      const dI = cumIntelW[hiEntry.idx] - cumIntelW[loEntry.idx];
+      const dC = cumCostW[hiEntry.idx] - cumCostW[loEntry.idx];
+      const rawTI = dI > 0 ? (cumIntelW[idx] - cumIntelW[loEntry.idx]) / dI : (idx - loEntry.idx) / (hiEntry.idx - loEntry.idx);
+      const rawTC = dC > 0 ? (cumCostW[idx] - cumCostW[loEntry.idx]) / dC : (idx - loEntry.idx) / (hiEntry.idx - loEntry.idx);
+      const tI = Math.max(0.15, Math.min(0.85, rawTI));
+      const tC = Math.max(0.15, Math.min(0.85, rawTC));
+
+      const estIntel = Number(
+        Math.max(1, Math.min(95, lo.intelligenceIndex + tI * (hi.intelligenceIndex - lo.intelligenceIndex))).toFixed(2)
+      );
+      const estCpt = Number(
+        Math.max(
+          0.001,
+          Math.exp(Math.log(lo.costPerTaskUsd) + tC * (Math.log(hi.costPerTaskUsd) - Math.log(lo.costPerTaskUsd)))
+        ).toFixed(4)
+      );
+
+      const benchmarks = { intelligenceIndex: round1(estIntel) };
+      for (const [k, loVal] of Object.entries(lo.benchmarks || {})) {
+        if (k === "intelligenceIndex") continue;
+        const hiVal = hi.benchmarks?.[k];
+        if (toNum(loVal) != null && toNum(hiVal) != null) {
+          benchmarks[k] = round1(loVal + tI * (hiVal - loVal));
+        }
+      }
+
+      const effortSuffix = EFFORT_LABELS[eff];
+      const baseDisplay = hi.baseDisplay || lo.baseDisplay || baseSlug;
+
+      effMap.set(eff, {
+        variantKey: `${baseSlug}--${eff}`,
+        baseSlug,
+        effort: eff,
+        effortLabel: effortSuffix,
+        effortEstimate: "extrapolated",
+        displayName: `${baseDisplay} (${effortSuffix})`,
+        baseDisplay,
+        creatorName: hi.creatorName || lo.creatorName || null,
+        creatorColor: hi.creatorColor || lo.creatorColor || null,
+        intelligenceIndex: estIntel,
+        costPerTaskUsd: estCpt,
+        benchmarks,
+        aaUrl: hi.aaUrl || lo.aaUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
+        aaLive: Boolean(hi.aaLive || lo.aaLive),
+        isHeadline: false,
+        pricing: hi.pricing || lo.pricing || null,
+        costPerTaskBreakdown: null,
+        totalIndexCostUsd: null,
+        speed: hi.speed || lo.speed || null,
+        isOpenWeights: Boolean(hi.isOpenWeights || lo.isOpenWeights),
+        contextWindowTokens: hi.contextWindowTokens ?? lo.contextWindowTokens ?? null,
+      });
+      extrapolatedCount++;
+    }
+  }
+
+  return extrapolatedCount;
+}
+
+/**
+ * Leak-free leave-one-out cross-validation (LOOCV) on all real measured multi-effort
+ * models to report empirical median error bands for interpolation (†) and same-family
+ * extrapolation (‡) in the Methodology dialog.
+ */
+function computeEffortAccuracy(aaVariantsByBase) {
+  const realByModel = new Map();
+  for (const [slug, effMap] of aaVariantsByBase.entries()) {
+    const pts = [];
+    for (let idx = 0; idx < ORDERED_NAMED_EFFORTS.length; idx++) {
+      const v = effMap.get(ORDERED_NAMED_EFFORTS[idx]);
+      if (v && !v.effortEstimate && v.intelligenceIndex > 1 && v.costPerTaskUsd > 0) {
+        pts.push({
+          idx,
+          family: canonicalModelFamily(slug, v.creatorName),
+          intel: v.intelligenceIndex,
+          cost: v.costPerTaskUsd,
+        });
+      }
+    }
+    if (pts.length >= 2) realByModel.set(slug, pts);
+  }
+
+  const interpIntelAbs = [];
+  const interpCostPct = [];
+  const extrap1IntelAbs = [];
+  const extrap1CostPct = [];
+  const extrapAllIntelAbs = [];
+  const extrapAllCostPct = [];
+
+  for (const [heldSlug, pts] of realByModel.entries()) {
+    // Fit curves excluding heldSlug
+    const stepI = Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []);
+    const stepLogC = Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []);
+    const famI = new Map();
+    const famC = new Map();
+    const famAllI = new Map();
+    const famAllC = new Map();
+
+    for (const [s, otherPts] of realByModel.entries()) {
+      if (s === heldSlug) continue;
+      const byIdx = new Map(otherPts.map((p) => [p.idx, p]));
+      for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+        const a = byIdx.get(i);
+        const b = byIdx.get(i + 1);
+        if (!a || !b) continue;
+        if (b.intel > a.intel) stepI[i].push(b.intel - a.intel);
+        if (b.cost > a.cost) stepLogC[i].push(Math.log(b.cost / a.cost));
+        const f = b.family || a.family;
+        if (f) {
+          const rI = b.intel / a.intel;
+          const rC = b.cost / a.cost;
+          if (rI >= 1.0 && rI <= 2.5) {
+            if (!famI.has(f)) {
+              famI.set(f, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+              famAllI.set(f, []);
+            }
+            famI.get(f)[i].push(rI);
+            famAllI.get(f).push(rI);
+          }
+          if (rC >= 1.0 && rC <= 8.0) {
+            if (!famC.has(f)) {
+              famC.set(f, Array.from({ length: ORDERED_NAMED_EFFORTS.length - 1 }, () => []));
+              famAllC.set(f, []);
+            }
+            famC.get(f)[i].push(rC);
+            famAllC.get(f).push(rC);
+          }
+        }
+      }
+    }
+
+    const defI = [6.0, 5.0, 4.0, 2.5, 1.5];
+    const defC = [0.6, 0.55, 0.5, 0.45, 0.45];
+    const cumI = [0];
+    const cumC = [0];
+    for (let i = 0; i < ORDERED_NAMED_EFFORTS.length - 1; i++) {
+      cumI.push(cumI[i] + Math.max(0.5, median(stepI[i]) ?? defI[i]));
+      cumC.push(cumC[i] + Math.max(0.1, median(stepLogC[i]) ?? defC[i]));
+    }
+
+    // Interpolation LOOCV
+    if (pts.length >= 3) {
+      for (let p = 1; p < pts.length - 1; p++) {
+        const target = pts[p];
+        const lo = pts[p - 1];
+        const hi = pts[p + 1];
+        const tI = Math.max(0.15, Math.min(0.85, (cumI[target.idx] - cumI[lo.idx]) / (cumI[hi.idx] - cumI[lo.idx])));
+        const tC = Math.max(0.15, Math.min(0.85, (cumC[target.idx] - cumC[lo.idx]) / (cumC[hi.idx] - cumC[lo.idx])));
+        const predI = lo.intel + tI * (hi.intel - lo.intel);
+        const predC = Math.exp(Math.log(lo.cost) + tC * (Math.log(hi.cost) - Math.log(lo.cost)));
+        interpIntelAbs.push(Math.abs(predI - target.intel));
+        interpCostPct.push((Math.abs(predC - target.cost) / target.cost) * 100);
+      }
+    }
+
+    // Same-family extrapolation LOOCV
+    const f = pts[0].family;
+    if (!f || !famAllI.has(f) || !famAllC.has(f)) continue;
+    const fStep = (i, kind) => {
+      const m = kind === "intel" ? famI : famC;
+      const all = kind === "intel" ? famAllI : famAllC;
+      const vals = m.get(f)[i];
+      const raw = vals.length >= 1 ? median(vals) : median(all.get(f));
+      if (raw == null) return null;
+      return kind === "intel" ? Math.max(1.01, Math.min(1.6, raw)) : Math.max(1.1, Math.min(4.0, raw));
+    };
+
+    for (const target of pts) {
+      for (const anchor of pts) {
+        if (anchor.idx === target.idx) continue;
+        let multI = 1;
+        let multC = 1;
+        let bad = false;
+        const lo = Math.min(anchor.idx, target.idx);
+        const hi = Math.max(anchor.idx, target.idx);
+        for (let i = lo; i < hi; i++) {
+          const rI = fStep(i, "intel");
+          const rC = fStep(i, "cost");
+          if (rI == null || rC == null) { bad = true; break; }
+          if (target.idx > anchor.idx) { multI *= rI; multC *= rC; }
+          else { multI /= rI; multC /= rC; }
+        }
+        if (bad) continue;
+        const predI = Math.max(1, Math.min(95, anchor.intel * multI));
+        const predC = Math.max(0.001, anchor.cost * multC);
+        const errI = Math.abs(predI - target.intel);
+        const errC = (Math.abs(predC - target.cost) / target.cost) * 100;
+        extrapAllIntelAbs.push(errI);
+        extrapAllCostPct.push(errC);
+        if (Math.abs(target.idx - anchor.idx) === 1) {
+          extrap1IntelAbs.push(errI);
+          extrap1CostPct.push(errC);
+        }
+      }
+    }
+  }
+
+  return {
+    interp: {
+      n: interpIntelAbs.length,
+      intelPts: interpIntelAbs.length ? round1(median(interpIntelAbs)) : null,
+      costPct: interpCostPct.length ? Math.round(median(interpCostPct)) : null,
+    },
+    extrap: {
+      n1: extrap1IntelAbs.length,
+      intelPts1: extrap1IntelAbs.length ? round1(median(extrap1IntelAbs)) : null,
+      costPct1: extrap1CostPct.length ? Math.round(median(extrap1CostPct)) : null,
+      nAll: extrapAllIntelAbs.length,
+      intelPtsAll: extrapAllIntelAbs.length ? round1(median(extrapAllIntelAbs)) : null,
+      costPctAll: extrapAllCostPct.length ? Math.round(median(extrapAllCostPct)) : null,
+    },
+  };
 }
 
 function parseListPriceDict(raw) {
@@ -1485,6 +2079,24 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       });
     }
   }
+
+  // Fill strictly bracketed missing intermediate efforts (Option A: interpolated between lower & higher measured efforts)
+  const interpolatedEffortVariants = interpolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm);
+  if (interpolatedEffortVariants > 0) {
+    log(`Interpolated ${interpolatedEffortVariants} bracketed intermediate reasoning effort variant(s)`);
+  }
+
+  // Option B (OFF by default in UI): extrapolate remaining OpenRouter-supported efforts (same-family only)
+  const extrapolatedEffortVariants = extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm);
+  if (extrapolatedEffortVariants > 0) {
+    log(`Extrapolated ${extrapolatedEffortVariants} same-family reasoning effort variant(s)`);
+  }
+
+  const effortAccuracy = computeEffortAccuracy(aaVariantsByBase);
+  log(
+    `LOOCV accuracy — Interp (†, n=${effortAccuracy.interp.n}): ±${effortAccuracy.interp.intelPts} pts / ±${effortAccuracy.interp.costPct}% $/task; ` +
+      `Extrap (‡, n=${effortAccuracy.extrap.n1}/${effortAccuracy.extrap.nAll}): ±${effortAccuracy.extrap.intelPts1}–${effortAccuracy.extrap.intelPtsAll} pts / ±${effortAccuracy.extrap.costPct1}–${effortAccuracy.extrap.costPctAll}% $/task`
+  );
 
   // 4. Live-parse GitHub Copilot AI Credits tiers
   let copilotTiers = [];
@@ -2184,6 +2796,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
             baseModelId: baseEntry.modelId,
             modelId: v.variantKey,
             effort: v.effort,
+            effortEstimate: v.effortEstimate || null,
             modelDisplay: v.displayName,
             aaUrl: v.aaUrl || baseEntry.aaUrl,
             aaLive: v.aaLive || baseEntry.aaLive,
@@ -2236,6 +2849,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       uniqueVariants: new Set(expandedEntries.map((e) => e.modelId)).size,
       liveAaModels: aaByNorm.size,
       openRouterBackfilledContext: backfilledContextSlugs.size,
+      interpolatedEffortVariants,
+      extrapolatedEffortVariants,
+      effortAccuracy,
       unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
     entries: expandedEntries,

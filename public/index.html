@@ -114,10 +114,25 @@
         <section class="panel" aria-label="Real cost bar chart">
           <div class="panel-head">
             <h2 id="chartHeading">Best Real Cost per Task</h2>
-            <label class="head-check">
-              <input id="cheapestEffortOnly" type="checkbox" checked />
-              <span id="effortToggleLabel">Cheapest applicable reasoning level only</span>
-            </label>
+            <div class="head-checks">
+              <label class="head-check">
+                <input id="cheapestPlanOnly" type="checkbox" checked />
+                <span>Cheapest plan per model only</span>
+              </label>
+              <label class="head-check">
+                <input id="cheapestEffortOnly" type="checkbox" checked />
+                <span id="effortToggleLabel">Cheapest applicable reasoning level only</span>
+              </label>
+            </div>
+          </div>
+          <div id="extrapBanner" class="extrap-banner" hidden>
+            <svg class="infobar-ico" viewBox="0 0 16 16" aria-hidden="true">
+              <polygon points="8,1 15,14 1,14" fill="#f7d23c" stroke="#7a5d00" stroke-width="1.2" stroke-linejoin="miter" />
+              <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
+              <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
+            </svg>
+            <span class="infobar-text"><strong>Notice:</strong> Extrapolated reasoning levels (‡ / faded bars) are estimated from other measured models in the same family, not directly benchmarked.</span>
+            <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
           </div>
           <div class="panel-body">
             <div id="barChart" class="bar-chart"></div>
@@ -144,6 +159,8 @@
         </details>
 
         <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
+        <p id="interpFootnote" class="footnote" hidden>† Interpolated reasoning effort (bracketed between lower and higher measured efforts on the same model).</p>
+        <p id="extrapFootnote" class="footnote" hidden>‡ Extrapolated reasoning effort (estimated from other measured models in the same family, not directly benchmarked).</p>
       </main>
     </div>
 
@@ -242,6 +259,14 @@
               <span>Hide estimated subsidies (*)</span>
             </label>
             <label class="settings-check">
+              <input id="hideInterpolated" type="checkbox" />
+              <span>Hide interpolated efforts (†)</span>
+            </label>
+            <label class="settings-check">
+              <input id="showExtrapolated" type="checkbox" />
+              <span>Show extrapolated efforts (‡)</span>
+            </label>
+            <label class="settings-check">
               <input id="hideCnPortal" type="checkbox" />
               <span>Hide domestic CN (¥) portal plans</span>
             </label>
@@ -271,34 +296,54 @@
         <h2>Methodology</h2>
         <button id="closeMethodBtn" class="btn btn-sm" type="button">Close</button>
       </div>
-      <div class="dialog-body">
-        <p>
-          <strong>Benchmarks &amp; API $/task</strong> come from
-          <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>,
-          including the overall Intelligence Index, domain capability scores, individual tests, and average API cost per benchmark task, with model specs (context window, open-weights status, and domain index backfill) from
-          <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>.
-        </p>
-        <p>
-          <strong>Plan subsidies</strong> come primarily from upstream
-          <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>
-          and first-party published credit pools (<a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a>,
-          <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>,
-          <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a>),
-          with secondary backfill from
-          <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a>
-          for per-effort sub-tests and unmeasured recent releases. Subsidies measure how many dollars of API usage a subscription provides per $1 of monthly fee at full usage.
-        </p>
-        <p>
-          <strong>Calculations:</strong><br />
-          Real $/task = API $/task ÷ plan subsidy<br />
-          API 3:1 blended $/1M = (3 × input $/1M + 1 × output $/1M) ÷ 4<br />
-          Real $/1M tokens = API 3:1 blended $/1M ÷ plan subsidy<br />
-          Tasks/mo (or Mtok/mo) = monthly plan fee ÷ real cost
-        </p>
-        <p class="dialog-note">
-          Per-task cost is usually the fairer cross-model comparison since it reflects each model's actual reasoning, output length, and caching on benchmarks; Per 1M tokens applies the plan subsidy to Artificial Analysis's standard 3:1 input:output blended rate.
-          Setting a Monthly API usage amount in Settings computes actual break-even cost (accounting for unused subscription quota or API overage past a plan's cap).
-          Legacy and off-peak plans are hidden by default, and pay-as-you-go API prices can be toggled on in Settings. Data refreshes automatically every 6 hours.
+      <div class="dialog-body method-body">
+        <div class="settings-section">
+          <div class="settings-heading">Data sources</div>
+          <ul class="method-list">
+            <li>
+              <strong>Benchmarks &amp; specs:</strong>
+              <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>
+              (Intelligence Index, domains, tests, API $/task) and
+              <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>
+              (context windows, open weights, supported efforts, domain backfill).
+            </li>
+            <li>
+              <strong>Plan subsidies:</strong>
+              <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>,
+              published credit pools (<a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a>,
+              <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>,
+              <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a>),
+              and <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a> backfill.
+            </li>
+          </ul>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-heading">Calculations</div>
+          <div class="method-formulas">
+            <div><code>Real $/task</code> = API $/task ÷ plan subsidy</div>
+            <div><code>Real $/1M tokens</code> = API 3:1 blended $/1M ÷ plan subsidy</div>
+            <div><code>Tasks/mo (or Mtok/mo)</code> = monthly fee ÷ real cost</div>
+          </div>
+          <p class="dialog-note">
+            Subsidy = API dollars included per $1 of monthly fee at full usage. Setting a <strong>Monthly API usage</strong> in Settings computes actual break-even cost (counting unused quota or API overage past a plan's cap).
+          </p>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-heading">Footnotes</div>
+          <dl class="method-markers">
+            <dt>*</dt>
+            <dd><strong>Estimated subsidy:</strong> preliminary user report or prior-generation quota carryover.</dd>
+            <dt>†</dt>
+            <dd><strong>Interpolated effort:</strong> missing reasoning level bracketed between a lower and higher measured effort on the same model<span id="interpErrNote"> (typical error ~±1.1 pts / ±12% $/task)</span>.</dd>
+            <dt>‡</dt>
+            <dd><strong>Extrapolated effort:</strong> unmeasured reasoning level estimated from measured effort steps on other models in the same family<span id="extrapErrNote"> (typical error ~±2–3.5 pts / ±14–26% $/task)</span>.</dd>
+          </dl>
+        </div>
+
+        <p class="dialog-note method-foot">
+          Per-task cost reflects actual reasoning, output length, and caching; Per 1M tokens uses Artificial Analysis's 3:1 input:output blended rate. Legacy and off-peak plans are hidden by default. Refreshes automatically every 6 hours.
         </p>
       </div>
     </dialog>

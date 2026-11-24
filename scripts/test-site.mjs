@@ -191,9 +191,44 @@ test("Monthly API usage break-even math handles under-cap, over-cap, and API bas
   assert.ok(mid100.subsidy > mid20.subsidy && mid100.subsidy > mid200.subsidy);
 });
 
-// 9. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
+// 9. Interpolated & extrapolated reasoning effort invariants
+test("Interpolated efforts are strictly bracketed and extrapolated efforts are valid", () => {
+  const rank = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
+  const measuredByModel = new Map();
+  const interpEntries = [];
+  const extrapEntries = [];
+  for (const e of entries) {
+    if (e.effortEstimate === "interpolated") {
+      interpEntries.push(e);
+    } else if (e.effortEstimate === "extrapolated") {
+      extrapEntries.push(e);
+    } else if (rank[e.effort] != null) {
+      if (!measuredByModel.has(e.baseModelId)) measuredByModel.set(e.baseModelId, []);
+      measuredByModel.get(e.baseModelId).push(rank[e.effort]);
+    }
+  }
+  for (const e of interpEntries) {
+    const r = rank[e.effort];
+    assert.ok(r != null, `Invalid interpolated effort "${e.effort}" on ${e.id}`);
+    const mRanks = measuredByModel.get(e.baseModelId) || [];
+    assert.ok(mRanks.some((x) => x < r), `Interpolated ${e.id} has no lower measured effort`);
+    assert.ok(mRanks.some((x) => x > r), `Interpolated ${e.id} has no higher measured effort`);
+  }
+  assert.ok(extrapEntries.length > 0, "Expected extrapolated experimental effort variants > 0");
+  for (const e of extrapEntries) {
+    assert.ok(rank[e.effort] != null, `Invalid extrapolated effort "${e.effort}" on ${e.id}`);
+    assert.ok(Number.isFinite(e.intelligenceIndex) && e.intelligenceIndex >= 1 && e.intelligenceIndex <= 95);
+    assert.ok(Number.isFinite(e.aaCostPerTaskUsd) && e.aaCostPerTaskUsd > 0);
+  }
+  const interpModels = [...new Map(interpEntries.map((e) => [e.modelId, `${e.modelDisplay} (II ${e.intelligenceIndex})`])).values()];
+  const extrapModels = new Set(extrapEntries.map((e) => e.modelId));
+  console.log(`     Interpolated (${interpModels.length}): ${interpModels.join(", ") || "none"}`);
+  console.log(`     Extrapolated (${extrapModels.size} variants across ${extrapEntries.length} rows)`);
+});
+
+// 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
 test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
-  for (const param of ["bench", "min", "mode", "usage", "access", "window", "minEffort", "maxEffort", "budget", "cost", "efforts", "extra", "q", "group", "sort"]) {
+  for (const param of ["bench", "min", "mode", "usage", "access", "window", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "extra", "q", "group", "sort"]) {
     assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
   }
   assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
