@@ -1735,7 +1735,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, 
         if (k === "intelligenceIndex" || toNum(baseVal) == null) continue;
         if (k === "gdpval") {
           const delta = (estIntel - anchor.v.intelligenceIndex) * 10;
-          benchmarks[k] = round1(Math.max(500, Math.min(2200, baseVal + delta)));
+          benchmarks[k] = round1(Math.max(200, Math.min(2200, baseVal + delta)));
         } else {
           benchmarks[k] = round1(Math.max(0, Math.min(100, baseVal * intelMult)));
         }
@@ -2452,6 +2452,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   // Build unified records
   const entries = [];
   const coveredMeteredAaSlugs = new Set();
+  const feiSeenPlanModel = new Set(); // `${billing}::${planSlug}::${aaSlug}::${offpeak}`
   const feiSubIndex = new Map(); // `${normPlan}::${aaSlug}` -> entry id
   const feiVendorFeeModelIndex = new Map(); // `${normVendor}::${roundFee}::${aaSlug}` -> entry id
   const modelInfoBySlug = new Map(); // track model metadata (for adding Ollama Team / Copilot cleanly)
@@ -2540,6 +2541,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     const entryId = r.id || `${normPlanSlug(planName)}::${normSlug(modelId)}`;
     const { isOffPeak, isLegacy, isCnPortal } = detectPlanFlags(planName, r.plan || "");
+    const feiDedupeKey = `${billing}::${normPlanSlug(billing === "metered" ? "Pay-as-you-go API" : planName)}::${aaSlug}::${isOffPeak ? "offpeak" : "std"}`;
+    if (feiSeenPlanModel.has(feiDedupeKey)) continue;
+    feiSeenPlanModel.add(feiDedupeKey);
     const benchmarks = aaModel?.benchmarks
       ? {
           ...aaModel.benchmarks,
@@ -3016,17 +3020,21 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     },
     {
       plans: ["ChatGPT Pro 20x"],
-      anchorModel: "gpt-6-1-sol",
+      anchorPlan: "ChatGPT Pro 10x",
+      anchorModel: "gpt-6-sol",
       targets: ["gpt-6-sol"],
       vendor: "OpenAI",
       fallbackUrl: "https://openai.com/chatgpt/pricing/",
+      priceOverride: 200,
     },
     {
       plans: ["ChatGPT Pro 20x"],
-      anchorModel: "gpt-5-6-luna",
+      anchorPlan: "ChatGPT Pro 10x",
+      anchorModel: "gpt-6-luna",
       targets: ["gpt-6-luna"],
       vendor: "OpenAI",
       fallbackUrl: "https://openai.com/chatgpt/pricing/",
+      priceOverride: 200,
     },
     {
       plans: ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"],
@@ -3040,10 +3048,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let sharedPoolCount = 0;
   for (const rule of sharedPoolRules) {
     for (const planName of rule.plans) {
+      const sourcePlanName = rule.anchorPlan || planName;
       const anchor = entries.find(
         (e) =>
           e.billing === "subscription" &&
-          e.plan === planName &&
+          e.plan === sourcePlanName &&
           e.modelId === rule.anchorModel &&
           !replacedIds.has(e.id) &&
           e.subsidyMultiple > 0
@@ -3091,7 +3100,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || `https://artificialanalysis.ai/models/${targetSlug}`,
           isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
           contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
-          priceUsd: anchor.priceUsd,
+          priceUsd: rule.priceOverride ?? anchor.priceUsd,
           monthlyTokens: null,
           realUsdPerMtok: null,
           listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? fallbackModel?.listBlendedUsdPerMtok ?? null,
@@ -3105,8 +3114,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
           confidence: "low",
           dataDate: anchor.dataDate || nowIso.slice(0, 10),
-          sourceNote: `Shared quota pool carryover from ${planName} ${anchor.modelDisplay} (${anchor.subsidyMultiple.toFixed(2)}×)`,
-          decisionNote: `Estimated using ${planName}'s shared quota pool multiplier from ${anchor.modelDisplay} until directly measured.`,
+          sourceNote: `Shared quota pool carryover from ${sourcePlanName} ${anchor.modelDisplay} (${anchor.subsidyMultiple.toFixed(2)}×)`,
+          decisionNote: `Estimated using ${sourcePlanName}'s shared quota pool multiplier from ${anchor.modelDisplay} until directly measured.`,
           preliminary: null,
         });
       }
