@@ -2502,15 +2502,21 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const monthlyYi = toNum(r.monthly_yi);
     const realUsdPerMtok = toNum(r.real_usd_per_mtok);
     const orModel = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
+    const feiListPrice = parseListPriceDict(r.list_price);
     const aaP = aaModel?.pricing?.inputPer1M != null ? aaModel.pricing : orModel?.pricing;
+    const rateP = feiListPrice?.inputPer1M != null ? feiListPrice : aaP;
     const isLowCache = String(r.workload || "").toLowerCase() === "lowcache";
+    // Fei2411 workload mixes: lowCache = 85% cached / 14.5% input / 0.5% output; standard = 97% / 2.5% / 0.5%
     const aaCodingBlended =
-      aaP && aaP.inputPer1M != null && aaP.outputPer1M != null
+      rateP && rateP.inputPer1M != null && rateP.outputPer1M != null
         ? isLowCache
-          ? 0.8 * (aaP.cacheHitPer1M ?? aaP.inputPer1M * 0.1) + 0.15 * aaP.inputPer1M + 0.05 * aaP.outputPer1M
-          : 0.97 * (aaP.cacheHitPer1M ?? aaP.inputPer1M * 0.1) + 0.025 * aaP.inputPer1M + 0.005 * aaP.outputPer1M
+          ? 0.85 * (rateP.cacheHitPer1M ?? rateP.inputPer1M * 0.1) + 0.145 * rateP.inputPer1M + 0.005 * rateP.outputPer1M
+          : 0.97 * (rateP.cacheHitPer1M ?? rateP.inputPer1M * 0.1) + 0.025 * rateP.inputPer1M + 0.005 * rateP.outputPer1M
         : null;
-    const listBlendedUsdPerMtok = toNum(r.list_blended_usd_per_mtok) ?? aaCodingBlended;
+    // Fei2411's list_blended_usd_per_mtok / d columns use the standard (97% cache) mix even on lowCache rows,
+    // which understates subsidy on lowCache rows (e.g. Google AI Pro Argon $28.20/$19.99 = 1.40x -> 0.65x).
+    const listBlendedUsdPerMtok =
+      isLowCache && aaCodingBlended ? aaCodingBlended : toNum(r.list_blended_usd_per_mtok) ?? aaCodingBlended;
     const discountRatio = toNum(r.d);
 
     let subsidyMultiple = null;
@@ -2518,6 +2524,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       subsidyMultiple = 1;
     } else if (unmetered) {
       subsidyMultiple = null;
+    } else if (isLowCache && listBlendedUsdPerMtok && realUsdPerMtok && listBlendedUsdPerMtok > 0 && realUsdPerMtok > 0) {
+      subsidyMultiple = listBlendedUsdPerMtok / realUsdPerMtok;
     } else if (discountRatio && discountRatio > 0) {
       subsidyMultiple = 1 / discountRatio;
     } else if (listBlendedUsdPerMtok && realUsdPerMtok && listBlendedUsdPerMtok > 0 && realUsdPerMtok > 0) {
@@ -2533,7 +2541,6 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     const planName = normalizePlanName(r.plan_en || r.plan || "");
     const vendor = cleanVendorName(r.vendor, aaModel?.creatorName);
-    const feiListPrice = parseListPriceDict(r.list_price);
     const pricing =
       aaModel?.pricing?.inputPer1M !== null && aaModel?.pricing
         ? aaModel.pricing
