@@ -132,7 +132,7 @@
               <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
               <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
             </svg>
-            <span class="infobar-text"><strong>Notice:</strong> <span id="extrapBannerText">Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.</span></span>
+            <span class="infobar-text"><strong>Notice:</strong> <span id="extrapBannerText">Showing rough estimates (<span class="tier-glyph">◐</span> <span class="tier-glyph">○</span> / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.</span></span>
             <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
           </div>
           <div class="panel-body">
@@ -140,7 +140,7 @@
           </div>
           <div id="extrapFooter" class="panel-foot" hidden>
             <span id="extrapFooterText">Rough estimates for unmeasured reasoning levels are hidden.</span>
-            <button id="enableExtrapBtn" class="infobar-link" type="button">Show rough estimates (◐ ○)</button>
+            <button id="enableExtrapBtn" class="infobar-link" type="button">Show rough estimates (<span class="tier-glyph">◐</span> <span class="tier-glyph">○</span>)</button>
           </div>
         </section>
 
@@ -164,9 +164,9 @@
         </details>
 
         <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
-        <p id="tierFootnote-high" class="footnote" hidden>● High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).</p>
-        <p id="tierFootnote-medium" class="footnote" hidden>◐ Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).</p>
-        <p id="tierFootnote-low" class="footnote" hidden>○ Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).</p>
+        <p id="tierFootnote-high" class="footnote" hidden><span class="tier-glyph">●</span> High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).</p>
+        <p id="tierFootnote-medium" class="footnote" hidden><span class="tier-glyph">◐</span> Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).</p>
+        <p id="tierFootnote-low" class="footnote" hidden><span class="tier-glyph">○</span> Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).</p>
       </main>
     </div>
 
@@ -254,15 +254,15 @@
             </label>
             <label class="settings-check">
               <input id="showTier-high" type="checkbox" checked />
-              <span>Show high-confidence estimates (●)</span>
+              <span>Show high-confidence estimates (<span class="tier-glyph">●</span>)</span>
             </label>
             <label class="settings-check">
               <input id="showTier-medium" type="checkbox" />
-              <span>Show medium-confidence estimates (◐)</span>
+              <span>Show medium-confidence estimates (<span class="tier-glyph">◐</span>)</span>
             </label>
             <label class="settings-check">
               <input id="showTier-low" type="checkbox" />
-              <span>Show low-confidence estimates (○)</span>
+              <span>Show low-confidence estimates (<span class="tier-glyph">○</span>)</span>
             </label>
             <label class="settings-check">
               <input id="hideCnPortal" type="checkbox" />

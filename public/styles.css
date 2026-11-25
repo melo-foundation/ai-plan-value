@@ -432,6 +432,13 @@ input[type="checkbox"]:checked {
   cursor: help;
 }
 
+.tier-glyph,
+.est-tier {
+  font-family: "Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", sans-serif;
+  font-weight: normal;
+  margin-left: 2px;
+}
+
 .footnote {
   margin: -6px 2px 0;
   font-size: 12px;
@@ -1131,6 +1138,7 @@ tbody tr:hover {
 }
 
 .method-markers dt {
+  font-family: "Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", sans-serif;
   font-weight: bold;
   text-align: center;
   color: var(--panel-head-fg);
@@ -1250,4 +1258,13 @@ tbody tr:hover {
     overflow: visible;
     text-overflow: clip;
   }
+}
+
+/* Methodology: wide enough to fit without scrolling on desktop; scroll only on short screens */
+#methodDialog {
+  width: min(1040px, calc(100vw - 28px));
+}
+
+#methodDialog .method-body {
+  max-height: calc(100vh - 60px);
 }

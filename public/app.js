@@ -256,6 +256,11 @@ function estimateTip(r) {
   return `Extrapolated reasoning effort (estimated from ${src}, not directly benchmarked) · ${conf}`;
 }
 
+// Escape, then wrap tier glyphs so they render in a symbol font
+function glyphHtml(text) {
+  return esc(text).replace(/[●◐○]/g, (g) => `<span class="tier-glyph">${g}</span>`);
+}
+
 function interpMark(r) {
   if (!r.estTier) return "";
   return `<span class="est-star est-tier" title="${esc(estimateTip(r))}">${TIER_GLYPH[r.estTier]}</span>`;
@@ -1128,9 +1133,9 @@ function render() {
   const agentMode = state.benchKey === "codingAgentIndex";
   if ($("extrapBanner")) {
     $("extrapBanner").hidden = !showsRough();
-    $("extrapBannerText").textContent = agentMode
+    $("extrapBannerText").innerHTML = glyphHtml(agentMode
       ? "Showing rough estimates (◐ ○ / faded bars) for unmeasured agent runs, estimated from other runs of the same model or Terminal-Bench 4.0."
-      : "Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.";
+      : "Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.");
   }
   if ($("extrapFooter")) {
     const hasHidden = allResolved.some((r) => r.estTier && !passesEstTier(r));
@@ -1168,7 +1173,7 @@ function render() {
   for (const t of ["high", "medium", "low"]) {
     const el = $(`tierFootnote-${t}`);
     if (!el) continue;
-    el.textContent = FOOTNOTES[t];
+    el.innerHTML = glyphHtml(FOOTNOTES[t]);
     el.hidden = !rows.some((r) => r.estTier === t);
   }
   syncUrlFromState();
