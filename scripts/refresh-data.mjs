@@ -264,18 +264,24 @@ function detectPlanFlags(planName, planLocal = "") {
 //   Claude: claude.com/pricing, support.claude.com/en/articles/11647753 (Ultra: no 5h for verified accounts)
 //   ChatGPT: help.openai.com/articles/9793128 (Plus 5h + weekly; Pro tiers weekly only)
 //   Google AI: antigravity.google/docs/plans (5h refresh until weekly limit)
-//   Grok: docs.x.ai/x-subscription/pricing (one weekly pool since 2026-06)
+//   Grok: docs.x.ai/grok/faq, docs.x.ai/x-subscription/usage-limits (one weekly pool since 2026-06;
+//     SuperGrok Lite/SuperGrok/Plus/Heavy are legacy since 2026-10-12; "X Plus"/"X Ultra" are
+//     The X Subscription Plus $8 / Ultra $200, same weekly pool shared with Cursor)
 //   Devin: docs.devin.ai/admin/billing/self-serve (Pro daily + weekly; Max weekly)
 //   Mistral: docs.mistral.ai/admin/billing-usage/subscriptions (monthly)
 //   Copilot: docs.github.com/.../usage-based-billing-for-individuals (monthly credits, resets on the 1st)
-//   Cursor legacy Pro/Pro+/Ultra: cursor.com/docs/account/pricing/legacy-cursor-plans (monthly pools)
+//   Cursor legacy Pro/Pro+/Ultra: cursor.com/docs/account/pricing/legacy-cursor-plans (Cursor Models + Other Models pools,
+//     both reset monthly with billing cycle; new X Subscription plans use one weekly pool)
 //   Command Code: commandcode.ai/docs/resources/pricing-limits (5h $20, 7d $50, monthly $100)
 //   Factory Droid: docs.factory.com/pricing (rolling 5h, 7d, 30d)
 //   OpenCode Go: opencode.ai/docs/go (5h 20%, weekly 50%, monthly)
-//   Ollama: ollama.com/blog/transparent-pricing (monthly credits, no 5h/weekly)
+//   Ollama: ollama.com/blog/transparent-pricing (monthly credits, no 5h/weekly since
+//     2026-08-31; un-switched legacy subscribers keep 5h + weekly GPU-time limits)
 //   Kilo Pass: kilo.ai/pricing/kilo-pass (credit balance, no time windows)
 //   GLM Coding: docs.bigmodel.cn/cn/coding-plan/overview (5h + weekly; weekly = 5x 5h)
-//   MiniMax: platform.minimax.io/docs/m-plan/usage-rules (5h + weekly)
+//   MiniMax: platform.minimax.io/docs/m-plan/usage-rules, platform.minimax.cn/docs/m-plan/faq
+//     (M Plan 5h + weekly, fixed blocks from first use). Token Plan is legacy (m-plan/token-plan-notice):
+//     also 5h + weekly; pre-2026-03-22 buyers have no weekly cap, 03-22..06-05 buyers get 150% weekly
 //   Kimi: kimi.com/en/help/membership/membership-update-rules (new: monthly + 5h; legacy: weekly + 5h + monthly)
 //   Alibaba / Tencent / MiMo / StepFun token plans: monthly credit pool only
 const QUOTA_WINDOW_NAMES = { "5h": "5h", daily: "daily", weekly: "weekly", "7d": "7-day", "30d": "30-day", monthly: "monthly" };
