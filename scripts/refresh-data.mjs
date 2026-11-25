@@ -62,13 +62,22 @@ const MODEL_ALIASES = {
   "aa-muse-wonder": "muse-wonder",
   "aa-muse-ember": "muse-ember",
   "aa-step-5": "step-5-preview",
+  "aa-reflection-beam": "reflection-beam",
   "minimax-m3-1": "minimax-m3-1-flash",
   "minimax-m3-1-flash-preview": "minimax-m3-1-flash",
   "gemini-4": "gemini-4-argon",
 };
 
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
 const PRIORS_BENCH_TO_KEY = {
-  "aa-intelligence-index-v5.0.1": "intelligenceIndex",
   "aa-humanitys-last-exam": "hle",
   "aa-hle-diamond": "hleDiamond",
   "aa-frontiercode-2-0": "frontierCode20",
@@ -657,16 +666,23 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
         if (!price3to1ByBase.has(baseSlug)) price3to1ByBase.set(baseSlug, val);
       }
     }
-    if (bid === "aa-cost-per-task-index" || bid === "aa-price-blended" || PRIORS_BENCH_TO_KEY[bid]) {
+    // Intelligence Index id carries a version (aa-intelligence-index-v5.0.1, -v5.0.2, …): take the highest per variant.
+    const iiVer = /^aa-intelligence-index-v(\d+(?:\.\d+)*)$/.exec(bid)?.[1] || null;
+    if (bid === "aa-cost-per-task-index" || bid === "aa-price-blended" || iiVer || PRIORS_BENCH_TO_KEY[bid]) {
       let rec = variantObs.get(vid);
       if (!rec) {
-        rec = { cpt: null, price3to1: null, benchmarks: {} };
+        rec = { cpt: null, price3to1: null, benchmarks: {}, iiVer: null };
         variantObs.set(vid, rec);
       }
       if (bid === "aa-cost-per-task-index") {
         rec.cpt = toNum(obs.value);
       } else if (bid === "aa-price-blended") {
         rec.price3to1 = toNum(obs.value);
+      } else if (iiVer) {
+        if (rec.iiVer == null || compareVersions(iiVer, rec.iiVer) >= 0) {
+          rec.iiVer = iiVer;
+          rec.benchmarks.intelligenceIndex = round1(obs.value);
+        }
       } else {
         const key = PRIORS_BENCH_TO_KEY[bid];
         rec.benchmarks[key] = round1(obs.value);
@@ -962,8 +978,9 @@ function resolveCodingAgent(entry, agentIndex) {
   if (pinned) {
     pick = pool.find((c) => c.agentSlug === pinned) || null;
   } else if (!UNMEASURED_HARNESSES.has(entry.harness) && (entry.openEndpoint || entry.billing === "metered")) {
-    // Open endpoint / API key: the model's AA default agent, else its best-scoring one.
-    pick = pool.find((c) => c.isDefault) || [...pool].sort((a, b) => b.index - a.index)[0];
+    // Open endpoint / API key: the model's AA default agent, else its median-scoring one (not the best).
+    const byIndex = [...pool].sort((a, b) => a.index - b.index);
+    pick = pool.find((c) => c.isDefault) || byIndex[Math.floor((byIndex.length - 1) / 2)];
   }
   if (!pick) return null;
   return {
@@ -982,7 +999,7 @@ function resolveCodingAgent(entry, agentIndex) {
  *    also from the farthest effort: ±2.9 pts); $/task scaled by the AA Intelligence $/task ratio.
  *  - terminal-bench: no agent run for the model at all → OLS of agent index on Terminal-Bench 4.0
  *    (best single predictor in LOOCV, beats Intelligence Index); $/task = AA $/task × median agent/AA ratio.
- * Unmeasured harnesses (Cursor etc.) stay empty: no agent run exists to anchor them.
+ * Unmeasured harnesses (Cursor etc.) and pinned agents AA never ran stay empty.
  * Returns leak-free LOOCV accuracy for both methods (held-out base model excluded from training).
  */
 function estimateCodingAgents(entries, agentIndex) {
@@ -1028,7 +1045,24 @@ function estimateCodingAgents(entries, agentIndex) {
   const nearestSibling = (pool, base, agentSlug, ii) => {
     const sibs = pool.filter((p) => p.base === base && (!agentSlug || p.agentSlug === agentSlug));
     if (!sibs.length) return null;
-    return sibs.sort((x, y) => Math.abs(x.ii - ii) - Math.abs(y.ii - ii) || y.y - x.y)[0];
+    const dist = (p) => Math.abs(p.ii - ii);
+    const dmin = Math.min(...sibs.map(dist));
+    const tied = sibs.filter((p) => dist(p) === dmin);
+    if (tied.length === 1) return tied[0];
+    // Equally near runs (e.g. one model in several agents): average them instead of taking the best score.
+    // Harness comparison: mean of the other agents 2.0 pts median error vs 2.7 for a single copy.
+    const mean = (k) => tied.reduce((acc, p) => acc + p[k], 0) / tied.length;
+    const agents = [...new Set(tied.map((p) => p.agent))];
+    return {
+      ...tied[0],
+      agentSlug: agents.length === 1 ? tied[0].agentSlug : null,
+      agent: agents.length === 1 ? tied[0].agent : `${agents.length} agents`,
+      effort: [...new Set(tied.map((p) => p.effort))].join("/"),
+      y: mean("y"),
+      ii: mean("ii"),
+      cost: mean("cost"),
+      aac: mean("aac"),
+    };
   };
   const fromSibling = (s, ii, aac) => ({
     index: round1(clampIdx(s.y + (ii - s.ii))),
@@ -1039,17 +1073,29 @@ function estimateCodingAgents(entries, agentIndex) {
     costPerTaskUsd: aac * ratio,
   });
 
-  // Fits on all measured points (prefer Terminal-Bench 4.0, fall back to Intelligence Index)
-  const tbFit = fitLine(points, "tb");
-  const iiFit = fitLine(points, "ii");
-  const ratioAll = costRatio(points);
+  // Cross-model fits use one point per model+effort (agents averaged), so a model AA ran in many
+  // harnesses (GLM-5.3-Flash, GPT-6 Luna) is not counted several times. Prefer Terminal-Bench 4.0, else II.
+  const fitGroups = new Map();
+  for (const p of points) {
+    const k = `${p.base}|${p.effort}`;
+    if (!fitGroups.has(k)) fitGroups.set(k, []);
+    fitGroups.get(k).push(p);
+  }
+  const fitPoints = [...fitGroups.values()].map((g) => ({
+    ...g[0],
+    y: g.reduce((acc, p) => acc + p.y, 0) / g.length,
+    cost: g.reduce((acc, p) => acc + p.cost, 0) / g.length,
+  }));
+  const tbFit = fitLine(fitPoints, "tb");
+  const iiFit = fitLine(fitPoints, "ii");
+  const ratioAll = costRatio(fitPoints);
 
   let sameModel = 0, model = 0;
   for (const e of entries) {
     if (e.codingAgent || UNMEASURED_HARNESSES.has(e.harness)) continue;
     const pinned = HARNESS_TO_AA_AGENT[e.harness] || null;
     if (!pinned && !(e.openEndpoint || e.billing === "metered")) continue;
-    // Pinned agent AA has never run (e.g. Devin): nothing to anchor on.
+    // Pinned agent AA has never run: nothing to anchor on.
     if (pinned && !agentNames.has(pinned)) continue;
     const ii = e.intelligenceIndex;
     const aac = e.aaCostPerTaskUsd;
@@ -1060,7 +1106,7 @@ function estimateCodingAgents(entries, agentIndex) {
     const s = nearestSibling(points, base, pinned, ii) || (pinned ? nearestSibling(points, base, null, ii) : null);
     if (s) {
       e.codingAgent = {
-        agent: pinned ? agentNames.get(pinned) || s.agent : s.agent,
+        agent: pinned ? agentNames.get(pinned) || s.agent : s.agentSlug ? s.agent : null,
         agentSlug: pinned || s.agentSlug,
         ...fromSibling(s, ii, aac),
         wallTimeSec: null,
@@ -1094,7 +1140,9 @@ function estimateCodingAgents(entries, agentIndex) {
       errS.push(Math.abs(r.index - p.y));
       costS.push(Math.abs(r.costPerTaskUsd / p.cost - 1) * 100);
     }
-    const train = points.filter((q) => q.base !== p.base);
+  }
+  for (const p of fitPoints) {
+    const train = fitPoints.filter((q) => q.base !== p.base);
     const useTb = Number.isFinite(p.tb);
     const fit = fitLine(train, useTb ? "tb" : "ii");
     if (fit) {

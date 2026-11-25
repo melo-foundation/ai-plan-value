@@ -438,7 +438,7 @@ if (WRITE_DOC) {
     "- **Same-family AA extrapolation (`‡`, off by default):** Uses median additive Intelligence point deltas (`+Δ`) and multiplicative `$/task` ratios measured on other multi-effort models in the *same* canonical family (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `alibaba`, `zhipu`, `mistral`, `meta`). No cross-family global fallback.",
     "- **ARC-AGI-2 (`v2_Semi_Private`) fallback (`‡`, off by default):** Only used for model families with no multi-effort AA data (e.g. `moonshot` / Kimi, `thinking machines` / Inkling). Transfers exact-model ARC-AGI-2 cost ratios and a live-fitted IRT logit-space slope (`Δlogit(ARC) → Δlogit(AA)`, following Truong et al., arXiv:2606.07616) first, then pools same-family ARC-AGI-2 step curves for sibling models (e.g. `Kimi K3.1 Pro` from `Kimi K3`).",
     "- **Coding Agent Index, same model (`‡`, off by default):** Nearest measured effort of the same model in the plan's agent, else in another agent; score shifted 1:1 by the Intelligence Index gap, `$/task` scaled by the AA Intelligence `$/task` ratio.",
-    "- **Coding Agent Index, Terminal-Bench 4.0 (`‡`, off by default):** Models with no agent run; score from a linear fit on Terminal-Bench 4.0, `$/task` = AA `$/task` × median agent/AA ratio. Plans on agents AA has not run (Cursor, Factory Droid, Command Code, Devin) stay empty.",
+    "- **Coding Agent Index, Terminal-Bench 4.0 (`‡`, off by default):** Models with no agent run; score from a linear fit on Terminal-Bench 4.0, `$/task` = AA `$/task` × median agent/AA ratio. Plans on Cursor, Factory Droid and Command Code stay empty.",
     "",
     "## Reproducing These Numbers",
     "",
