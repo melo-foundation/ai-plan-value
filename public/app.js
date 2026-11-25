@@ -1161,8 +1161,8 @@ function render() {
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
   const FOOTNOTES = agentMode
     ? {
-        high: "● High-confidence estimate (same model and agent, measured at another reasoning effort).",
-        medium: "◐ Medium-confidence estimate (another agent's run of the same model, or fitted on Terminal-Bench 4.0).",
+        high: "● High-confidence estimate (estimated from the same model and agent at a different reasoning effort).",
+        medium: "◐ Medium-confidence estimate (estimated from another agent's run of the same model, or fitted on Terminal-Bench 4.0).",
         low: "○ Low-confidence estimate (fitted on Terminal-Bench 4.0 below its measured range, or built on a low-confidence effort estimate).",
       }
     : {
