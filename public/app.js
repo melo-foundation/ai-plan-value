@@ -236,6 +236,13 @@ function interpMark(r) {
   if (r.effortEstimate === "interpolated") {
     return `<span class="est-star" title="Interpolated reasoning effort (bracketed between measured efforts on this model)">†</span>`;
   }
+  if (r.effortEstimateSource === "agent-same-model") {
+    const a = r.codingAgent || {};
+    return `<span class="est-star" title="${esc(`Estimated from ${a.fromAgent} run at ${a.fromEffort} effort`)}">‡</span>`;
+  }
+  if (r.effortEstimateSource === "agent-terminal-bench") {
+    return `<span class="est-star" title="Estimated from Terminal-Bench 4.0">‡</span>`;
+  }
   if (r.effortEstimate === "extrapolated") {
     const src = r.effortEstimateSource === "arc-agi-2"
       ? "ARC-AGI-2 effort ratios"
@@ -343,7 +350,13 @@ function getAllEntriesResolved() {
       return {
         ...e,
         ...accessMeta,
-        ...(agentMode ? { effortEstimate: null, harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
+        ...(agentMode
+          ? {
+              effortEstimate: e.codingAgent?.estimate ? "extrapolated" : null,
+              effortEstimateSource: e.codingAgent?.estimate ? `agent-${e.codingAgent.estimate}` : null,
+              harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness,
+            }
+          : {}),
         isApi,
         score,
         subsidy,
@@ -1113,9 +1126,13 @@ function render() {
           .map((r) => r.modelId)
       ).size;
       $("extrapFooterText").textContent =
-        hiddenVariants > 0
-          ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
-          : "Rough estimates for unmeasured reasoning levels are hidden.";
+        state.benchKey === "codingAgentIndex"
+          ? hiddenVariants > 0
+            ? `${hiddenVariants} more ${hiddenVariants === 1 ? "model has" : "models have"} estimated agent scores matching these filters.`
+            : "Estimated agent scores are hidden."
+          : hiddenVariants > 0
+            ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
+            : "Rough estimates for unmeasured reasoning levels are hidden.";
     }
   }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
@@ -1124,6 +1141,10 @@ function render() {
   }
   if ($("extrapFootnote")) {
     $("extrapFootnote").hidden = !rows.some((r) => r.effortEstimate === "extrapolated");
+    $("extrapFootnote").textContent =
+      state.benchKey === "codingAgentIndex"
+        ? "‡ Estimated agent score: same model at another effort or in another agent, else Terminal-Bench 4.0."
+        : "‡ Extrapolated reasoning effort (estimated from same-family models or ARC-AGI-2, not directly benchmarked).";
   }
   syncUrlFromState();
 }
@@ -1149,6 +1170,10 @@ function renderMeta() {
     $("extrapErrNote")
   ) {
     $("extrapErrNote").textContent = ` (typical error ~±${acc.extrap.intelPts1}–${acc.extrap.intelPtsAll} pts / ±${acc.extrap.costPct1}–${acc.extrap.costPctAll}% $/task)`;
+  }
+  const ag = ds.stats?.codingAgentEstimates?.accuracy;
+  if (ag?.sameModel?.pts != null && ag?.model?.pts != null && $("agentErrNote")) {
+    $("agentErrNote").textContent = ` (typical error ~±${ag.sameModel.pts}–${ag.model.pts} pts / ±${ag.sameModel.costPct}–${ag.model.costPct}% $/task)`;
   }
 }
 

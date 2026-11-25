@@ -967,6 +967,146 @@ function resolveCodingAgent(entry, agentIndex) {
 }
 
 /**
+ * Fill Coding Agent Index for rows AA has not run, as ‡ estimates.
+ *  - same-model: nearest measured effort of the same base model (pinned agent first, else any agent),
+ *    shifted 1:1 by the Intelligence Index gap (LOOCV beat ratio, 0.8 slope and Terminal-Bench shifts,
+ *    also from the farthest effort: ±2.9 pts); $/task scaled by the AA Intelligence $/task ratio.
+ *  - terminal-bench: no agent run for the model at all → OLS of agent index on Terminal-Bench 4.0
+ *    (best single predictor in LOOCV, beats Intelligence Index); $/task = AA $/task × median agent/AA ratio.
+ * Unmeasured harnesses (Cursor etc.) stay empty: no agent run exists to anchor them.
+ * Returns leak-free LOOCV accuracy for both methods (held-out base model excluded from training).
+ */
+function estimateCodingAgents(entries, agentIndex) {
+  const agentNames = new Map();
+  for (const pool of agentIndex.values()) for (const c of pool) agentNames.set(c.agentSlug, c.agentName);
+
+  const seen = new Set();
+  const points = [];
+  for (const e of entries) {
+    const a = e.codingAgent;
+    if (!a || a.estimate || e.effortEstimate) continue;
+    const key = `${e.modelId}|${a.agentSlug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!(e.intelligenceIndex > 0) || !(e.aaCostPerTaskUsd > 0)) continue;
+    points.push({
+      base: normSlug(e.baseModelId),
+      agentSlug: a.agentSlug,
+      agent: a.agent,
+      effort: e.effort || "default",
+      y: a.index,
+      ii: e.intelligenceIndex,
+      tb: e.benchmarks?.terminalBench40 ?? null,
+      cost: a.costPerTaskUsd,
+      aac: e.aaCostPerTaskUsd,
+    });
+  }
+
+  const fitLine = (pts, xKey) => {
+    const q = pts.filter((p) => Number.isFinite(p[xKey]));
+    if (q.length < 5) return null;
+    const mx = q.reduce((s, p) => s + p[xKey], 0) / q.length;
+    const my = q.reduce((s, p) => s + p.y, 0) / q.length;
+    let sxy = 0, sxx = 0;
+    for (const p of q) { sxy += (p[xKey] - mx) * (p.y - my); sxx += (p[xKey] - mx) ** 2; }
+    if (!(sxx > 0)) return null;
+    const b = sxy / sxx;
+    return { a: my - b * mx, b };
+  };
+  const costRatio = (pts) => median(pts.map((p) => p.cost / p.aac));
+  const clampIdx = (v) => Math.min(100, Math.max(0.1, v));
+
+  const nearestSibling = (pool, base, agentSlug, ii) => {
+    const sibs = pool.filter((p) => p.base === base && (!agentSlug || p.agentSlug === agentSlug));
+    if (!sibs.length) return null;
+    return sibs.sort((x, y) => Math.abs(x.ii - ii) - Math.abs(y.ii - ii) || y.y - x.y)[0];
+  };
+  const fromSibling = (s, ii, aac) => ({
+    index: round1(clampIdx(s.y + (ii - s.ii))),
+    costPerTaskUsd: s.cost * (aac / s.aac),
+  });
+  const fromModel = (fit, xKey, x, ratio, aac) => ({
+    index: round1(clampIdx(fit.a + fit.b * x)),
+    costPerTaskUsd: aac * ratio,
+  });
+
+  // Fits on all measured points (prefer Terminal-Bench 4.0, fall back to Intelligence Index)
+  const tbFit = fitLine(points, "tb");
+  const iiFit = fitLine(points, "ii");
+  const ratioAll = costRatio(points);
+
+  let sameModel = 0, model = 0;
+  for (const e of entries) {
+    if (e.codingAgent || UNMEASURED_HARNESSES.has(e.harness)) continue;
+    const pinned = HARNESS_TO_AA_AGENT[e.harness] || null;
+    if (!pinned && !(e.openEndpoint || e.billing === "metered")) continue;
+    // Pinned agent AA has never run (e.g. Devin): nothing to anchor on.
+    if (pinned && !agentNames.has(pinned)) continue;
+    const ii = e.intelligenceIndex;
+    const aac = e.aaCostPerTaskUsd;
+    if (!(ii > 0) || !(aac > 0)) continue;
+
+    // Same agent first; else the same model in another agent (LOOCV ±1.8 pts, beats the cross-model fit).
+    const base = normSlug(e.baseModelId);
+    const s = nearestSibling(points, base, pinned, ii) || (pinned ? nearestSibling(points, base, null, ii) : null);
+    if (s) {
+      e.codingAgent = {
+        agent: pinned ? agentNames.get(pinned) || s.agent : s.agent,
+        agentSlug: pinned || s.agentSlug,
+        ...fromSibling(s, ii, aac),
+        wallTimeSec: null,
+        estimate: "same-model",
+        fromAgent: s.agent,
+        fromEffort: s.effort,
+      };
+      sameModel++;
+      continue;
+    }
+    const tb = e.benchmarks?.terminalBench40;
+    const [fit, x] = tbFit && Number.isFinite(tb) ? [tbFit, tb] : iiFit ? [iiFit, ii] : [null, null];
+    if (!fit) continue;
+    e.codingAgent = {
+      agent: pinned ? agentNames.get(pinned) || null : null,
+      agentSlug: pinned,
+      ...fromModel(fit, fit === tbFit ? "tb" : "ii", x, ratioAll, aac),
+      wallTimeSec: null,
+      estimate: "terminal-bench",
+    };
+    model++;
+  }
+
+  // LOOCV (hold out each measured point; its whole base model is excluded from training for the fit)
+  const errS = [], costS = [], errM = [], costM = [];
+  for (const p of points) {
+    const others = points.filter((q) => q !== p);
+    const s = nearestSibling(others, p.base, p.agentSlug, p.ii);
+    if (s) {
+      const r = fromSibling(s, p.ii, p.aac);
+      errS.push(Math.abs(r.index - p.y));
+      costS.push(Math.abs(r.costPerTaskUsd / p.cost - 1) * 100);
+    }
+    const train = points.filter((q) => q.base !== p.base);
+    const useTb = Number.isFinite(p.tb);
+    const fit = fitLine(train, useTb ? "tb" : "ii");
+    if (fit) {
+      const r = fromModel(fit, useTb ? "tb" : "ii", useTb ? p.tb : p.ii, costRatio(train), p.aac);
+      errM.push(Math.abs(r.index - p.y));
+      costM.push(Math.abs(r.costPerTaskUsd / p.cost - 1) * 100);
+    }
+  }
+  const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+  const r0 = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+  return {
+    sameModel,
+    model,
+    accuracy: {
+      sameModel: { n: errS.length, pts: r1(median(errS)), costPct: r0(median(costS)) },
+      model: { n: errM.length, pts: r1(median(errM)), costPct: r0(median(costM)) },
+    },
+  };
+}
+
+/**
  * Parse multi-effort Artificial Analysis Intelligence Index + Cost per Task directly
  * from upstream Fei2411/real-api-pricing (derived/benchmark-configurations.csv).
  */
@@ -3478,8 +3618,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   if (fxRescaledRows > 0) log(`Re-priced ${fxRescaledRows} CNY-fee Fei2411 rows at USD/CNY ${liveCnyPerUsd}`);
 
   sourceStatus.aaCodingAgents.matchedEntries = expandedEntries.filter((e) => e.codingAgent).length;
+  let codingAgentEstimates = null;
   if (agentIndex) {
     log(`Matched Coding Agent Index onto ${sourceStatus.aaCodingAgents.matchedEntries} entries`);
+    codingAgentEstimates = estimateCodingAgents(expandedEntries, agentIndex);
+    const acc = codingAgentEstimates.accuracy;
+    log(
+      `Estimated Coding Agent Index on ${codingAgentEstimates.sameModel} rows from same-model runs ` +
+        `(LOOCV n=${acc.sameModel.n}: ±${acc.sameModel.pts} pts / ±${acc.sameModel.costPct}% $/task) and ` +
+        `${codingAgentEstimates.model} rows from Terminal-Bench 4.0 (LOOCV n=${acc.model.n}: ±${acc.model.pts} pts / ±${acc.model.costPct}% $/task)`
+    );
   }
 
   sourceStatus.openRouter.backfilledContextCount = backfilledContextSlugs.size;
@@ -3516,6 +3664,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       extrapolatedEffortVariants,
       arcExtrapolatedVariants,
       effortAccuracy,
+      codingAgentEstimates,
       unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
     entries: expandedEntries,

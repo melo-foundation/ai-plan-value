@@ -78,7 +78,17 @@ test("Coding Agent Index joins only exact agent/model/effort matches with sane v
   };
   const UNMEASURED = new Set(["Cursor IDE", "Command Code CLI", "Factory Droid CLI", "First-party app"]);
   const matched = entries.filter((e) => e.codingAgent);
-  assert.ok(matched.length >= 100, `Expected >= 100 entries with Coding Agent Index, got ${matched.length}`);
+  const measured = matched.filter((e) => !e.codingAgent.estimate);
+  assert.ok(measured.length >= 100, `Expected >= 100 entries with measured Coding Agent Index, got ${measured.length}`);
+  const estimated = matched.filter((e) => e.codingAgent.estimate);
+  assert.ok(estimated.length >= measured.length, `Expected agent estimates to fill unmeasured rows, got ${estimated.length}`);
+  for (const e of estimated) {
+    assert.ok(["same-model", "terminal-bench"].includes(e.codingAgent.estimate), `Unknown agent estimate on ${e.id}`);
+    if (e.codingAgent.estimate === "same-model") assert.ok(e.codingAgent.fromAgent && e.codingAgent.fromEffort, `Missing estimate source on ${e.id}`);
+  }
+  const acc = dataset.stats?.codingAgentEstimates?.accuracy;
+  assert.ok(acc?.sameModel?.pts > 0 && acc.sameModel.pts < 4, `Agent same-model LOOCV out of range: ${acc?.sameModel?.pts}`);
+  assert.ok(acc?.model?.pts > 0 && acc.model.pts < 6, `Agent Terminal-Bench LOOCV out of range: ${acc?.model?.pts}`);
   for (const e of matched) {
     const a = e.codingAgent;
     assert.ok(Number.isFinite(a.index) && a.index > 0 && a.index <= 100, `Bad codingAgent.index on ${e.id}: ${a.index}`);
