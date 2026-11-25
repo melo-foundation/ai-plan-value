@@ -44,7 +44,7 @@ const workflowYml = fs.readFileSync(WORKFLOW_PATH, "utf8");
 const entries = dataset.entries || [];
 
 // 1. Upstream sources health
-test("All 8 upstream sources succeeded with non-zero records", () => {
+test("All 9 upstream sources succeeded with non-zero records", () => {
   const expected = [
     ["fei2411", "rowCount"],
     ["priorsRepo", "itemCount"],
@@ -54,12 +54,44 @@ test("All 8 upstream sources succeeded with non-zero records", () => {
     ["ollamaCloud", "tierCount"],
     ["kiloPass", "tierCount"],
     ["arcPrize", "multiEffortModelCount"],
+    ["aaCodingAgents", "configCount"],
   ];
   for (const [key, countField] of expected) {
     const src = dataset.sources?.[key];
     assert.ok(src, `Missing source entry: ${key}`);
     assert.equal(src.ok, true, `Source ${key} failed: ${src.error}`);
     assert.ok((src[countField] || 0) > 0, `Source ${key}.${countField} must be > 0`);
+  }
+});
+
+// 1b. Coding Agent Index join
+test("Coding Agent Index joins only exact agent/model/effort matches with sane values", () => {
+  const PINNED = {
+    "Claude Code / Web": "claude-code",
+    "Codex / Web": "codex",
+    "Gemini CLI / Web": "antigravity-cli",
+    "Le Chat / Vibe": "mistral-vibe",
+    "Grok Web / App": "grok-build",
+    "OpenCode / API": "opencode",
+    "Devin Agent": "devin-cli",
+    "Copilot IDE / CLI": "copilot-cli",
+  };
+  const UNMEASURED = new Set(["Cursor IDE", "Command Code CLI", "Factory Droid CLI", "First-party app"]);
+  const matched = entries.filter((e) => e.codingAgent);
+  assert.ok(matched.length >= 100, `Expected >= 100 entries with Coding Agent Index, got ${matched.length}`);
+  for (const e of matched) {
+    const a = e.codingAgent;
+    assert.ok(Number.isFinite(a.index) && a.index > 0 && a.index <= 100, `Bad codingAgent.index on ${e.id}: ${a.index}`);
+    assert.ok(Number.isFinite(a.costPerTaskUsd) && a.costPerTaskUsd > 0, `Bad codingAgent.costPerTaskUsd on ${e.id}`);
+    assert.ok(!UNMEASURED.has(e.harness), `${e.id} (${e.harness}) has an unmeasured harness but got agent ${a.agent}`);
+    const pinned = PINNED[e.harness];
+    if (pinned) assert.equal(a.agentSlug, pinned, `${e.id} (${e.harness}) must use ${pinned}, got ${a.agentSlug}`);
+  }
+  const names = new Map();
+  for (const e of matched) {
+    const prev = names.get(e.codingAgent.agentSlug);
+    assert.ok(!prev || prev === e.codingAgent.agent, `Inconsistent agent names for ${e.codingAgent.agentSlug}: ${prev} / ${e.codingAgent.agent}`);
+    names.set(e.codingAgent.agentSlug, e.codingAgent.agent);
   }
 });
 
@@ -88,6 +120,15 @@ test("All entries have valid AA cost/task, intelligence, token pricing, and sane
         `Suspicious subsidyMultiple (${e.subsidyMultiple}x) on ${e.id} — possible unit/workload mismatch`
       );
       if (e.subsidyMultiple > 100) console.log(`     Note: ${e.id} subsidyMultiple ${e.subsidyMultiple}x (>100x, upstream value)`);
+      // Workload-mix corrections only rescale Fei2411's standard-mix multiple by a blend ratio
+      // (~1.0-2.3x today; cheap-cache models can go higher); beyond 4x is a currency/unit error (e.g. CNY list price read as USD).
+      if (e.origin === "fei2411" && e.upstreamSubsidyMultiple > 0) {
+        const ratio = e.subsidyMultiple / e.upstreamSubsidyMultiple;
+        assert.ok(
+          ratio >= 0.95 && ratio <= 4,
+          `${e.id} (${e.feiWorkload}) subsidy ${e.subsidyMultiple}x is ${ratio.toFixed(2)}x Fei2411's standard-mix ${e.upstreamSubsidyMultiple}x — currency/unit mismatch?`
+        );
+      }
       if (e.origin === "fei2411" && e.monthlyTokens > 0 && e.priceUsd > 0 && e.listBlendedUsdPerMtok > 0) {
         const implied = ((e.monthlyTokens / 1e6) * e.listBlendedUsdPerMtok) / e.priceUsd;
         const relDiff = Math.abs(implied - e.subsidyMultiple) / e.subsidyMultiple;

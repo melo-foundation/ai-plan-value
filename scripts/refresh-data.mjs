@@ -25,6 +25,8 @@ const OUTPUT_PATH = path.join(ROOT_DIR, "public", "data", "combined.json");
 const SOURCES = {
   feiPointsCsv:
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/points.csv",
+  feiConventions:
+    "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/data/conventions.json",
   feiBenchConfigsCsv:
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/benchmark-configurations.csv",
   priorsSnapshotGz:
@@ -37,6 +39,7 @@ const SOURCES = {
   kiloPricing: "https://kilo.ai/pricing",
   arcPrizeEvals: "https://arcprize.org/media/data/evaluations.json",
   arcPrizeModels: "https://arcprize.org/media/data/models.json",
+  aaCodingAgents: "https://artificialanalysis.ai/agents/coding-agents",
 };
 
 const USER_AGENT =
@@ -874,6 +877,90 @@ function extractBalancedJsonObject(text, openBraceIdx) {
     }
   }
   throw new Error("Unbalanced JSON object");
+}
+
+/**
+ * Parse Artificial Analysis Coding Agent Index configs (agent × model × effort) from the
+ * /agents/coding-agents RSC payload. Each config is an independently measured run, so the
+ * resulting index/cost are attached only on exact (agent?, base model, effort) matches.
+ */
+function parseAaCodingAgentsHtml(html) {
+  const rsc = extractNextRscText(html);
+  const configs = [];
+  const seen = new Set();
+  const re = /\{"id":"[0-9a-f]{32}","isDefault":/g;
+  let m;
+  while ((m = re.exec(rsc)) !== null) {
+    let o;
+    try {
+      o = extractBalancedJsonObject(rsc, m.index);
+    } catch {
+      continue;
+    }
+    if (!o || seen.has(o.id) || !o.agentSlug) continue;
+    seen.add(o.id);
+    const key = o.agentRelease?.key || "";
+    const sep = key.indexOf(":");
+    const baseSlug = sep > 0 ? key.slice(sep + 1) : null;
+    const index = Number(o.indexScore);
+    const cost = Number(o.mean?.costUsd);
+    if (!baseSlug || o.isUnavailable || !Number.isFinite(index) || !(cost > 0)) continue;
+    configs.push({
+      agentSlug: o.agentSlug,
+      agentName: o.agentName || o.display?.agent || o.agentSlug,
+      baseSlug: normSlug(MODEL_ALIASES[baseSlug] || baseSlug),
+      effort: o.model?.effort?.slug || "default",
+      isDefault: Boolean(o.isDefault),
+      index: round1(index * 100),
+      costPerTaskUsd: Number(cost.toFixed(4)),
+      wallTimeSec: Number.isFinite(Number(o.mean?.agentWallTimeSec)) ? Math.round(o.mean.agentWallTimeSec) : null,
+    });
+  }
+  if (configs.length === 0) throw new Error("Could not locate coding-agent configs in Artificial Analysis HTML");
+  // AA spells some agents inconsistently across rows (e.g. "Opencode" / "OpenCode"); keep one name per slug.
+  const nameBySlug = new Map();
+  for (const c of configs) {
+    const prev = nameBySlug.get(c.agentSlug);
+    if (!prev || (c.isDefault && !prev.isDefault)) nameBySlug.set(c.agentSlug, c);
+  }
+  for (const c of configs) c.agentName = nameBySlug.get(c.agentSlug).agentName;
+  return configs;
+}
+
+// Plan harness → AA coding agent that plan's quota is consumed through.
+// Harnesses not listed here are either open endpoints (any agent) or unmeasured by AA.
+const HARNESS_TO_AA_AGENT = {
+  "Claude Code / Web": "claude-code",
+  "Codex / Web": "codex",
+  "Gemini CLI / Web": "antigravity-cli",
+  "Le Chat / Vibe": "mistral-vibe",
+  "Grok Web / App": "grok-build",
+  "OpenCode / API": "opencode",
+  "Devin Agent": "devin-cli",
+  "Copilot IDE / CLI": "copilot-cli",
+};
+const UNMEASURED_HARNESSES = new Set(["Cursor IDE", "Command Code CLI", "Factory Droid CLI", "First-party app"]);
+
+function resolveCodingAgent(entry, agentIndex) {
+  if (!agentIndex) return null;
+  const pool = agentIndex.get(`${normSlug(entry.baseModelId)}|${entry.effort || "default"}`);
+  if (!pool || pool.length === 0) return null;
+  const pinned = HARNESS_TO_AA_AGENT[entry.harness];
+  let pick = null;
+  if (pinned) {
+    pick = pool.find((c) => c.agentSlug === pinned) || null;
+  } else if (!UNMEASURED_HARNESSES.has(entry.harness) && (entry.openEndpoint || entry.billing === "metered")) {
+    // Open endpoint / API key: the model's AA default agent, else its best-scoring one.
+    pick = pool.find((c) => c.isDefault) || [...pool].sort((a, b) => b.index - a.index)[0];
+  }
+  if (!pick) return null;
+  return {
+    agent: pick.agentName,
+    agentSlug: pick.agentSlug,
+    index: pick.index,
+    costPerTaskUsd: pick.costPerTaskUsd,
+    wallTimeSec: pick.wallTimeSec,
+  };
 }
 
 /**
@@ -2048,15 +2135,52 @@ function computeEffortAccuracy(aaVariantsByBase) {
   };
 }
 
-function parseListPriceDict(raw) {
+// Fei2411 data/conventions.json fallbacks (used only if that file cannot be fetched).
+const DEFAULT_FEI_CONVENTIONS = {
+  cnyPerUsd: 6.7787,
+  mixes: {
+    standard: { cache: 0.97, input: 0.025, cacheWrite: 0, output: 0.005 },
+    lowCache: { cache: 0.85, input: 0.145, cacheWrite: 0, output: 0.005 },
+    gemini: { cache: 0.9, input: 0.095, cacheWrite: 0, output: 0.005 },
+    anthropic: { cache: 0.97, input: 0, cacheWrite: 0.025, output: 0.005 },
+  },
+};
+// Anthropic 5-minute cache writes are billed at 1.25x base input.
+const ANTHROPIC_CACHE_WRITE_MULT = 1.25;
+
+function parseFeiConventions(json) {
+  const out = { cnyPerUsd: DEFAULT_FEI_CONVENTIONS.cnyPerUsd, mixes: { ...DEFAULT_FEI_CONVENTIONS.mixes } };
+  // Legacy field name: `usdPerCny` actually stores CNY per USD (see exchangeRate.units).
+  const fx = toNum(json?.usdPerCny);
+  if (fx && fx > 1) out.cnyPerUsd = fx;
+  for (const [key, field] of [["standard", "standardTokenMix"], ["lowCache", "lowCacheTokenMix"], ["gemini", "geminiTokenMix"], ["anthropic", "anthropicTokenMix"]]) {
+    const m = json?.[field];
+    if (!m || toNum(m.cache) == null || toNum(m.output) == null) continue;
+    out.mixes[key] = { cache: toNum(m.cache), input: toNum(m.input) ?? 0, cacheWrite: toNum(m.cacheWrite) ?? 0, output: toNum(m.output) };
+  }
+  return out;
+}
+
+function blendedForMix(p, mix) {
+  if (!p || p.inputPer1M == null || p.outputPer1M == null || !mix) return null;
+  const cached = p.cacheHitPer1M ?? p.inputPer1M * 0.1;
+  return mix.cache * cached + mix.input * p.inputPer1M + mix.cacheWrite * p.inputPer1M * ANTHROPIC_CACHE_WRITE_MULT + mix.output * p.outputPer1M;
+}
+
+function parseListPriceDict(raw, cnyPerUsd = DEFAULT_FEI_CONVENTIONS.cnyPerUsd) {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw.replace(/'/g, '"'));
+    const currency = String(obj.currency || "USD").toUpperCase();
+    // Normalize CN-portal list prices to USD so blends compare against USD fees / real $/Mtok.
+    const fx = currency === "CNY" ? 1 / cnyPerUsd : 1;
+    const conv = (v) => (toNum(v) == null ? null : toNum(v) * fx);
     return {
-      inputPer1M: toNum(obj.input),
-      outputPer1M: toNum(obj.output),
-      cacheHitPer1M: toNum(obj.cached),
-      currency: obj.currency || "USD",
+      inputPer1M: conv(obj.input),
+      outputPer1M: conv(obj.output),
+      cacheHitPer1M: conv(obj.cached),
+      currency: "USD",
+      sourceCurrency: currency,
     };
   } catch {
     return null;
@@ -2160,9 +2284,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       multiEffortModelCount: 0,
       error: null,
     },
+    aaCodingAgents: {
+      name: "Artificial Analysis (Coding Agents)",
+      url: SOURCES.aaCodingAgents,
+      ok: false,
+      fetchedAt: null,
+      configCount: 0,
+      matchedEntries: 0,
+      error: null,
+    },
   };
 
   let feiCsvText = null;
+  let feiConventionsJson = null;
   let feiBenchCsvText = null;
   let priorsGzBuf = null;
   let aaHtml = null;
@@ -2173,6 +2307,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let kiloHtml = null;
   let arcEvalsJson = null;
   let arcModelsJson = null;
+  let aaAgentsHtml = null;
 
   if (fromLocal) {
     log("Reading local fixture snapshots from /tmp ...");
@@ -2186,11 +2321,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (fs.existsSync("/tmp/copilot_plans.html")) copilotHtml = fs.readFileSync("/tmp/copilot_plans.html", "utf8");
     if (fs.existsSync("/tmp/ollama_pricing.html")) ollamaHtml = fs.readFileSync("/tmp/ollama_pricing.html", "utf8");
     if (fs.existsSync("/tmp/kilo_pricing.html")) kiloHtml = fs.readFileSync("/tmp/kilo_pricing.html", "utf8");
+    if (fs.existsSync("/tmp/aa_coding_agents.html")) aaAgentsHtml = fs.readFileSync("/tmp/aa_coding_agents.html", "utf8");
   } else {
     const tasks = [
       fetchText(SOURCES.feiPointsCsv)
         .then((t) => { feiCsvText = t; })
         .catch((err) => { sourceStatus.fei2411.error = err.message; }),
+      fetchText(SOURCES.feiConventions)
+        .then((t) => { feiConventionsJson = JSON.parse(t); })
+        .catch((err) => { log("Fei conventions.json fetch failed (using defaults):", err.message); }),
       fetchText(SOURCES.feiBenchConfigsCsv)
         .then((t) => { feiBenchCsvText = t; })
         .catch((err) => { log("Fei benchmark-configurations fetch failed:", err.message); }),
@@ -2218,6 +2357,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.arcPrizeModels)
         .then((t) => { arcModelsJson = JSON.parse(t); })
         .catch((err) => { sourceStatus.arcPrize.error = sourceStatus.arcPrize.error || err.message; }),
+      fetchText(SOURCES.aaCodingAgents)
+        .then((t) => { aaAgentsHtml = t; })
+        .catch((err) => { sourceStatus.aaCodingAgents.error = err.message; }),
     ];
 
     if (process.env.AA_API_KEY) {
@@ -2291,6 +2433,31 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       log("ARC Prize parse error:", err.message);
     }
   }
+
+  // 1d. Parse AA Coding Agent Index configs, keyed by base model + effort
+  let agentIndex = null;
+  if (aaAgentsHtml) {
+    try {
+      const configs = parseAaCodingAgentsHtml(aaAgentsHtml);
+      agentIndex = new Map();
+      for (const c of configs) {
+        const k = `${c.baseSlug}|${c.effort}`;
+        if (!agentIndex.has(k)) agentIndex.set(k, []);
+        agentIndex.get(k).push(c);
+      }
+      sourceStatus.aaCodingAgents.ok = true;
+      sourceStatus.aaCodingAgents.fetchedAt = nowIso;
+      sourceStatus.aaCodingAgents.configCount = configs.length;
+      log(`Parsed ${configs.length} agent×model configs from Artificial Analysis Coding Agents`);
+    } catch (err) {
+      sourceStatus.aaCodingAgents.error = err.message;
+      log("AA Coding Agents parse error:", err.message);
+    }
+  }
+
+  // 1e. Fei2411 workload mixes + CNY/USD rate
+  const feiConventions = feiConventionsJson ? parseFeiConventions(feiConventionsJson) : DEFAULT_FEI_CONVENTIONS;
+  log(`Fei2411 conventions: ${feiConventionsJson ? "fetched" : "defaults"} (CNY/USD ${feiConventions.cnyPerUsd}, mixes: ${Object.keys(feiConventions.mixes).join("/")})`);
 
   // 2. Parse Fei2411 derived/points.csv
   let feiRows = [];
@@ -2502,21 +2669,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const monthlyYi = toNum(r.monthly_yi);
     const realUsdPerMtok = toNum(r.real_usd_per_mtok);
     const orModel = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
-    const feiListPrice = parseListPriceDict(r.list_price);
+    const feiListPrice = parseListPriceDict(r.list_price, feiConventions.cnyPerUsd);
     const aaP = aaModel?.pricing?.inputPer1M != null ? aaModel.pricing : orModel?.pricing;
     const rateP = feiListPrice?.inputPer1M != null ? feiListPrice : aaP;
-    const isLowCache = String(r.workload || "").toLowerCase() === "lowcache";
-    // Fei2411 workload mixes: lowCache = 85% cached / 14.5% input / 0.5% output; standard = 97% / 2.5% / 0.5%
-    const aaCodingBlended =
-      rateP && rateP.inputPer1M != null && rateP.outputPer1M != null
-        ? isLowCache
-          ? 0.85 * (rateP.cacheHitPer1M ?? rateP.inputPer1M * 0.1) + 0.145 * rateP.inputPer1M + 0.005 * rateP.outputPer1M
-          : 0.97 * (rateP.cacheHitPer1M ?? rateP.inputPer1M * 0.1) + 0.025 * rateP.inputPer1M + 0.005 * rateP.outputPer1M
-        : null;
-    // Fei2411's list_blended_usd_per_mtok / d columns use the standard (97% cache) mix even on lowCache rows,
-    // which understates subsidy on lowCache rows (e.g. Google AI Pro Argon $28.20/$19.99 = 1.40x -> 0.65x).
-    const listBlendedUsdPerMtok =
-      isLowCache && aaCodingBlended ? aaCodingBlended : toNum(r.list_blended_usd_per_mtok) ?? aaCodingBlended;
+    // Fei2411 converts each row's API-worth into monthly tokens with that row's workload mix
+    // (data/conventions.json), but its list_blended_usd_per_mtok / d columns always use the standard
+    // 97%-cache mix. On lowCache / gemini / anthropic rows that understates the subsidy
+    // (e.g. Google AI Pro Argon: 85M tok x $0.33 gemini blend / $19.99 = 1.40x, not 0.84x).
+    const workloadKey = Object.keys(feiConventions.mixes).find((k) => k.toLowerCase() === String(r.workload || "").toLowerCase());
+    const hasOwnMix = workloadKey != null && workloadKey !== "standard";
+    const ownMixBlended = hasOwnMix ? blendedForMix(rateP, feiConventions.mixes[workloadKey]) : null;
+    const standardBlended = blendedForMix(rateP, feiConventions.mixes.standard);
+    const listBlendedUsdPerMtok = ownMixBlended ?? toNum(r.list_blended_usd_per_mtok) ?? standardBlended;
+    const usesOwnMix = ownMixBlended != null;
     const discountRatio = toNum(r.d);
 
     let subsidyMultiple = null;
@@ -2524,7 +2689,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       subsidyMultiple = 1;
     } else if (unmetered) {
       subsidyMultiple = null;
-    } else if (isLowCache && listBlendedUsdPerMtok && realUsdPerMtok && listBlendedUsdPerMtok > 0 && realUsdPerMtok > 0) {
+    } else if (usesOwnMix && listBlendedUsdPerMtok && realUsdPerMtok && listBlendedUsdPerMtok > 0 && realUsdPerMtok > 0) {
       subsidyMultiple = listBlendedUsdPerMtok / realUsdPerMtok;
     } else if (discountRatio && discountRatio > 0) {
       subsidyMultiple = 1 / discountRatio;
@@ -2602,6 +2767,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       realUsdPerMtok,
       listBlendedUsdPerMtok,
       subsidyMultiple: subsidyMultiple !== null ? Number(subsidyMultiple.toFixed(4)) : null,
+      feiWorkload: workloadKey || null,
+      upstreamSubsidyMultiple: discountRatio > 0 ? Number((1 / discountRatio).toFixed(4)) : null,
       intelligenceIndex: Number(intelligenceIndex.toFixed(2)),
       benchmarks,
       aaCostPerTaskUsd: Number(aaCostPerTaskUsd.toFixed(4)),
@@ -3161,6 +3328,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (accessMeta.matched === false) {
       unclassifiedPlans.add(entry.plan);
     }
+    entry.codingAgent = resolveCodingAgent(entry, agentIndex);
 
     if (!openRouterIndex) return entry;
     const orModel = resolveOpenRouterModel(entry.baseModelId, openRouterIndex, aaByNorm);
@@ -3264,6 +3432,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         )
       );
     }
+  }
+
+  sourceStatus.aaCodingAgents.matchedEntries = expandedEntries.filter((e) => e.codingAgent).length;
+  if (agentIndex) {
+    log(`Matched Coding Agent Index onto ${sourceStatus.aaCodingAgents.matchedEntries} entries`);
   }
 
   sourceStatus.openRouter.backfilledContextCount = backfilledContextSlugs.size;
