@@ -902,7 +902,16 @@ function parseAaCodingAgentsHtml(html) {
     seen.add(o.id);
     const key = o.agentRelease?.key || "";
     const sep = key.indexOf(":");
-    const baseSlug = sep > 0 ? key.slice(sep + 1) : null;
+    let baseSlug = sep > 0 ? key.slice(sep + 1) : null;
+    let effort = o.model?.effort?.slug || "default";
+    // Harness-comparison rows (e.g. Devin CLI on Cognition hosting) carry model: null and no release key;
+    // the model is only in display.model ("GLM-5.3-Flash", "GPT-6 Luna (Max)"). AA's methodology runs
+    // these comparisons at maximum reasoning effort. Routers (Devin Fusion: two models) map to no single model.
+    if (!baseSlug && !o.model && !o.isRouter && o.display?.model) {
+      const dm = String(o.display.model).match(/^(.*?)\s*(?:\(([^)]+)\))?$/);
+      baseSlug = normSlug(dm[1]);
+      effort = dm[2] ? normSlug(dm[2]) : "max";
+    }
     const index = Number(o.indexScore);
     const cost = Number(o.mean?.costUsd);
     if (!baseSlug || o.isUnavailable || !Number.isFinite(index) || !(cost > 0)) continue;
@@ -910,7 +919,7 @@ function parseAaCodingAgentsHtml(html) {
       agentSlug: o.agentSlug,
       agentName: o.agentName || o.display?.agent || o.agentSlug,
       baseSlug: normSlug(MODEL_ALIASES[baseSlug] || baseSlug),
-      effort: o.model?.effort?.slug || "default",
+      effort,
       isDefault: Boolean(o.isDefault),
       index: round1(index * 100),
       costPerTaskUsd: Number(cost.toFixed(4)),
@@ -1046,7 +1055,7 @@ function estimateCodingAgents(entries, agentIndex) {
     const aac = e.aaCostPerTaskUsd;
     if (!(ii > 0) || !(aac > 0)) continue;
 
-    // Same agent first; else the same model in another agent (LOOCV ±1.8 pts, beats the cross-model fit).
+    // Same agent first; else the same model in another agent (accuracy.crossAgent).
     const base = normSlug(e.baseModelId);
     const s = nearestSibling(points, base, pinned, ii) || (pinned ? nearestSibling(points, base, null, ii) : null);
     if (s) {
@@ -1094,6 +1103,17 @@ function estimateCodingAgents(entries, agentIndex) {
       costM.push(Math.abs(r.costPerTaskUsd / p.cost - 1) * 100);
     }
   }
+  // Cross-agent transfer error: every ordered pair of agents run on the same model+effort
+  // (AA's harness comparison: ~13 harnesses on GLM-5.3-Flash and GPT-6 Luna at max).
+  // A fixed per-agent offset fitted on one model raised this error on the other (rank flips), so none is applied.
+  const errX = [], costX = [];
+  for (const pool of agentIndex.values()) {
+    for (const t of pool) for (const s of pool) {
+      if (t === s) continue;
+      errX.push(Math.abs(s.index - t.index));
+      costX.push(Math.abs(s.costPerTaskUsd / t.costPerTaskUsd - 1) * 100);
+    }
+  }
   const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
   const r0 = (v) => (Number.isFinite(v) ? Math.round(v) : null);
   return {
@@ -1101,6 +1121,7 @@ function estimateCodingAgents(entries, agentIndex) {
     model,
     accuracy: {
       sameModel: { n: errS.length, pts: r1(median(errS)), costPct: r0(median(costS)) },
+      crossAgent: { n: errX.length, pts: r1(median(errX)), costPct: r0(median(costX)) },
       model: { n: errM.length, pts: r1(median(errM)), costPct: r0(median(costM)) },
     },
   };
@@ -3625,7 +3646,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const acc = codingAgentEstimates.accuracy;
     log(
       `Estimated Coding Agent Index on ${codingAgentEstimates.sameModel} rows from same-model runs ` +
-        `(LOOCV n=${acc.sameModel.n}: ±${acc.sameModel.pts} pts / ±${acc.sameModel.costPct}% $/task) and ` +
+        `(LOOCV n=${acc.sameModel.n}: ±${acc.sameModel.pts} pts / ±${acc.sameModel.costPct}% $/task; ` +
+        `cross-agent pairs n=${acc.crossAgent.n}: ±${acc.crossAgent.pts} pts / ±${acc.crossAgent.costPct}%) and ` +
         `${codingAgentEstimates.model} rows from Terminal-Bench 4.0 (LOOCV n=${acc.model.n}: ±${acc.model.pts} pts / ±${acc.model.costPct}% $/task)`
     );
   }

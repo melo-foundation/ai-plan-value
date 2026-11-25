@@ -425,7 +425,8 @@ if (WRITE_DOC) {
             "",
             "| Method | Marker | Held-out `n` | Agent score median err | `$/task` median err |",
             "|---|---:|---:|---:|---:|",
-            `| Same model, other effort or agent | ‡ | ${a.sameModel.n} | ±${a.sameModel.pts} pts | ±${a.sameModel.costPct}% |`,
+            `| Same model, other effort | ‡ | ${a.sameModel.n} | ±${a.sameModel.pts} pts | ±${a.sameModel.costPct}% |`,
+            ...(a.crossAgent ? [`| Same model, other agent | ‡ | ${a.crossAgent.n} | ±${a.crossAgent.pts} pts | ±${a.crossAgent.costPct}% |`] : []),
             `| Terminal-Bench 4.0 fit | ‡ | ${a.model.n} | ±${a.model.pts} pts | ±${a.model.costPct}% |`,
             "",
           ];

@@ -1172,8 +1172,11 @@ function renderMeta() {
     $("extrapErrNote").textContent = ` (typical error ~±${acc.extrap.intelPts1}–${acc.extrap.intelPtsAll} pts / ±${acc.extrap.costPct1}–${acc.extrap.costPctAll}% $/task)`;
   }
   const ag = ds.stats?.codingAgentEstimates?.accuracy;
-  if (ag?.sameModel?.pts != null && ag?.model?.pts != null && $("agentErrNote")) {
-    $("agentErrNote").textContent = ` (typical error ~±${ag.sameModel.pts}–${ag.model.pts} pts / ±${ag.sameModel.costPct}–${ag.model.costPct}% $/task)`;
+  const agParts = [ag?.sameModel, ag?.crossAgent, ag?.model].filter((x) => x?.pts != null && x?.costPct != null);
+  if (agParts.length && $("agentErrNote")) {
+    const lo = (k) => Math.min(...agParts.map((x) => x[k]));
+    const hi = (k) => Math.max(...agParts.map((x) => x[k]));
+    $("agentErrNote").textContent = ` (typical error ~±${lo("pts")}–${hi("pts")} pts / ±${lo("costPct")}–${hi("costPct")}% $/task)`;
   }
 }
 

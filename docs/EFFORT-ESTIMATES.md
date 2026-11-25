@@ -21,7 +21,8 @@ Every held-out test point is excluded from both the scaling curves and regressio
 
 | Method | Marker | Held-out `n` | Agent score median err | `$/task` median err |
 |---|---:|---:|---:|---:|
-| Same model, other effort or agent | ‡ | 17 | ±1.4 pts | ±11% |
+| Same model, other effort | ‡ | 17 | ±1.4 pts | ±11% |
+| Same model, other agent | ‡ | 312 | ±2.7 pts | ±31% |
 | Terminal-Bench 4.0 fit | ‡ | 43 | ±2.8 pts | ±19% |
 
 ## How Each Method Works
