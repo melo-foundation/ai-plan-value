@@ -71,8 +71,7 @@ const state = {
   hideLegacy: true,
   hideOffPeak: true,
   hideEstimated: false,
-  hideInterpolated: false,
-  showExtrapolated: false,
+  estTier: "high", // max estimate confidence tier shown: "none" | "high" | "medium" | "low"
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
@@ -232,24 +231,33 @@ function estMark(r) {
   return `<span class="est-star" title="${esc(tip)}">*</span>`;
 }
 
-function interpMark(r) {
-  if (r.effortEstimate === "interpolated") {
-    return `<span class="est-star" title="Interpolated reasoning effort (bracketed between measured efforts on this model)">†</span>`;
-  }
-  if (r.effortEstimateSource === "agent-same-model") {
+const TIER_RANK = { high: 0, medium: 1, low: 2 };
+const TIER_GLYPH = { high: "●", medium: "◐", low: "○" };
+const TIER_LABEL = { high: "High", medium: "Medium", low: "Low" };
+
+function estimateMethod(r) {
+  if (state.benchKey === "codingAgentIndex") {
     const a = r.codingAgent || {};
-    return `<span class="est-star" title="${esc(`Estimated from ${a.fromAgent} run at ${a.fromEffort} effort`)}">‡</span>`;
+    if (a.estimate === "same-model") return `${a.fromAgent} run at ${a.fromEffort} effort`;
+    if (a.estimate === "terminal-bench") return a.outOfRange ? "Terminal-Bench 4.0, below measured range" : "Terminal-Bench 4.0";
+    return "";
   }
-  if (r.effortEstimateSource === "agent-terminal-bench") {
-    return `<span class="est-star" title="Estimated from Terminal-Bench 4.0">‡</span>`;
-  }
-  if (r.effortEstimate === "extrapolated") {
-    const src = r.effortEstimateSource === "arc-agi-2"
-      ? "ARC-AGI-2 effort ratios"
-      : "other measured models in the same family";
-    return `<span class="est-star" title="Extrapolated reasoning effort (estimated from ${src}, not directly benchmarked)">‡</span>`;
-  }
-  return "";
+  if (r.effortEstimate === "interpolated") return "interpolated between measured efforts";
+  if (r.effortEstimateSource === "arc-agi-2") return "ARC-AGI-2 effort ratios";
+  const n = r.effortEstimateSteps;
+  return n ? `same-family effort steps (${n} from measured)` : "same-family effort steps";
+}
+
+function interpMark(r) {
+  if (!r.estTier) return "";
+  const tip = `${TIER_LABEL[r.estTier]} confidence estimate: ${estimateMethod(r)}`;
+  return `<span class="est-star est-tier" title="${esc(tip)}">${TIER_GLYPH[r.estTier]}</span>`;
+}
+
+function passesEstTier(r, maxTier = state.estTier) {
+  if (!r.estTier) return true;
+  if (maxTier === "none") return false;
+  return TIER_RANK[r.estTier] <= TIER_RANK[maxTier];
 }
 
 function isLegacyEntry(r) {
@@ -350,13 +358,8 @@ function getAllEntriesResolved() {
       return {
         ...e,
         ...accessMeta,
-        ...(agentMode
-          ? {
-              effortEstimate: e.codingAgent?.estimate ? "extrapolated" : null,
-              effortEstimateSource: e.codingAgent?.estimate ? `agent-${e.codingAgent.estimate}` : null,
-              harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness,
-            }
-          : {}),
+        estTier: agentMode ? e.codingAgent?.confidence ?? null : e.estimateConfidence ?? null,
+        ...(agentMode ? { harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
         isApi,
         score,
         subsidy,
@@ -371,7 +374,7 @@ function getAllEntriesResolved() {
 function getFilteredRows(allResolved, includeExtrapOverride = null) {
   const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
   const maxCost = currentCostStops()[state.maxCostIdx].max;
-  const allowExtrap = includeExtrapOverride ?? state.showExtrapolated;
+  const maxTier = includeExtrapOverride ?? state.estTier;
 
   const out = [];
   for (const r of allResolved) {
@@ -386,8 +389,7 @@ function getFilteredRows(allResolved, includeExtrapOverride = null) {
     if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
     if (state.hideEstimated && r.isPreliminary) continue;
-    if (state.hideInterpolated && r.effortEstimate === "interpolated") continue;
-    if (!allowExtrap && r.effortEstimate === "extrapolated") continue;
+    if (!passesEstTier(r, maxTier)) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
@@ -405,8 +407,7 @@ function renderPlanDrawer(planName, allResolved) {
       cleanPlan(e) === planName &&
       e.effectiveCost != null &&
       !(state.hideEstimated && e.isPreliminary) &&
-      !(state.hideInterpolated && e.effortEstimate === "interpolated") &&
-      (state.showExtrapolated || e.effortEstimate !== "extrapolated")
+      passesEstTier(e)
   );
 
   // Collect effort columns actually present in this plan, ordered low -> max
@@ -455,9 +456,9 @@ function renderPlanDrawer(planName, allResolved) {
               : e.intelligenceIndex != null && state.benchKey !== "codingAgentIndex"
                 ? `II ${e.intelligenceIndex.toFixed(1)}`
                 : "—";
-          const isExtrap = e.effortEstimate === "extrapolated";
-          const scoreTilde = isExtrap ? "~" : "";
-          const costTilde = isExtrap && state.costMode !== "tokens" ? "~" : "";
+          const isExtrap = e.estTier === "medium" || e.estTier === "low";
+          const scoreTilde = e.estTier ? "~" : "";
+          const costTilde = e.estTier && state.costMode !== "tokens" ? "~" : "";
           return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costTilde}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${scoreTilde}${esc(scoreStr)}</span></td>`;
         })
         .join("");
@@ -545,8 +546,8 @@ function renderBarChart(rows, allResolved) {
         ? ""
         : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
-      const isExtrap = r.effortEstimate === "extrapolated";
-      const costTilde = isExtrap && state.costMode !== "tokens" ? "~" : "";
+      const isExtrap = r.estTier === "medium" || r.estTier === "low";
+      const costTilde = r.estTier && state.costMode !== "tokens" ? "~" : "";
 
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
@@ -557,7 +558,7 @@ function renderBarChart(rows, allResolved) {
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
             <span class="bar-val">${costTilde}${fmtUsd(r.effectiveCost)}</span>
-            <span class="bar-note">${isExtrap ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
+            <span class="bar-note">${r.estTier ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
           ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
         </div>
@@ -690,10 +691,10 @@ function renderTable(rows) {
       ? `<td class="meta-cell col-hide-sm"></td>`
       : `<td class="meta-cell col-hide-sm"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
 
-    const isExtrap = r.effortEstimate === "extrapolated";
+    const isExtrap = r.estTier === "medium" || r.estTier === "low";
     const rowCls = [grouped ? "grouped-item" : "", isExtrap ? "is-extrapolated" : ""].filter(Boolean).join(" ");
-    const scoreTilde = isExtrap ? "~" : "";
-    const costTilde = isExtrap && !isTokens ? "~" : "";
+    const scoreTilde = r.estTier ? "~" : "";
+    const costTilde = r.estTier && !isTokens ? "~" : "";
 
     return `
       <tr${rowCls ? ` class="${rowCls}"` : ""}>
@@ -975,8 +976,11 @@ function loadStateFromUrl() {
   if (params.get("legacy") === "1") state.hideLegacy = false;
   if (params.get("offpeak") === "1") state.hideOffPeak = false;
   if (params.get("noest") === "1") state.hideEstimated = true;
-  if (params.get("nointerp") === "1") state.hideInterpolated = true;
-  if (params.get("extrap") === "1") state.showExtrapolated = true;
+  // Legacy: nointerp=1 → no estimates, extrap=1 → all estimates
+  if (params.get("nointerp") === "1") state.estTier = "none";
+  if (params.get("extrap") === "1") state.estTier = "low";
+  const estParam = params.get("est");
+  if (["none", "high", "medium", "low"].includes(estParam)) state.estTier = estParam;
   if (params.get("nocn") === "1") state.hideCnPortal = true;
   if (params.get("api") === "1") state.showApi = true;
   if (params.get("open") === "1") state.openWeightsOnly = true;
@@ -1032,8 +1036,7 @@ function syncControlsFromState() {
   $("hideLegacy").checked = state.hideLegacy;
   $("hideOffPeak").checked = state.hideOffPeak;
   $("hideEstimated").checked = state.hideEstimated;
-  if ($("hideInterpolated")) $("hideInterpolated").checked = state.hideInterpolated;
-  if ($("showExtrapolated")) $("showExtrapolated").checked = state.showExtrapolated;
+  if ($("estTier")) $("estTier").value = state.estTier;
   $("hideCnPortal").checked = state.hideCnPortal;
   $("showApi").checked = state.showApi;
   $("openWeightsOnly").checked = state.openWeightsOnly;
@@ -1066,8 +1069,7 @@ function syncUrlFromState() {
     if (!state.hideLegacy) params.set("legacy", "1");
     if (!state.hideOffPeak) params.set("offpeak", "1");
     if (state.hideEstimated) params.set("noest", "1");
-    if (state.hideInterpolated) params.set("nointerp", "1");
-    if (state.showExtrapolated) params.set("extrap", "1");
+    if (state.estTier !== "high") params.set("est", state.estTier);
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
     if (state.openWeightsOnly) params.set("open", "1");
@@ -1114,37 +1116,25 @@ function render() {
   renderBarChart(rows, allResolved);
   renderTable(rows);
   if ($("extrapBanner")) {
-    $("extrapBanner").hidden = !state.showExtrapolated;
+    $("extrapBanner").hidden = state.estTier !== "low";
   }
   if ($("extrapFooter")) {
-    const hasAnyExtrap = allResolved.some((r) => r.effortEstimate === "extrapolated");
-    $("extrapFooter").hidden = state.showExtrapolated || !hasAnyExtrap;
-    if (!state.showExtrapolated && hasAnyExtrap && $("extrapFooterText")) {
-      const hiddenVariants = new Set(
-        getFilteredRows(allResolved, true)
-          .filter((r) => r.effortEstimate === "extrapolated")
-          .map((r) => r.modelId)
-      ).size;
-      $("extrapFooterText").textContent =
-        state.benchKey === "codingAgentIndex"
-          ? hiddenVariants > 0
-            ? `${hiddenVariants} more ${hiddenVariants === 1 ? "model has" : "models have"} estimated agent scores matching these filters.`
-            : "Estimated agent scores are hidden."
-          : hiddenVariants > 0
-            ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
-            : "Rough estimates for unmeasured reasoning levels are hidden.";
+    const hiddenModels =
+      state.estTier === "low"
+        ? 0
+        : new Set(
+            getFilteredRows(allResolved, "low")
+              .filter((r) => !passesEstTier(r))
+              .map((r) => r.modelId)
+          ).size;
+    $("extrapFooter").hidden = hiddenModels === 0;
+    if (hiddenModels > 0 && $("extrapFooterText")) {
+      $("extrapFooterText").textContent = `${hiddenModels} more ${hiddenModels === 1 ? "model" : "models"} with lower-confidence estimates ${hiddenModels === 1 ? "matches" : "match"} these filters.`;
     }
   }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
-  if ($("interpFootnote")) {
-    $("interpFootnote").hidden = !rows.some((r) => r.effortEstimate === "interpolated");
-  }
-  if ($("extrapFootnote")) {
-    $("extrapFootnote").hidden = !rows.some((r) => r.effortEstimate === "extrapolated");
-    $("extrapFootnote").textContent =
-      state.benchKey === "codingAgentIndex"
-        ? "‡ Estimated agent score: same model at another effort or in another agent, else Terminal-Bench 4.0."
-        : "‡ Extrapolated reasoning effort (estimated from same-family models or ARC-AGI-2, not directly benchmarked).";
+  if ($("tierFootnote")) {
+    $("tierFootnote").hidden = !rows.some((r) => r.estTier);
   }
   syncUrlFromState();
 }
@@ -1158,25 +1148,13 @@ function renderMeta() {
     : ds.latestDataDate;
   $("updatedAt").textContent = `Updated ${stamp}`;
 
-  const acc = ds.stats?.effortAccuracy;
-  if (acc?.interp?.intelPts != null && acc?.interp?.costPct != null && $("interpErrNote")) {
-    $("interpErrNote").textContent = ` (typical error ~±${acc.interp.intelPts} pts / ±${acc.interp.costPct}% $/task)`;
-  }
-  if (
-    acc?.extrap?.intelPts1 != null &&
-    acc?.extrap?.intelPtsAll != null &&
-    acc?.extrap?.costPct1 != null &&
-    acc?.extrap?.costPctAll != null &&
-    $("extrapErrNote")
-  ) {
-    $("extrapErrNote").textContent = ` (typical error ~±${acc.extrap.intelPts1}–${acc.extrap.intelPtsAll} pts / ±${acc.extrap.costPct1}–${acc.extrap.costPctAll}% $/task)`;
-  }
-  const ag = ds.stats?.codingAgentEstimates?.accuracy;
-  const agParts = [ag?.sameModel, ag?.crossAgent, ag?.model].filter((x) => x?.pts != null && x?.costPct != null);
-  if (agParts.length && $("agentErrNote")) {
-    const lo = (k) => Math.min(...agParts.map((x) => x[k]));
-    const hi = (k) => Math.max(...agParts.map((x) => x[k]));
-    $("agentErrNote").textContent = ` (typical error ~±${lo("pts")}–${hi("pts")} pts / ±${lo("costPct")}–${hi("costPct")}% $/task)`;
+  const tiers = ds.stats?.estimateTiers || {};
+  for (const t of ["high", "medium", "low"]) {
+    const r = tiers[t];
+    const el = $(`tierErr-${t}`);
+    if (!r || !el) continue;
+    const span = (lo, hi) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
+    el.textContent = ` (typical error ~±${span(r.ptsLo, r.ptsHi)} pts / ±${span(r.costLo, r.costHi)}% $/task)`;
   }
 }
 
@@ -1307,28 +1285,22 @@ $("hideEstimated").addEventListener("change", (e) => {
   render();
 });
 
-$("hideInterpolated")?.addEventListener("change", (e) => {
-  state.hideInterpolated = e.target.checked;
-  updateSettingsBadge();
-  render();
-});
-
-$("showExtrapolated")?.addEventListener("change", (e) => {
-  state.showExtrapolated = e.target.checked;
+$("estTier")?.addEventListener("change", (e) => {
+  state.estTier = e.target.value;
   updateSettingsBadge();
   render();
 });
 
 $("disableExtrapBtn")?.addEventListener("click", () => {
-  state.showExtrapolated = false;
-  if ($("showExtrapolated")) $("showExtrapolated").checked = false;
+  state.estTier = "medium";
+  if ($("estTier")) $("estTier").value = state.estTier;
   updateSettingsBadge();
   render();
 });
 
 $("enableExtrapBtn")?.addEventListener("click", () => {
-  state.showExtrapolated = true;
-  if ($("showExtrapolated")) $("showExtrapolated").checked = true;
+  state.estTier = "low";
+  if ($("estTier")) $("estTier").value = state.estTier;
   updateSettingsBadge();
   render();
 });
@@ -1361,8 +1333,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
-  state.hideInterpolated = false;
-  state.showExtrapolated = false;
+  state.estTier = "high";
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
@@ -1376,8 +1347,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;
-  if ($("hideInterpolated")) $("hideInterpolated").checked = false;
-  if ($("showExtrapolated")) $("showExtrapolated").checked = false;
+  if ($("estTier")) $("estTier").value = "high";
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;

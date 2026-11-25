@@ -993,6 +993,49 @@ function resolveCodingAgent(entry, agentIndex) {
 }
 
 /**
+ * Confidence tier for an estimate, graded by LOOCV median error (docs/EFFORT-ESTIMATES.md):
+ *   high ≤1.5 pts, medium ≤3 pts, low >3 pts or outside validated range.
+ */
+const TIER_RANK = { high: 0, medium: 1, low: 2 };
+// Live per-tier median error ranges for the methodology panel (pts and $/task %).
+function buildEstimateTiers(effortAcc, agentAcc) {
+  const x = effortAcc?.extrap || {};
+  const range = (parts) => {
+    const q = parts.filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (!q.length) return null;
+    return {
+      ptsLo: Math.min(...q.map((p) => p[0])), ptsHi: Math.max(...q.map((p) => p[0])),
+      costLo: Math.min(...q.map((p) => p[1])), costHi: Math.max(...q.map((p) => p[1])),
+    };
+  };
+  return {
+    high: range([[effortAcc?.interp?.intelPts, effortAcc?.interp?.costPct], [x.intelPts1, x.costPct1],
+      [agentAcc?.sameModel?.pts, agentAcc?.sameModel?.costPct]]),
+    medium: range([[x.intelPts2, x.costPct2], [agentAcc?.crossAgent?.pts, agentAcc?.crossAgent?.costPct],
+      [agentAcc?.model?.pts, agentAcc?.model?.costPct]]),
+    low: range([[x.intelPts3, x.costPct3]]),
+  };
+}
+function effortConfidence(e) {
+  if (!e.effortEstimate) return null;
+  if (e.effortEstimate === "interpolated") return "high"; // ±1.1
+  if (e.effortEstimateSource === "arc-agi-2") return "medium"; // ±2.8–3.0
+  const steps = e.effortEstimateSteps ?? 9;
+  return steps <= 1 ? "high" : steps === 2 ? "medium" : "low"; // ±1.4 / ±2.5 / ±3.1–4.6
+}
+function agentConfidence(e) {
+  const a = e.codingAgent;
+  if (!a?.estimate) return null;
+  const method =
+    a.estimate === "same-model"
+      ? a.crossAgent ? "medium" : "high" // ±1.4 same agent; ±2.7 copied from another harness
+      : a.outOfRange ? "low" : "medium"; // fit ±2.8 in range; untested below it
+  // Stacking: an agent estimate built on an estimated II / benchmark is no better than that input.
+  const input = effortConfidence(e);
+  return input && TIER_RANK[input] > TIER_RANK[method] ? input : method;
+}
+
+/**
  * Fill Coding Agent Index for rows AA has not run, as ‡ estimates.
  *  - same-model: nearest measured effort of the same base model (pinned agent first, else any agent),
  *    shifted 1:1 by the Intelligence Index gap (LOOCV beat ratio, 0.8 slope and Terminal-Bench shifts,
@@ -1111,6 +1154,7 @@ function estimateCodingAgents(entries, agentIndex) {
         ...fromSibling(s, ii, aac),
         wallTimeSec: null,
         estimate: "same-model",
+        crossAgent: Boolean(pinned && s.agentSlug !== pinned),
         fromAgent: s.agent,
         fromEffort: s.effort,
       };
@@ -1120,7 +1164,9 @@ function estimateCodingAgents(entries, agentIndex) {
     const tb = e.benchmarks?.terminalBench40;
     const [fit, x] = tbFit && Number.isFinite(tb) ? [tbFit, tb] : iiFit ? [iiFit, ii] : [null, null];
     if (!fit) continue;
+    const xKey = fit === tbFit ? "tb" : "ii";
     e.codingAgent = {
+      outOfRange: x < Math.min(...fitPoints.filter((p) => Number.isFinite(p[xKey])).map((p) => p[xKey])),
       agent: pinned ? agentNames.get(pinned) || null : null,
       agentSlug: pinned,
       ...fromModel(fit, fit === tbFit ? "tb" : "ii", x, ratioAll, aac),
@@ -2061,6 +2107,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, 
         effortLabel: effortSuffix,
         effortEstimate: "extrapolated",
         effortEstimateSource: estimateSource,
+        effortEstimateSteps: Math.abs(targetIdx - anchor.idx),
         displayName: `${baseDisplay} (${effortSuffix})`,
         baseDisplay,
         creatorName: anchor.v.creatorName || null,
@@ -2158,6 +2205,9 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, 
       const effortSuffix = EFFORT_LABELS[eff];
       const baseDisplay = hi.baseDisplay || lo.baseDisplay || baseSlug;
 
+      // Effort steps to the nearest real measurement (neighbours here may themselves be extrapolated)
+      const realIdx = positioned.filter((p) => !p.v.effortEstimate).map((p) => p.idx);
+      const gapSteps = realIdx.length ? Math.min(...realIdx.map((r) => Math.abs(r - idx))) : 9;
       effMap.set(eff, {
         variantKey: `${baseSlug}--${eff}`,
         baseSlug,
@@ -2168,6 +2218,7 @@ function extrapolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm, 
           lo.effortEstimateSource === "arc-agi-2" || hi.effortEstimateSource === "arc-agi-2"
             ? "arc-agi-2"
             : "same-family",
+        effortEstimateSteps: gapSteps,
         displayName: `${baseDisplay} (${effortSuffix})`,
         baseDisplay,
         creatorName: hi.creatorName || lo.creatorName || null,
@@ -2219,6 +2270,7 @@ function computeEffortAccuracy(aaVariantsByBase) {
   const interpCostPct = [];
   const extrap1IntelAbs = [];
   const extrap1CostPct = [];
+  const extrap2IntelAbs = [], extrap2CostPct = [], extrap3IntelAbs = [], extrap3CostPct = [];
   const extrapAllIntelAbs = [];
   const extrapAllCostPct = [];
 
@@ -2322,9 +2374,16 @@ function computeEffortAccuracy(aaVariantsByBase) {
         const errC = (Math.abs(predC - target.cost) / target.cost) * 100;
         extrapAllIntelAbs.push(errI);
         extrapAllCostPct.push(errC);
-        if (Math.abs(target.idx - anchor.idx) === 1) {
+        const stepDist = Math.abs(target.idx - anchor.idx);
+        if (stepDist === 1) {
           extrap1IntelAbs.push(errI);
           extrap1CostPct.push(errC);
+        } else if (stepDist === 2) {
+          extrap2IntelAbs.push(errI);
+          extrap2CostPct.push(errC);
+        } else {
+          extrap3IntelAbs.push(errI);
+          extrap3CostPct.push(errC);
         }
       }
     }
@@ -2343,6 +2402,12 @@ function computeEffortAccuracy(aaVariantsByBase) {
       nAll: extrapAllIntelAbs.length,
       intelPtsAll: extrapAllIntelAbs.length ? round1(median(extrapAllIntelAbs)) : null,
       costPctAll: extrapAllCostPct.length ? Math.round(median(extrapAllCostPct)) : null,
+      n2: extrap2IntelAbs.length,
+      intelPts2: extrap2IntelAbs.length ? round1(median(extrap2IntelAbs)) : null,
+      costPct2: extrap2CostPct.length ? Math.round(median(extrap2CostPct)) : null,
+      n3: extrap3IntelAbs.length,
+      intelPts3: extrap3IntelAbs.length ? round1(median(extrap3IntelAbs)) : null,
+      costPct3: extrap3CostPct.length ? Math.round(median(extrap3CostPct)) : null,
     },
   };
 }
@@ -3662,6 +3727,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
             effort: v.effort,
             effortEstimate: v.effortEstimate || null,
             effortEstimateSource: v.effortEstimateSource || null,
+            effortEstimateSteps: v.effortEstimateSteps ?? null,
             modelDisplay: v.displayName,
             aaUrl: v.aaUrl || baseEntry.aaUrl,
             aaLive: v.aaLive || baseEntry.aaLive,
@@ -3700,6 +3766,17 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     );
   }
 
+  const tierCounts = { effort: {}, agent: {} };
+  for (const e of expandedEntries) {
+    e.estimateConfidence = effortConfidence(e);
+    if (e.estimateConfidence) tierCounts.effort[e.estimateConfidence] = (tierCounts.effort[e.estimateConfidence] || 0) + 1;
+    if (e.codingAgent?.estimate) {
+      e.codingAgent.confidence = agentConfidence(e);
+      tierCounts.agent[e.codingAgent.confidence] = (tierCounts.agent[e.codingAgent.confidence] || 0) + 1;
+    }
+  }
+  log(`Estimate confidence — effort: ${JSON.stringify(tierCounts.effort)}, agent: ${JSON.stringify(tierCounts.agent)}`);
+
   sourceStatus.openRouter.backfilledContextCount = backfilledContextSlugs.size;
   if (backfilledContextSlugs.size > 0) {
     log(`Backfilled contextWindowTokens for ${backfilledContextSlugs.size} models from OpenRouter`);
@@ -3735,6 +3812,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       arcExtrapolatedVariants,
       effortAccuracy,
       codingAgentEstimates,
+      estimateTiers: buildEstimateTiers(effortAccuracy, codingAgentEstimates?.accuracy),
       unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
     entries: expandedEntries,
