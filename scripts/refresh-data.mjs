@@ -27,6 +27,7 @@ const SOURCES = {
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/points.csv",
   feiConventions:
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/data/conventions.json",
+  fxUsdCny: "https://api.frankfurter.app/latest?from=USD&to=CNY",
   feiBenchConfigsCsv:
     "https://raw.githubusercontent.com/Fei2411/real-api-pricing/main/derived/benchmark-configurations.csv",
   priorsSnapshotGz:
@@ -2284,6 +2285,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       multiEffortModelCount: 0,
       error: null,
     },
+    fxUsdCny: {
+      name: "Frankfurter (ECB) USD/CNY",
+      url: SOURCES.fxUsdCny,
+      ok: false,
+      fetchedAt: null,
+      cnyPerUsd: null,
+      rateDate: null,
+      usedFallback: true,
+      error: null,
+    },
     aaCodingAgents: {
       name: "Artificial Analysis (Coding Agents)",
       url: SOURCES.aaCodingAgents,
@@ -2297,6 +2308,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   let feiCsvText = null;
   let feiConventionsJson = null;
+  let fxJson = null;
   let feiBenchCsvText = null;
   let priorsGzBuf = null;
   let aaHtml = null;
@@ -2327,6 +2339,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.feiPointsCsv)
         .then((t) => { feiCsvText = t; })
         .catch((err) => { sourceStatus.fei2411.error = err.message; }),
+      fetchText(SOURCES.fxUsdCny)
+        .then((t) => { fxJson = JSON.parse(t); })
+        .catch((err) => { sourceStatus.fxUsdCny.error = err.message; }),
       fetchText(SOURCES.feiConventions)
         .then((t) => { feiConventionsJson = JSON.parse(t); })
         .catch((err) => { log("Fei conventions.json fetch failed (using defaults):", err.message); }),
@@ -2458,6 +2473,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   // 1e. Fei2411 workload mixes + CNY/USD rate
   const feiConventions = feiConventionsJson ? parseFeiConventions(feiConventionsJson) : DEFAULT_FEI_CONVENTIONS;
   log(`Fei2411 conventions: ${feiConventionsJson ? "fetched" : "defaults"} (CNY/USD ${feiConventions.cnyPerUsd}, mixes: ${Object.keys(feiConventions.mixes).join("/")})`);
+
+  // 1f. Live USD/CNY (ECB via Frankfurter); falls back to Fei2411's published rate.
+  let liveCnyPerUsd = feiConventions.cnyPerUsd;
+  const fxRate = toNum(fxJson?.rates?.CNY);
+  if (fxRate && fxRate > 3 && fxRate < 15) {
+    liveCnyPerUsd = fxRate;
+    Object.assign(sourceStatus.fxUsdCny, { ok: true, fetchedAt: nowIso, cnyPerUsd: fxRate, rateDate: fxJson.date || null, usedFallback: false });
+  } else {
+    sourceStatus.fxUsdCny.cnyPerUsd = liveCnyPerUsd;
+    sourceStatus.fxUsdCny.error = sourceStatus.fxUsdCny.error || (fxJson ? "No CNY rate in response" : "Not fetched");
+  }
+  log(`USD/CNY: ${liveCnyPerUsd}${sourceStatus.fxUsdCny.usedFallback ? " (Fei2411 fallback)" : ` (ECB ${sourceStatus.fxUsdCny.rateDate})`}`);
+  let fxRescaledRows = 0;
 
   // 2. Parse Fei2411 derived/points.csv
   let feiRows = [];
@@ -2665,11 +2693,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
 
     const unmetered = String(r.unmetered).toLowerCase() === "true";
-    const priceUsd = toNum(r.price_usd);
+    let priceUsd = toNum(r.price_usd);
     const monthlyYi = toNum(r.monthly_yi);
-    const realUsdPerMtok = toNum(r.real_usd_per_mtok);
+    let realUsdPerMtok = toNum(r.real_usd_per_mtok);
     const orModel = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
-    const feiListPrice = parseListPriceDict(r.list_price, feiConventions.cnyPerUsd);
+    const feiListPrice = parseListPriceDict(r.list_price, liveCnyPerUsd);
     const aaP = aaModel?.pricing?.inputPer1M != null ? aaModel.pricing : orModel?.pricing;
     const rateP = feiListPrice?.inputPer1M != null ? feiListPrice : aaP;
     // Fei2411 converts each row's API-worth into monthly tokens with that row's workload mix
@@ -2682,7 +2710,18 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const standardBlended = blendedForMix(rateP, feiConventions.mixes.standard);
     const listBlendedUsdPerMtok = ownMixBlended ?? toNum(r.list_blended_usd_per_mtok) ?? standardBlended;
     const usesOwnMix = ownMixBlended != null;
-    const discountRatio = toNum(r.d);
+    let discountRatio = toNum(r.d);
+    // Re-price CNY fees that Fei2411 converted at its own (dated) rate onto today's rate.
+    // Fees Fei2411 priced in USD separately (e.g. Kimi CN, MiMo) don't match its rate and are left as-is.
+    const cnyFee = toNum(String(`${r.local_price || ""} ${r.plan || ""} ${r.plan_en || ""}`).match(/¥\s*([\d,]+(?:\.\d+)?)/)?.[1]?.replace(/,/g, ""));
+    if (cnyFee && priceUsd > 0 && Math.abs(cnyFee / feiConventions.cnyPerUsd - priceUsd) / priceUsd < 0.01 && liveCnyPerUsd !== feiConventions.cnyPerUsd) {
+      const scale = cnyFee / liveCnyPerUsd / priceUsd;
+      priceUsd = Number((cnyFee / liveCnyPerUsd).toFixed(4));
+      if (realUsdPerMtok) realUsdPerMtok *= scale;
+      // d = real / standard-blended list: CNY list prices move with the fee (cancels), USD list prices don't.
+      if (discountRatio && feiListPrice?.sourceCurrency !== "CNY") discountRatio *= scale;
+      fxRescaledRows++;
+    }
 
     let subsidyMultiple = null;
     if (billing === "metered") {
@@ -3433,6 +3472,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       );
     }
   }
+
+  if (fxRescaledRows > 0) log(`Re-priced ${fxRescaledRows} CNY-fee Fei2411 rows at USD/CNY ${liveCnyPerUsd}`);
 
   sourceStatus.aaCodingAgents.matchedEntries = expandedEntries.filter((e) => e.codingAgent).length;
   if (agentIndex) {

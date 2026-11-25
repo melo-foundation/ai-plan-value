@@ -194,7 +194,8 @@ async function main() {
         (key === "githubCopilot" && !src.tierCount) ||
         (key === "ollamaCloud" && !src.tierCount) ||
         (key === "kiloPass" && !src.tierCount) ||
-        (key === "arcPrize" && !src.multiEffortModelCount);
+        (key === "arcPrize" && !src.multiEffortModelCount) ||
+        (key === "aaCodingAgents" && !src.configCount);
       if (!src.ok || empty) {
         failedSources.push({
           name: src.name || key,
