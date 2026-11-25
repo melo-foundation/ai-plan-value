@@ -259,78 +259,130 @@ function detectPlanFlags(planName, planLocal = "") {
   return { isOffPeak, isLegacy, isCnPortal };
 }
 
-const QUOTA_WINDOW_LABELS = {
-  monthly: "Monthly pool",
-  weekly: "Weekly cap",
-  rolling: "5h / daily",
-  payg: "Pay-as-you-go",
-};
+// Usage-limit reset windows per plan family, binding window first.
+// Verified against official vendor pages on 2026-11-25:
+//   Claude: claude.com/pricing, support.claude.com/en/articles/11647753 (Ultra: no 5h for verified accounts)
+//   ChatGPT: help.openai.com/articles/9793128 (Plus 5h + weekly; Pro tiers weekly only)
+//   Google AI: antigravity.google/docs/plans (5h refresh until weekly limit)
+//   Grok: docs.x.ai/x-subscription/pricing (one weekly pool since 2026-06)
+//   Devin: docs.devin.ai/admin/billing/self-serve (Pro daily + weekly; Max weekly)
+//   Mistral: docs.mistral.ai/admin/billing-usage/subscriptions (monthly)
+//   Copilot: docs.github.com/.../usage-based-billing-for-individuals (monthly credits, resets on the 1st)
+//   Cursor legacy Pro/Pro+/Ultra: cursor.com/docs/account/pricing/legacy-cursor-plans (monthly pools)
+//   Command Code: commandcode.ai/docs/resources/pricing-limits (5h $20, 7d $50, monthly $100)
+//   Factory Droid: docs.factory.com/pricing (rolling 5h, 7d, 30d)
+//   OpenCode Go: opencode.ai/docs/go (5h 20%, weekly 50%, monthly)
+//   Ollama: ollama.com/blog/transparent-pricing (monthly credits, no 5h/weekly)
+//   Kilo Pass: kilo.ai/pricing/kilo-pass (credit balance, no time windows)
+//   GLM Coding: docs.bigmodel.cn/cn/coding-plan/overview (5h + weekly; weekly = 5x 5h)
+//   MiniMax: platform.minimax.io/docs/m-plan/usage-rules (5h + weekly)
+//   Kimi: kimi.com/en/help/membership/membership-update-rules (new: monthly + 5h; legacy: weekly + 5h + monthly)
+//   Alibaba / Tencent / MiMo / StepFun token plans: monthly credit pool only
+const QUOTA_WINDOW_NAMES = { "5h": "5h", daily: "daily", weekly: "weekly", "7d": "7-day", "30d": "30-day", monthly: "monthly" };
+
+function quotaWindowsForPlan(p) {
+  if (/^kilo pass\b/i.test(p)) return [];
+  if (/^ollama\b/i.test(p)) return ["monthly"];
+  if (/^opencode\b/i.test(p)) return ["5h", "weekly", "monthly"];
+  if (/^glm coding\b/i.test(p)) return ["weekly", "5h"];
+  if (/^minimax\b/i.test(p)) return ["5h", "weekly"];
+  if (/^kimi\s+(?:moderato|allegretto|allegro|andante)\b/i.test(p)) return ["weekly", "5h", "monthly"];
+  if (/^kimi\b/i.test(p)) return ["monthly", "5h"];
+  if (/qwen token plan|alibaba|阿里云百炼|^tencent token|^mimo token|^step plan|^deeprelay\b/i.test(p)) return ["monthly"];
+  if (/^claude\s+ultra\b/i.test(p)) return ["weekly"];
+  if (/^claude\b/i.test(p)) return ["5h", "weekly"];
+  if (/^chatgpt\s+plus\b/i.test(p)) return ["5h", "weekly"];
+  if (/^chatgpt\b/i.test(p)) return ["weekly"];
+  if (/^devin\s+max\b/i.test(p)) return ["weekly"];
+  if (/^devin\b/i.test(p)) return ["daily", "weekly"];
+  if (/^github copilot\b/i.test(p)) return ["monthly"];
+  if (/^cursor\b/i.test(p)) return ["monthly"];
+  if (/^command code\b/i.test(p)) return ["5h", "weekly", "monthly"];
+  if (/^droid\b/i.test(p)) return ["5h", "7d", "30d"];
+  if (/^google ai\b/i.test(p)) return ["weekly", "5h"];
+  if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) return ["weekly"];
+  if (/^mistral\b/i.test(p)) return ["monthly"];
+  return ["monthly"];
+}
+
+function quotaWindowMeta(windows, billing) {
+  if (billing === "metered") return { quotaWindows: ["payg"], quotaWindow: "payg", quotaWindowLabel: "Pay-as-you-go" };
+  if (!windows.length) return { quotaWindows: [], quotaWindow: "none", quotaWindowLabel: "Limits: none (credits)" };
+  return {
+    quotaWindows: windows,
+    quotaWindow: windows[0],
+    quotaWindowLabel: `Limits: ${windows.map((w) => QUOTA_WINDOW_NAMES[w] || w).join(", ")}`,
+  };
+}
 
 function detectPlanAccessAndWindow(planName, billing) {
+  const meta = detectPlanAccess(planName, billing);
+  return { ...meta, ...quotaWindowMeta(quotaWindowsForPlan(String(planName || "")), billing) };
+}
+
+function detectPlanAccess(planName, billing) {
   if (billing === "metered") {
     return {
       openEndpoint: true,
       harness: "Any API / CLI",
-      quotaWindow: "payg",
-      quotaWindowLabel: QUOTA_WINDOW_LABELS.payg,
     };
   }
   const p = String(planName || "");
   if (/^kilo pass\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Kilo / OpenAI API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: true, harness: "Kilo / OpenAI API" };
   }
   if (/^ollama\s+team\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/^ollama\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/^opencode\b/i.test(p)) {
-    return { openEndpoint: true, harness: "OpenCode / API", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+    return { openEndpoint: true, harness: "OpenCode / API" };
   }
   if (/^glm coding\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/^minimax\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/^kimi\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/qwen token plan|alibaba|阿里云百炼|^tencent token|^mimo token|^step plan|^deeprelay\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: true, harness: "Any CLI / API" };
   }
   if (/^claude\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Claude Code / Web", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+    return { openEndpoint: false, harness: "Claude Code / Web" };
   }
   if (/^chatgpt\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Codex / Web", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+    return { openEndpoint: false, harness: "Codex / Web" };
   }
   if (/^devin\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Devin Agent", quotaWindow: "weekly", quotaWindowLabel: QUOTA_WINDOW_LABELS.weekly };
+    return { openEndpoint: false, harness: "Devin Agent" };
   }
   if (/^github copilot\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Copilot IDE / CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: false, harness: "Copilot IDE / CLI" };
   }
   if (/^cursor\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Cursor IDE", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: false, harness: "Cursor IDE" };
   }
   if (/^command code\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Command Code CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: false, harness: "Command Code CLI" };
   }
   if (/^droid\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Factory Droid CLI", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly };
+    return { openEndpoint: false, harness: "Factory Droid CLI" };
   }
   if (/^google ai\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+    return { openEndpoint: false, harness: "Gemini CLI / Web" };
   }
   if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: QUOTA_WINDOW_LABELS.rolling };
+    return { openEndpoint: false, harness: "Grok Web / App" };
   }
   if (/^mistral\b/i.test(p)) {
-    return { openEndpoint: false, harness: "Le Chat / Vibe", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly, matched: true };
+    return { openEndpoint: false, harness: "Le Chat / Vibe", matched: true };
   }
-  return { openEndpoint: false, harness: "First-party app", quotaWindow: "monthly", quotaWindowLabel: QUOTA_WINDOW_LABELS.monthly, matched: false };
+  return { openEndpoint: false, harness: "First-party app", matched: false };
 }
 
 function resolvePlanUrl(planName, vendor, billing) {
@@ -3638,6 +3690,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const accessMeta = detectPlanAccessAndWindow(entry.plan, entry.billing);
     entry.openEndpoint = accessMeta.openEndpoint;
     entry.harness = accessMeta.harness;
+    entry.quotaWindows = accessMeta.quotaWindows;
     entry.quotaWindow = accessMeta.quotaWindow;
     entry.quotaWindowLabel = accessMeta.quotaWindowLabel;
     if (accessMeta.matched === false) {

@@ -55,7 +55,6 @@ const BENCHMARKS = {
 };
 
 const ACCESS_FILTERS = new Set(["any", "open", "locked"]);
-const WINDOW_FILTERS = new Set(["any", "monthly", "weekly", "rolling"]);
 
 const state = {
   dataset: null,
@@ -64,7 +63,8 @@ const state = {
   minEffort: "any", // "any" | "none" | "low" | "medium" | "high" | "xhigh" | "max"
   maxEffort: "any",
   accessFilter: "any", // "any" | "open" | "locked"
-  windowFilter: "any", // "any" | "monthly" | "noweekly" | "rolling" | "weekly"
+  no5h: false, // hide plans with a 5h or daily limit
+  noWeekly: false, // hide plans with a weekly / 7-day limit
   minScore: 45,
   budgetIdx: 5,
   maxCostIdx: 4,
@@ -158,45 +158,23 @@ function feeText(r) {
 }
 
 function getPlanAccessMeta(r) {
-  if (typeof r.openEndpoint === "boolean" && r.harness && r.quotaWindow && r.quotaWindowLabel) {
-    return {
-      openEndpoint: r.openEndpoint,
-      harness: r.harness,
-      quotaWindow: r.quotaWindow,
-      quotaWindowLabel: r.quotaWindowLabel,
-    };
-  }
   if (r.billing === "metered" || r.isApi) {
-    return { openEndpoint: true, harness: "Any API / CLI", quotaWindow: "payg", quotaWindowLabel: "Pay-as-you-go" };
+    return { openEndpoint: true, harness: r.harness || "Any API / CLI", quotaWindows: ["payg"], quotaWindowLabel: "Pay-as-you-go" };
   }
-  const p = String(r.plan || "");
-  if (/^kilo pass\b/i.test(p)) return { openEndpoint: true, harness: "Kilo / OpenAI API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^ollama\s+team\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^ollama\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
-  if (/^opencode\b/i.test(p)) return { openEndpoint: true, harness: "OpenCode / API", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
-  if (/^glm coding\b|^minimax\b|^kimi\b/i.test(p)) return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
-  if (/qwen token plan|alibaba|阿里云百炼|^tencent token|^mimo token|^step plan|^deeprelay\b/i.test(p)) {
-    return { openEndpoint: true, harness: "Any CLI / API", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  }
-  if (/^claude\b/i.test(p)) return { openEndpoint: false, harness: "Claude Code / Web", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
-  if (/^chatgpt\b/i.test(p)) return { openEndpoint: false, harness: "Codex / Web", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
-  if (/^devin\b/i.test(p)) return { openEndpoint: false, harness: "Devin Agent", quotaWindow: "weekly", quotaWindowLabel: "Weekly cap" };
-  if (/^github copilot\b/i.test(p)) return { openEndpoint: false, harness: "Copilot IDE / CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^cursor\b/i.test(p)) return { openEndpoint: false, harness: "Cursor IDE", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^command code\b/i.test(p)) return { openEndpoint: false, harness: "Command Code CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^droid\b/i.test(p)) return { openEndpoint: false, harness: "Factory Droid CLI", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  if (/^google ai\b/i.test(p)) return { openEndpoint: false, harness: "Gemini CLI / Web", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
-  if (/^(?:supergrok|x\s+(?:plus|premium|super|ultra))\b/i.test(p)) return { openEndpoint: false, harness: "Grok Web / App", quotaWindow: "rolling", quotaWindowLabel: "5h / daily" };
-  if (/^mistral\b/i.test(p)) return { openEndpoint: false, harness: "Le Chat / Vibe", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
-  return { openEndpoint: false, harness: "First-party app", quotaWindow: "monthly", quotaWindowLabel: "Monthly pool" };
+  return {
+    openEndpoint: Boolean(r.openEndpoint),
+    harness: r.harness || "First-party app",
+    quotaWindows: Array.isArray(r.quotaWindows) ? r.quotaWindows : [],
+    quotaWindowLabel: r.quotaWindowLabel || "",
+  };
 }
 
 function passesAccessAndWindow(r) {
   if (state.accessFilter === "open" && !r.openEndpoint) return false;
   if (state.accessFilter === "locked" && r.openEndpoint) return false;
-  if (state.windowFilter !== "any" && !r.isApi && r.quotaWindow !== state.windowFilter) {
-    return false;
-  }
+  const w = r.quotaWindows || [];
+  if (state.no5h && !r.isApi && (w.includes("5h") || w.includes("daily"))) return false;
+  if (state.noWeekly && !r.isApi && (w.includes("weekly") || w.includes("7d"))) return false;
   return true;
 }
 
@@ -965,8 +943,8 @@ function loadStateFromUrl() {
   const accessRaw = params.get("access");
   if (accessRaw && ACCESS_FILTERS.has(accessRaw)) state.accessFilter = accessRaw;
 
-  const windowRaw = params.get("window");
-  if (windowRaw && WINDOW_FILTERS.has(windowRaw)) state.windowFilter = windowRaw;
+  if (params.get("no5h") === "1") state.no5h = true;
+  if (params.get("noweekly") === "1") state.noWeekly = true;
 
   const minEff = params.get("minEffort");
   if (minEff && NAMED_EFFORTS.has(minEff)) state.minEffort = minEff;
@@ -1041,7 +1019,8 @@ function syncControlsFromState() {
   $("maxBudget").value = String(state.budgetIdx);
   $("costMode").value = state.costMode;
   if ($("accessFilter")) $("accessFilter").value = state.accessFilter;
-  if ($("windowFilter")) $("windowFilter").value = state.windowFilter;
+  if ($("no5h")) $("no5h").checked = state.no5h;
+  if ($("noWeekly")) $("noWeekly").checked = state.noWeekly;
   if ($("minEffort")) $("minEffort").value = state.minEffort;
   if ($("maxEffort")) $("maxEffort").value = state.maxEffort;
   $("maxCost").value = String(state.maxCostIdx);
@@ -1067,7 +1046,8 @@ function syncUrlFromState() {
     if (state.minScore !== meta.def) params.set("min", String(state.minScore));
     if (state.costMode !== "task") params.set("mode", state.costMode);
     if (state.accessFilter !== "any") params.set("access", state.accessFilter);
-    if (state.windowFilter !== "any") params.set("window", state.windowFilter);
+    if (state.no5h) params.set("no5h", "1");
+    if (state.noWeekly) params.set("noweekly", "1");
     if (state.minEffort !== "any") params.set("minEffort", state.minEffort);
     if (state.maxEffort !== "any") params.set("maxEffort", state.maxEffort);
     if (state.budgetIdx !== 5) {
@@ -1367,7 +1347,8 @@ $("openWeightsOnly").addEventListener("change", (e) => {
 $("resetSettingsBtn").addEventListener("click", () => {
   state.costMode = "task";
   state.accessFilter = "any";
-  state.windowFilter = "any";
+  state.no5h = false;
+  state.noWeekly = false;
   state.minEffort = "any";
   state.maxEffort = "any";
   state.maxCostIdx = 4;
@@ -1381,7 +1362,8 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.extraCriteria = [];
   $("costMode").value = "task";
   if ($("accessFilter")) $("accessFilter").value = "any";
-  if ($("windowFilter")) $("windowFilter").value = "any";
+  if ($("no5h")) $("no5h").checked = false;
+  if ($("noWeekly")) $("noWeekly").checked = false;
   if ($("minEffort")) $("minEffort").value = "any";
   if ($("maxEffort")) $("maxEffort").value = "any";
   $("maxCost").value = "4";
@@ -1432,8 +1414,13 @@ $("accessFilter")?.addEventListener("change", (e) => {
   render();
 });
 
-$("windowFilter")?.addEventListener("change", (e) => {
-  state.windowFilter = e.target.value;
+$("no5h")?.addEventListener("change", (e) => {
+  state.no5h = e.target.checked;
+  render();
+});
+
+$("noWeekly")?.addEventListener("change", (e) => {
+  state.noWeekly = e.target.checked;
   render();
 });
 

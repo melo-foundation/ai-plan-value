@@ -229,17 +229,16 @@
                 <option value="locked">First-party app / IDE</option>
               </select>
             </label>
-            <label class="effort-pick">
-              <span>Quota reset</span>
-              <select id="windowFilter" class="select" aria-label="Quota reset window">
-                <option value="any" selected>Any</option>
-                <option value="monthly">Monthly pool</option>
-                <option value="weekly">Weekly cap</option>
-                <option value="rolling">5h / daily</option>
-              </select>
-            </label>
           </div>
           <div class="settings-checks">
+            <label class="settings-check">
+              <input id="no5h" type="checkbox" />
+              <span>No 5h / daily limit</span>
+            </label>
+            <label class="settings-check">
+              <input id="noWeekly" type="checkbox" />
+              <span>No weekly limit</span>
+            </label>
             <label class="settings-check">
               <input id="hideLegacy" type="checkbox" checked />
               <span>Hide legacy / grandfathered plans</span>

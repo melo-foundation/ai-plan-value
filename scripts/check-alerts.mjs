@@ -210,7 +210,7 @@ async function main() {
   const previousForDrift = await loadPreviousDataset();
   if (current && !REFRESH_FAILED) {
     const entries = current.entries || [];
-    const validWindows = new Set(["monthly", "weekly", "rolling", "payg"]);
+    const validWindows = new Set(["5h", "daily", "weekly", "7d", "30d", "monthly", "payg", "none"]);
     const badMeta = entries.filter(
       (e) =>
         typeof e.openEndpoint !== "boolean" ||

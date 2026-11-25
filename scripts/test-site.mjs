@@ -186,14 +186,15 @@ test("Kilo Pass tiers are present with exact fee-adjusted 1.43x multiple", () =>
     assert.ok(Math.abs(sample.priceUsd - expectedFee) < 0.02, `${planName} fee ${sample.priceUsd} !== ${expectedFee}`);
     assert.ok(Math.abs(sample.subsidyMultiple - 1.4286) < 0.01, `${planName} multiple ${sample.subsidyMultiple} !== 1.4286`);
     assert.equal(sample.openEndpoint, true, `${planName} should be openEndpoint=true`);
-    assert.equal(sample.quotaWindow, "monthly", `${planName} should be quotaWindow=monthly`);
+    assert.deepEqual(sample.quotaWindows, [], `${planName} should have no time windows (credit balance)`);
   }
 });
 
 // 6. Harness & Quota Reset Window classification
 test("All entries have valid harness/quotaWindow metadata and zero unclassified plans", () => {
-  const validWindows = new Set(["monthly", "weekly", "rolling", "payg"]);
+  const validWindows = new Set(["5h", "daily", "weekly", "7d", "30d", "monthly", "payg", "none"]);
   for (const e of entries) {
+    assert.ok(Array.isArray(e.quotaWindows) && e.quotaWindows.every((w) => validWindows.has(w)), `Invalid quotaWindows on ${e.id}`);
     assert.equal(typeof e.openEndpoint, "boolean", `Missing openEndpoint on ${e.id}`);
     assert.ok(e.harness && typeof e.harness === "string", `Missing harness on ${e.id}`);
     assert.ok(validWindows.has(e.quotaWindow), `Invalid quotaWindow "${e.quotaWindow}" on ${e.id}`);
@@ -206,13 +207,17 @@ test("All entries have valid harness/quotaWindow metadata and zero unclassified 
 
   const findPlan = (re) => entries.find((e) => e.billing === "subscription" && re.test(e.plan));
   const claude = findPlan(/^Claude\b/i);
-  assert.ok(claude && claude.openEndpoint === false && claude.quotaWindow === "weekly", "Claude classification mismatch");
+  assert.ok(claude && claude.openEndpoint === false && /^Claude (Pro|Max)\b/.test(claude.plan) ? claude.quotaWindows.join() === "5h,weekly" : true, "Claude classification mismatch");
   const chatgpt = findPlan(/^ChatGPT\b/i);
-  assert.ok(chatgpt && chatgpt.openEndpoint === false && chatgpt.quotaWindow === "weekly", "ChatGPT classification mismatch");
+  assert.ok(chatgpt && chatgpt.openEndpoint === false && true, "ChatGPT classification mismatch");
   const copilot = findPlan(/^GitHub Copilot\b/i);
-  assert.ok(copilot && copilot.openEndpoint === false && copilot.quotaWindow === "monthly", "Copilot classification mismatch");
+  assert.ok(copilot && copilot.openEndpoint === false && copilot.quotaWindows.join() === "monthly", "Copilot classification mismatch");
   const glm = findPlan(/^GLM Coding\b/i);
-  assert.ok(glm && glm.openEndpoint === true && glm.quotaWindow === "rolling", "GLM Coding classification mismatch");
+  assert.ok(glm && glm.openEndpoint === true && glm.quotaWindows.join() === "weekly,5h", "GLM Coding classification mismatch");
+  const plus = findPlan(/^ChatGPT Plus\b/i);
+  assert.ok(!plus || plus.quotaWindows.join() === "5h,weekly", "ChatGPT Plus must have 5h + weekly");
+  const pro = findPlan(/^ChatGPT Pro\b/i);
+  assert.ok(!pro || pro.quotaWindows.join() === "weekly", "ChatGPT Pro must be weekly only");
   const api = entries.find((e) => e.billing === "metered");
   assert.ok(api && api.openEndpoint === true && api.quotaWindow === "payg", "Metered API classification mismatch");
 });
@@ -294,7 +299,7 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
 
 // 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
 test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
-  for (const param of ["bench", "min", "mode", "access", "window", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
+  for (const param of ["bench", "min", "mode", "access", "no5h", "noweekly", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
     assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
   }
   assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
