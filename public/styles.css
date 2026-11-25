@@ -821,7 +821,7 @@ details[open] > summary.panel-toggle h2::before {
   border-bottom: 0;
 }
 
-.bar-row:hover {
+.bar-row:hover:not(:has(.plan-drawer:hover)) {
   background: var(--row-hover);
 }
 
