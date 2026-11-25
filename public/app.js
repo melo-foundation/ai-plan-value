@@ -1134,8 +1134,8 @@ function render() {
   if ($("extrapBanner")) {
     $("extrapBanner").hidden = !showsRough();
     $("extrapBannerText").innerHTML = glyphHtml(agentMode
-      ? "Showing rough estimates (◐ ○ / faded bars) for unmeasured agent runs, estimated from other runs of the same model or Terminal-Bench 4.0."
-      : "Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.");
+      ? "Including rough estimates (◐ ○, faded) for agent and model pairs AA hasn't run."
+      : "Including rough estimates (◐ ○, faded) for reasoning levels AA hasn't measured.");
   }
   if ($("extrapFooter")) {
     const hasHidden = allResolved.some((r) => r.estTier && !passesEstTier(r));
