@@ -193,7 +193,8 @@ async function main() {
         (key === "openRouter" && !src.modelCount) ||
         (key === "githubCopilot" && !src.tierCount) ||
         (key === "ollamaCloud" && !src.tierCount) ||
-        (key === "kiloPass" && !src.tierCount);
+        (key === "kiloPass" && !src.tierCount) ||
+        (key === "arcPrize" && !src.multiEffortModelCount);
       if (!src.ok || empty) {
         failedSources.push({
           name: src.name || key,
@@ -204,7 +205,8 @@ async function main() {
     }
   }
 
-  // --- 1b. Dataset Integrity Checks (harness, quota window, valid numbers) ---
+  // --- 1b. Dataset Integrity & Sudden-Drop Drift Checks ---
+  const previousForDrift = await loadPreviousDataset();
   if (current && !REFRESH_FAILED) {
     const entries = current.entries || [];
     const validWindows = new Set(["monthly", "weekly", "rolling", "payg"]);
@@ -220,6 +222,14 @@ async function main() {
       failedSources.push({
         name: "Dataset integrity check",
         error: `${badMeta.length} entry(s) missing valid harness/quotaWindow metadata or aaCostPerTaskUsd`,
+      });
+    }
+    const prevTotal = previousForDrift?.stats?.totalEntries || 0;
+    const currTotal = current.stats?.totalEntries || entries.length;
+    if (prevTotal >= 500 && currTotal < prevTotal * 0.75) {
+      failedSources.push({
+        name: "Sudden dataset drop",
+        error: `Entry count dropped >25% (${prevTotal} → ${currTotal}); possible upstream schema change`,
       });
     }
   }
@@ -312,11 +322,9 @@ async function main() {
     const needsClassification = [...new Set([...unclassified, ...missingUrls])].sort();
 
     for (const planName of needsClassification) {
+      const expectedTitle = `[New Plan] Classify ${planName}`.toLowerCase();
       const alreadyFiled = existingIssues.some(
-        (i) =>
-          !i.pull_request &&
-          i.title.startsWith("[New Plan]") &&
-          i.title.toLowerCase().includes(planName.toLowerCase())
+        (i) => !i.pull_request && i.title.toLowerCase() === expectedTitle
       );
       if (alreadyFiled) {
         console.log(`[alerts] [New Plan] issue already exists for ${planName}; skipping.`);
@@ -343,6 +351,21 @@ async function main() {
 
       await createIssue(title, body);
     }
+
+    // Auto-close open [New Plan] issues once those plans are classified and have URLs
+    const stillNeeded = new Set(needsClassification.map((p) => p.toLowerCase()));
+    const openNewPlanIssues = existingIssues.filter(
+      (i) => i.state === "open" && !i.pull_request && i.title.startsWith("[New Plan] Classify ")
+    );
+    for (const issue of openNewPlanIssues) {
+      const planName = issue.title.slice("[New Plan] Classify ".length).trim();
+      if (planName && !stillNeeded.has(planName.toLowerCase())) {
+        await closeIssue(
+          issue.number,
+          `Plan \`${planName}\` is now classified with harness, quota window, and pricing URL.${RUN_URL ? ` Run: ${RUN_URL}` : ""}`
+        );
+      }
+    }
   }
 
   // --- 3. New Important Model Released Check ---
@@ -351,7 +374,7 @@ async function main() {
     return;
   }
 
-  const previous = await loadPreviousDataset();
+  const previous = previousForDrift;
   if (!previous) {
     console.log("[alerts] No previous dataset baseline available; skipping new-model diff.");
     return;

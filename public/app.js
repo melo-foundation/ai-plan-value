@@ -149,6 +149,7 @@ function cleanPlan(r) {
 
 function feeText(r) {
   if (r.isApi) return "API";
+  if (r.priceUsd == null || !Number.isFinite(r.priceUsd)) return "—";
   const base =
     r.priceUsd >= 100 || Number.isInteger(r.priceUsd)
       ? Math.round(r.priceUsd)
@@ -434,8 +435,9 @@ function renderPlanDrawer(planName, allResolved) {
                 ? `II ${e.intelligenceIndex.toFixed(1)}`
                 : "—";
           const isExtrap = e.effortEstimate === "extrapolated";
-          const costPrefix = isExtrap ? "~" : "";
-          return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costPrefix}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${costPrefix}${esc(scoreStr)}</span></td>`;
+          const scoreTilde = isExtrap ? "~" : "";
+          const costTilde = isExtrap && state.costMode !== "tokens" ? "~" : "";
+          return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costTilde}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${scoreTilde}${esc(scoreStr)}</span></td>`;
         })
         .join("");
 
@@ -523,7 +525,7 @@ function renderBarChart(rows, allResolved) {
         : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
       const isExtrap = r.effortEstimate === "extrapolated";
-      const tilde = isExtrap ? "~" : "";
+      const costTilde = isExtrap && state.costMode !== "tokens" ? "~" : "";
 
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
@@ -533,7 +535,7 @@ function renderBarChart(rows, allResolved) {
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
-            <span class="bar-val">${tilde}${fmtUsd(r.effectiveCost)}</span>
+            <span class="bar-val">${costTilde}${fmtUsd(r.effectiveCost)}</span>
             <span class="bar-note">${isExtrap ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
           ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
@@ -669,18 +671,19 @@ function renderTable(rows) {
 
     const isExtrap = r.effortEstimate === "extrapolated";
     const rowCls = [grouped ? "grouped-item" : "", isExtrap ? "is-extrapolated" : ""].filter(Boolean).join(" ");
-    const tilde = isExtrap ? "~" : "";
+    const scoreTilde = isExtrap ? "~" : "";
+    const costTilde = isExtrap && !isTokens ? "~" : "";
 
     return `
       <tr${rowCls ? ` class="${rowCls}"` : ""}>
         <td>${nameCell}</td>
-        <td class="num-col">${tilde}${fmtScore(r.score, scoreKey)}</td>
+        <td class="num-col">${scoreTilde}${fmtScore(r.score, scoreKey)}</td>
         ${extraCells}
         ${accessCell}
         <td class="num-col">${feeText(r)}</td>
         <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
-        <td class="num-col col-hide-sm">${tilde}${fmtUsd(r.apiMetric)}</td>
-        <td class="num-col real-cell">${tilde}${fmtUsd(r.effectiveCost)}</td>
+        <td class="num-col col-hide-sm">${costTilde}${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col real-cell">${costTilde}${fmtUsd(r.effectiveCost)}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
     `;
