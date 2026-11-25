@@ -57,6 +57,7 @@
                   <select id="benchSelect" class="select" aria-label="Benchmark domain or test">
                     <optgroup label="Overall">
                       <option value="intelligenceIndex" selected>Intelligence Index</option>
+                      <option value="codingAgentIndex">Coding Agent Index</option>
                     </optgroup>
                     <optgroup label="Domains">
                       <option value="engineering">Engineering</option>
@@ -297,9 +298,11 @@
               <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>
               (Intelligence Index, domains, tests, API $/task),
               <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>
-              (context windows, open weights, supported efforts, domain backfill), and
+              (context windows, open weights, supported efforts, domain backfill),
               <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a>
-              (ARC-AGI-2 fallback for unmeasured effort ratios).
+              (ARC-AGI-2 fallback for unmeasured effort ratios), and
+              <a href="https://artificialanalysis.ai/agents/coding-agents" target="_blank" rel="noopener noreferrer">Artificial Analysis Coding Agents</a>
+              (Coding Agent Index, agent $/task).
             </li>
             <li>
               <strong>Plan subsidies:</strong>
@@ -316,6 +319,7 @@
           <div class="settings-heading">Calculations</div>
           <div class="method-formulas">
             <div><code>Real $/task</code> = API $/task ÷ plan subsidy</div>
+            <div><code>Coding Agent</code> = AA agent run for the plan's agent; open endpoints and APIs use the model's default agent</div>
             <div><code>Real $/1M tokens</code> = API 3:1 blended $/1M ÷ plan subsidy</div>
             <div><code>Tasks/mo (or Mtok/mo)</code> = monthly fee ÷ real cost</div>
           </div>

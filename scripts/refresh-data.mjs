@@ -922,7 +922,9 @@ function parseAaCodingAgentsHtml(html) {
   const nameBySlug = new Map();
   for (const c of configs) {
     const prev = nameBySlug.get(c.agentSlug);
-    if (!prev || (c.isDefault && !prev.isDefault)) nameBySlug.set(c.agentSlug, c);
+    // Prefer the most-capitalised spelling ("OpenCode" over "Opencode").
+    const caps = (n) => (n.match(/[A-Z]/g) || []).length;
+    if (!prev || caps(c.agentName) > caps(prev.agentName)) nameBySlug.set(c.agentSlug, c);
   }
   for (const c of configs) c.agentName = nameBySlug.get(c.agentSlug).agentName;
   return configs;

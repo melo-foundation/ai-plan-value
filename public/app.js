@@ -31,6 +31,7 @@ const COST_STOPS_TOKENS = [
 
 const BENCHMARKS = {
   intelligenceIndex: { label: "Intelligence", unit: "", min: 0, max: 64, step: 1, def: 45 },
+  codingAgentIndex: { label: "Coding Agent", unit: "", min: 0, max: 60, step: 1, def: 40 },
   engineering: { label: "Engineering", unit: "", min: 20, max: 72, step: 1, def: 50 },
   financeAndAccounting: { label: "Finance & Accounting", unit: "", min: 25, max: 65, step: 1, def: 48 },
   strategyAndOps: { label: "Strategy & Ops", unit: "", min: 20, max: 67, step: 1, def: 50 },
@@ -207,6 +208,9 @@ function getScore(entry, benchKey) {
   if (benchKey === "outputSpeed") {
     return entry.aaSpeed?.outputTokPerSec > 0 ? entry.aaSpeed.outputTokPerSec : null;
   }
+  if (benchKey === "codingAgentIndex") {
+    return entry.codingAgent?.index ?? null;
+  }
   const b = entry.benchmarks;
   if (b && b[benchKey] != null) return b[benchKey];
   if (benchKey === "intelligenceIndex") return entry.intelligenceIndex;
@@ -303,6 +307,9 @@ function getAllEntriesResolved() {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
   const isTokens = state.costMode === "tokens";
+  // Coding Agent mode: score and $/task are AA's measured agent run for this exact model + effort,
+  // so effort interpolation/extrapolation markers (which describe model-level AA data) don't apply.
+  const agentMode = state.benchKey === "codingAgentIndex";
 
   return raw
     .filter((e) => !replaced.has(e.id))
@@ -311,7 +318,7 @@ function getAllEntriesResolved() {
       const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
       const accessMeta = getPlanAccessMeta(e);
       const score = getScore(e, state.benchKey);
-      const taskCost = e.aaCostPerTaskUsd;
+      const taskCost = agentMode ? e.codingAgent?.costPerTaskUsd ?? null : e.aaCostPerTaskUsd;
       const unmeteredFree = Boolean(e.unmetered);
 
       const p = e.aaPricing || {};
@@ -336,6 +343,7 @@ function getAllEntriesResolved() {
       return {
         ...e,
         ...accessMeta,
+        ...(agentMode ? { effortEstimate: null, harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
         isApi,
         score,
         subsidy,
@@ -431,7 +439,7 @@ function renderPlanDrawer(planName, allResolved) {
           const scoreStr =
             e.score != null
               ? fmtScore(e.score, activeScoreKey())
-              : e.intelligenceIndex != null
+              : e.intelligenceIndex != null && state.benchKey !== "codingAgentIndex"
                 ? `II ${e.intelligenceIndex.toFixed(1)}`
                 : "—";
           const isExtrap = e.effortEstimate === "extrapolated";
