@@ -132,15 +132,15 @@
               <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
               <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
             </svg>
-            <span class="infobar-text"><strong>Notice:</strong> Showing low-confidence estimates (○).</span>
+            <span class="infobar-text"><strong>Notice:</strong> <span id="extrapBannerText">Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.</span></span>
             <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
           </div>
           <div class="panel-body">
             <div id="barChart" class="bar-chart"></div>
           </div>
           <div id="extrapFooter" class="panel-foot" hidden>
-            <span id="extrapFooterText"></span>
-            <button id="enableExtrapBtn" class="infobar-link" type="button">Show all estimates</button>
+            <span id="extrapFooterText">Rough estimates for unmeasured reasoning levels are hidden.</span>
+            <button id="enableExtrapBtn" class="infobar-link" type="button">Show rough estimates (◐ ○)</button>
           </div>
         </section>
 
@@ -164,7 +164,9 @@
         </details>
 
         <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
-        <p id="tierFootnote" class="footnote" hidden>● ◐ ○ Estimate confidence: high / medium / low.</p>
+        <p id="tierFootnote-high" class="footnote" hidden>● High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).</p>
+        <p id="tierFootnote-medium" class="footnote" hidden>◐ Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).</p>
+        <p id="tierFootnote-low" class="footnote" hidden>○ Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).</p>
       </main>
     </div>
 
@@ -236,15 +238,6 @@
                 <option value="rolling">5h / daily</option>
               </select>
             </label>
-            <label class="effort-pick">
-              <span>Estimates</span>
-              <select id="estTier" class="select" aria-label="Estimate confidence">
-                <option value="none">None</option>
-                <option value="high" selected>● High</option>
-                <option value="medium">● ◐ High + Medium</option>
-                <option value="low">● ◐ ○ All</option>
-              </select>
-            </label>
           </div>
           <div class="settings-checks">
             <label class="settings-check">
@@ -258,6 +251,18 @@
             <label class="settings-check">
               <input id="hideEstimated" type="checkbox" />
               <span>Hide estimated subsidies (*)</span>
+            </label>
+            <label class="settings-check">
+              <input id="showTier-high" type="checkbox" checked />
+              <span>Show high-confidence estimates (●)</span>
+            </label>
+            <label class="settings-check">
+              <input id="showTier-medium" type="checkbox" />
+              <span>Show medium-confidence estimates (◐)</span>
+            </label>
+            <label class="settings-check">
+              <input id="showTier-low" type="checkbox" />
+              <span>Show low-confidence estimates (○)</span>
             </label>
             <label class="settings-check">
               <input id="hideCnPortal" type="checkbox" />
@@ -337,11 +342,11 @@
             <dt>*</dt>
             <dd><strong>Estimated subsidy:</strong> preliminary user report or prior-generation quota carryover.</dd>
             <dt>●</dt>
-            <dd><strong>High confidence:</strong> effort interpolated between measured efforts or 1 same-family step away; agent score from the same model and agent at another effort<span id="tierErr-high"></span>.</dd>
+            <dd><strong>High confidence:</strong> missing reasoning level bracketed between a lower and higher measured effort on the same model, or one effort step from a measured effort using same-family step sizes; agent score from the same model and agent measured at another effort, shifted by the Intelligence Index gap<span id="tierErr-high"></span>.</dd>
             <dt>◐</dt>
-            <dd><strong>Medium confidence:</strong> 2 same-family effort steps; ARC-AGI-2 effort ratios; agent score copied from another agent, or fitted on Terminal-Bench 4.0<span id="tierErr-medium"></span>.</dd>
+            <dd><strong>Medium confidence:</strong> unmeasured reasoning level two effort steps from a measured effort, or estimated from ARC-AGI-2 effort ratios where a family lacks multi-effort AA data; agent score copied from another agent's run of the same model, or fitted on Terminal-Bench 4.0<span id="tierErr-medium"></span>.</dd>
             <dt>○</dt>
-            <dd><strong>Low confidence:</strong> 3+ same-family effort steps; Terminal-Bench 4.0 fit below the measured range<span id="tierErr-low"></span>.</dd>
+            <dd><strong>Low confidence:</strong> unmeasured reasoning level three or more effort steps from a measured effort; agent score fitted on Terminal-Bench 4.0 below the range of measured models, or built on a low-confidence effort estimate<span id="tierErr-low"></span>.</dd>
           </dl>
         </div>
 

@@ -71,7 +71,7 @@ const state = {
   hideLegacy: true,
   hideOffPeak: true,
   hideEstimated: false,
-  estTier: "high", // max estimate confidence tier shown: "none" | "high" | "medium" | "low"
+  estShow: { high: true, medium: false, low: false }, // estimate confidence tiers shown
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
@@ -235,30 +235,37 @@ const TIER_RANK = { high: 0, medium: 1, low: 2 };
 const TIER_GLYPH = { high: "●", medium: "◐", low: "○" };
 const TIER_LABEL = { high: "High", medium: "Medium", low: "Low" };
 
-function estimateMethod(r) {
+function estimateTip(r) {
+  const conf = `${TIER_LABEL[r.estTier]} confidence`;
   if (state.benchKey === "codingAgentIndex") {
     const a = r.codingAgent || {};
-    if (a.estimate === "same-model") return `${a.fromAgent} run at ${a.fromEffort} effort`;
-    if (a.estimate === "terminal-bench") return a.outOfRange ? "Terminal-Bench 4.0, below measured range" : "Terminal-Bench 4.0";
-    return "";
+    if (a.estimate === "same-model") return `Estimated from ${a.fromAgent} run at ${a.fromEffort} effort · ${conf}`;
+    if (a.estimate === "terminal-bench") {
+      return `Estimated from Terminal-Bench 4.0${a.outOfRange ? " (below the measured range)" : ""} · ${conf}`;
+    }
+    return conf;
   }
-  if (r.effortEstimate === "interpolated") return "interpolated between measured efforts";
-  if (r.effortEstimateSource === "arc-agi-2") return "ARC-AGI-2 effort ratios";
+  if (r.effortEstimate === "interpolated") {
+    return `Interpolated reasoning effort (bracketed between measured efforts on this model) · ${conf}`;
+  }
   const n = r.effortEstimateSteps;
-  return n ? `same-family effort steps (${n} from measured)` : "same-family effort steps";
+  const src =
+    r.effortEstimateSource === "arc-agi-2"
+      ? "ARC-AGI-2 effort ratios"
+      : `other measured models in the same family${n ? `, ${n} effort ${n === 1 ? "step" : "steps"} from a measured result` : ""}`;
+  return `Extrapolated reasoning effort (estimated from ${src}, not directly benchmarked) · ${conf}`;
 }
 
 function interpMark(r) {
   if (!r.estTier) return "";
-  const tip = `${TIER_LABEL[r.estTier]} confidence estimate: ${estimateMethod(r)}`;
-  return `<span class="est-star est-tier" title="${esc(tip)}">${TIER_GLYPH[r.estTier]}</span>`;
+  return `<span class="est-star est-tier" title="${esc(estimateTip(r))}">${TIER_GLYPH[r.estTier]}</span>`;
 }
 
-function passesEstTier(r, maxTier = state.estTier) {
-  if (!r.estTier) return true;
-  if (maxTier === "none") return false;
-  return TIER_RANK[r.estTier] <= TIER_RANK[maxTier];
+const ALL_TIERS = { high: true, medium: true, low: true };
+function passesEstTier(r, show = state.estShow) {
+  return !r.estTier || Boolean(show[r.estTier]);
 }
+const showsRough = () => state.estShow.medium || state.estShow.low;
 
 function isLegacyEntry(r) {
   if (typeof r.isLegacy === "boolean") return r.isLegacy;
@@ -374,7 +381,7 @@ function getAllEntriesResolved() {
 function getFilteredRows(allResolved, includeExtrapOverride = null) {
   const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
   const maxCost = currentCostStops()[state.maxCostIdx].max;
-  const maxTier = includeExtrapOverride ?? state.estTier;
+  const tierShow = includeExtrapOverride ?? state.estShow;
 
   const out = [];
   for (const r of allResolved) {
@@ -389,7 +396,7 @@ function getFilteredRows(allResolved, includeExtrapOverride = null) {
     if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
     if (state.hideEstimated && r.isPreliminary) continue;
-    if (!passesEstTier(r, maxTier)) continue;
+    if (!passesEstTier(r, tierShow)) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
@@ -976,11 +983,13 @@ function loadStateFromUrl() {
   if (params.get("legacy") === "1") state.hideLegacy = false;
   if (params.get("offpeak") === "1") state.hideOffPeak = false;
   if (params.get("noest") === "1") state.hideEstimated = true;
-  // Legacy: nointerp=1 → no estimates, extrap=1 → all estimates
-  if (params.get("nointerp") === "1") state.estTier = "none";
-  if (params.get("extrap") === "1") state.estTier = "low";
+  // est = shown tiers as letters (h/m/l, "0" = none); legacy nointerp=1 hides high, extrap=1 shows medium + low
+  if (params.get("nointerp") === "1") state.estShow.high = false;
+  if (params.get("extrap") === "1") state.estShow = { ...state.estShow, medium: true, low: true };
   const estParam = params.get("est");
-  if (["none", "high", "medium", "low"].includes(estParam)) state.estTier = estParam;
+  if (estParam != null && /^(0|[hml]+)$/.test(estParam)) {
+    state.estShow = { high: estParam.includes("h"), medium: estParam.includes("m"), low: estParam.includes("l") };
+  }
   if (params.get("nocn") === "1") state.hideCnPortal = true;
   if (params.get("api") === "1") state.showApi = true;
   if (params.get("open") === "1") state.openWeightsOnly = true;
@@ -1036,7 +1045,7 @@ function syncControlsFromState() {
   $("hideLegacy").checked = state.hideLegacy;
   $("hideOffPeak").checked = state.hideOffPeak;
   $("hideEstimated").checked = state.hideEstimated;
-  if ($("estTier")) $("estTier").value = state.estTier;
+  for (const t of ["high", "medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = state.estShow[t];
   $("hideCnPortal").checked = state.hideCnPortal;
   $("showApi").checked = state.showApi;
   $("openWeightsOnly").checked = state.openWeightsOnly;
@@ -1069,7 +1078,8 @@ function syncUrlFromState() {
     if (!state.hideLegacy) params.set("legacy", "1");
     if (!state.hideOffPeak) params.set("offpeak", "1");
     if (state.hideEstimated) params.set("noest", "1");
-    if (state.estTier !== "high") params.set("est", state.estTier);
+    const estStr = ["high", "medium", "low"].filter((t) => state.estShow[t]).map((t) => t[0]).join("") || "0";
+    if (estStr !== "h") params.set("est", estStr);
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
     if (state.openWeightsOnly) params.set("open", "1");
@@ -1115,26 +1125,51 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
+  const agentMode = state.benchKey === "codingAgentIndex";
   if ($("extrapBanner")) {
-    $("extrapBanner").hidden = state.estTier !== "low";
+    $("extrapBanner").hidden = !showsRough();
+    $("extrapBannerText").textContent = agentMode
+      ? "Showing rough estimates (◐ ○ / faded bars) for unmeasured agent runs, estimated from other runs of the same model or Terminal-Bench 4.0."
+      : "Showing rough estimates (◐ ○ / faded bars) for unmeasured reasoning levels, estimated from same-family models or ARC-AGI-2.";
   }
   if ($("extrapFooter")) {
-    const hiddenModels =
-      state.estTier === "low"
-        ? 0
-        : new Set(
-            getFilteredRows(allResolved, "low")
-              .filter((r) => !passesEstTier(r))
-              .map((r) => r.modelId)
-          ).size;
-    $("extrapFooter").hidden = hiddenModels === 0;
-    if (hiddenModels > 0 && $("extrapFooterText")) {
-      $("extrapFooterText").textContent = `${hiddenModels} more ${hiddenModels === 1 ? "model" : "models"} with lower-confidence estimates ${hiddenModels === 1 ? "matches" : "match"} these filters.`;
+    const hasHidden = allResolved.some((r) => r.estTier && !passesEstTier(r));
+    const hiddenVariants = hasHidden
+      ? new Set(
+          getFilteredRows(allResolved, ALL_TIERS)
+            .filter((r) => !passesEstTier(r))
+            .map((r) => r.modelId)
+        ).size
+      : 0;
+    // Generic "hidden" line only while rough estimates are off entirely
+    $("extrapFooter").hidden = !hasHidden || (hiddenVariants === 0 && showsRough());
+    if (hasHidden && $("extrapFooterText")) {
+      $("extrapFooterText").textContent = agentMode
+        ? hiddenVariants > 0
+          ? `${hiddenVariants} more ${hiddenVariants === 1 ? "model has" : "models have"} estimated agent scores matching these filters.`
+          : "Estimated agent scores are hidden."
+        : hiddenVariants > 0
+          ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
+          : "Rough estimates for unmeasured reasoning levels are hidden.";
     }
   }
   $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
-  if ($("tierFootnote")) {
-    $("tierFootnote").hidden = !rows.some((r) => r.estTier);
+  const FOOTNOTES = agentMode
+    ? {
+        high: "● High-confidence estimate (same model and agent, measured at another reasoning effort).",
+        medium: "◐ Medium-confidence estimate (another agent's run of the same model, or fitted on Terminal-Bench 4.0).",
+        low: "○ Low-confidence estimate (fitted on Terminal-Bench 4.0 below its measured range, or built on a low-confidence effort estimate).",
+      }
+    : {
+        high: "● High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).",
+        medium: "◐ Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).",
+        low: "○ Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).",
+      };
+  for (const t of ["high", "medium", "low"]) {
+    const el = $(`tierFootnote-${t}`);
+    if (!el) continue;
+    el.textContent = FOOTNOTES[t];
+    el.hidden = !rows.some((r) => r.estTier === t);
   }
   syncUrlFromState();
 }
@@ -1285,24 +1320,25 @@ $("hideEstimated").addEventListener("change", (e) => {
   render();
 });
 
-$("estTier")?.addEventListener("change", (e) => {
-  state.estTier = e.target.value;
+for (const t of ["high", "medium", "low"]) {
+  $(`showTier-${t}`)?.addEventListener("change", (e) => {
+    state.estShow = { ...state.estShow, [t]: e.target.checked };
+    updateSettingsBadge();
+    render();
+  });
+}
+
+function setRough(on) {
+  state.estShow = { ...state.estShow, medium: on, low: on };
+  for (const t of ["medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = on;
   updateSettingsBadge();
   render();
-});
-
-$("disableExtrapBtn")?.addEventListener("click", () => {
-  state.estTier = "medium";
-  if ($("estTier")) $("estTier").value = state.estTier;
-  updateSettingsBadge();
-  render();
-});
-
+}
+$("disableExtrapBtn")?.addEventListener("click", () => setRough(false));
 $("enableExtrapBtn")?.addEventListener("click", () => {
-  state.estTier = "low";
-  if ($("estTier")) $("estTier").value = state.estTier;
-  updateSettingsBadge();
-  render();
+  state.estShow.high = true;
+  if ($("showTier-high")) $("showTier-high").checked = true;
+  setRough(true);
 });
 
 $("hideCnPortal").addEventListener("change", (e) => {
@@ -1333,7 +1369,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.hideLegacy = true;
   state.hideOffPeak = true;
   state.hideEstimated = false;
-  state.estTier = "high";
+  state.estShow = { high: true, medium: false, low: false };
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
@@ -1347,7 +1383,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
   $("hideEstimated").checked = false;
-  if ($("estTier")) $("estTier").value = "high";
+  for (const t of ["high", "medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = t === "high";
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;

@@ -33,7 +33,7 @@ Every held-out test point is excluded from both the scaling curves and regressio
 - **Coding Agent Index, same model (● same agent, ◐ other agent):** Nearest measured effort of the same model in the plan's agent, else in another agent; score shifted 1:1 by the Intelligence Index gap, `$/task` scaled by the AA Intelligence `$/task` ratio.
 - **Coding Agent Index, Terminal-Bench 4.0 (◐, ○ below the measured Terminal-Bench range):** Models with no agent run; score from a linear fit on Terminal-Bench 4.0, `$/task` = AA `$/task` × median agent/AA ratio. Plans on Cursor, Factory Droid and Command Code stay empty.
 - **Stacking:** an agent estimate whose Intelligence Index or Terminal-Bench input is itself an effort estimate takes the lower of the two tiers.
-- **Estimates picker:** None / High (default) / High + Medium / All.
+- **Settings:** Show high-confidence estimates (●, on by default), medium (◐) and low (○) toggle separately; URL `est=` takes the shown tiers as letters (`h`, `hm`, `hml`, `0`).
 
 ## Reproducing These Numbers
 
