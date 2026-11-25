@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Automated verification suite for AI Plan Value.
- * Tests dataset integrity, upstream sources (including OpenRouter & Kilo Pass),
- * harness/quota-window classification, HTML/JS DOM wiring, break-even usage math,
- * reasoning effort bounds, shareable URL params, and cache-busting readiness.
+ * Tests dataset integrity, all 8 upstream sources (including OpenRouter, Kilo Pass,
+ * and ARC Prize), harness/quota-window classification, HTML/JS DOM wiring,
+ * reasoning effort bounds & monotonicity, shareable URL params, and cache-busting.
  *
  * Zero external dependencies (Node.js >= 20). Exits non-zero on any failure.
  */
@@ -44,7 +44,7 @@ const workflowYml = fs.readFileSync(WORKFLOW_PATH, "utf8");
 const entries = dataset.entries || [];
 
 // 1. Upstream sources health
-test("All 7 upstream sources succeeded with non-zero records", () => {
+test("All 8 upstream sources succeeded with non-zero records", () => {
   const expected = [
     ["fei2411", "rowCount"],
     ["priorsRepo", "itemCount"],
@@ -53,6 +53,7 @@ test("All 7 upstream sources succeeded with non-zero records", () => {
     ["githubCopilot", "tierCount"],
     ["ollamaCloud", "tierCount"],
     ["kiloPass", "tierCount"],
+    ["arcPrize", "multiEffortModelCount"],
   ];
   for (const [key, countField] of expected) {
     const src = dataset.sources?.[key];
@@ -75,14 +76,26 @@ test("Dataset has expected scale and zero duplicate entry IDs", () => {
   }
 });
 
-// 3. Pricing & benchmark sanity
-test("All entries have positive AA cost/task, valid intelligence, and token pricing", () => {
+// 3. Pricing, subsidy bounds, and benchmark sanity
+test("All entries have valid AA cost/task, intelligence, token pricing, and sane subsidies", () => {
   let missingTokenPrice = 0;
   for (const e of entries) {
     assert.ok(Number.isFinite(e.aaCostPerTaskUsd) && e.aaCostPerTaskUsd > 0, `Invalid aaCostPerTaskUsd on ${e.id}`);
     assert.ok(Number.isFinite(e.intelligenceIndex), `Invalid intelligenceIndex on ${e.id}`);
     if (e.billing === "subscription" && !e.unmetered) {
-      assert.ok(Number.isFinite(e.subsidyMultiple) && e.subsidyMultiple > 0, `Invalid subsidyMultiple on ${e.id}`);
+      assert.ok(
+        Number.isFinite(e.subsidyMultiple) && e.subsidyMultiple >= 0.85,
+        `Suspicious subsidyMultiple (${e.subsidyMultiple}x) on ${e.id} — possible unit/workload mismatch`
+      );
+      if (e.subsidyMultiple > 100) console.log(`     Note: ${e.id} subsidyMultiple ${e.subsidyMultiple}x (>100x, upstream value)`);
+      if (e.origin === "fei2411" && e.monthlyTokens > 0 && e.priceUsd > 0 && e.listBlendedUsdPerMtok > 0) {
+        const implied = ((e.monthlyTokens / 1e6) * e.listBlendedUsdPerMtok) / e.priceUsd;
+        const relDiff = Math.abs(implied - e.subsidyMultiple) / e.subsidyMultiple;
+        assert.ok(
+          relDiff <= 0.1,
+          `Subsidy mismatch on ${e.id}: ${e.subsidyMultiple}x vs implied ${implied.toFixed(2)}x (monthlyTokens × listBlended / priceUsd)`
+        );
+      }
     }
     const p = e.aaPricing || {};
     const mtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok;
@@ -191,9 +204,39 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
     assert.ok(Number.isFinite(e.intelligenceIndex) && e.intelligenceIndex >= 1 && e.intelligenceIndex <= 95);
     assert.ok(Number.isFinite(e.aaCostPerTaskUsd) && e.aaCostPerTaskUsd > 0);
   }
+  // Guard extrapolated monotonicity (catches benchmark clamping bugs like gdpval floor)
+  const byModelEff = new Map();
+  for (const e of entries) {
+    if (rank[e.effort] == null) continue;
+    if (!byModelEff.has(e.baseModelId)) byModelEff.set(e.baseModelId, new Map());
+    if (!byModelEff.get(e.baseModelId).has(e.effort)) byModelEff.get(e.baseModelId).set(e.effort, e);
+  }
+  const orderedEffs = ["none", "low", "medium", "high", "xhigh", "max"];
+  for (const [slug, m] of byModelEff.entries()) {
+    const seq = orderedEffs.filter((ef) => m.has(ef)).map((ef) => m.get(ef));
+    for (let i = 0; i < seq.length - 1; i++) {
+      const a = seq[i];
+      const b = seq[i + 1];
+      if (!a.effortEstimate && !b.effortEstimate) continue;
+      assert.ok(
+        b.intelligenceIndex >= a.intelligenceIndex - 0.5,
+        `Extrapolated intelligence drop on ${slug} (${a.effort} ${a.intelligenceIndex} -> ${b.effort} ${b.intelligenceIndex})`
+      );
+      if (a.benchmarks?.gdpval != null && b.benchmarks?.gdpval != null) {
+        assert.ok(
+          b.benchmarks.gdpval >= a.benchmarks.gdpval - 15,
+          `Extrapolated gdpval drop on ${slug} (${a.effort} ${a.benchmarks.gdpval} -> ${b.effort} ${b.benchmarks.gdpval})`
+        );
+      }
+    }
+  }
   const interpModels = [...new Map(interpEntries.map((e) => [e.modelId, `${e.modelDisplay} (II ${e.intelligenceIndex})`])).values()];
   const extrapModels = new Set(extrapEntries.map((e) => e.modelId));
   const arcModels = [...new Map(extrapEntries.filter((e) => e.effortEstimateSource === "arc-agi-2").map((e) => [e.modelId, e.modelDisplay])).values()];
+  const acc = dataset.stats?.effortAccuracy;
+  assert.ok(acc?.interp?.intelPts != null && acc.interp.intelPts <= 3.0, `Interp LOOCV error drifted: ${acc?.interp?.intelPts}`);
+  assert.ok(acc?.extrap?.intelPts1 != null && acc.extrap.intelPts1 <= 3.5, `Extrap 1-step LOOCV error drifted: ${acc?.extrap?.intelPts1}`);
+  assert.ok(acc?.extrap?.intelPtsAll != null && acc.extrap.intelPtsAll <= 5.0, `Extrap all-step LOOCV error drifted: ${acc?.extrap?.intelPtsAll}`);
   console.log(`     Interpolated (${interpModels.length}): ${interpModels.join(", ") || "none"}`);
   console.log(`     Extrapolated (${extrapModels.size} variants across ${extrapEntries.length} rows; ARC-AGI-2 fallback: ${arcModels.length}${arcModels.length ? " — " + arcModels.join(", ") : ""})`);
 });
@@ -222,6 +265,40 @@ test("Pricing fallbacks recover Fei2411 and Priors rows with omitted listPrice",
   assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-astra"), "Missing gpt-6-astra on ChatGPT Pro 500");
   assert.ok(has(/^ChatGPT Pro 500$/i, "gpt-6-sol"), "Missing gpt-6-sol on ChatGPT Pro 500");
   assert.ok(has(/^ChatGPT Pro 20x$/i, "gpt-6-1-sol"), "Missing gpt-6-1-sol on ChatGPT Pro 20x");
+
+  // Guard against duplicate active subscription rows (e.g. dated model aliases on the same plan)
+  const replaced = new Set(entries.map((e) => e.replacesId).filter(Boolean));
+  const activeSubKeys = new Set();
+  const modelsByPlan = new Map();
+  for (const e of entries) {
+    if (e.billing !== "subscription" || replaced.has(e.id)) continue;
+    const key = `${e.plan}::${e.baseModelId}::${e.effort}::${e.isOffPeak ? "offpeak" : "std"}`;
+    assert.ok(!activeSubKeys.has(key), `Duplicate active subscription entry: ${key}`);
+    activeSubKeys.add(key);
+    if (!modelsByPlan.has(e.plan)) modelsByPlan.set(e.plan, new Set());
+    modelsByPlan.get(e.plan).add(e.baseModelId);
+  }
+
+  // Guard tier inheritance across multi-tier subscription ladders
+  const ladders = [
+    ["GitHub Copilot Pro", "GitHub Copilot Pro+", "GitHub Copilot Max"],
+    ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"],
+    ["Claude Pro", "Claude Max", "Claude Ultra"],
+    ["ChatGPT Plus", "ChatGPT Pro 10x", "ChatGPT Pro 20x", "ChatGPT Pro 500"],
+    ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"],
+  ];
+  for (const ladder of ladders) {
+    for (let i = 0; i < ladder.length - 1; i++) {
+      const lo = modelsByPlan.get(ladder[i]) || new Set();
+      const hi = modelsByPlan.get(ladder[i + 1]) || new Set();
+      const missing = [...lo].filter((m) => !hi.has(m));
+      assert.equal(
+        missing.length,
+        0,
+        `${ladder[i + 1]} missing lower-tier models from ${ladder[i]}: ${missing.join(", ")}`
+      );
+    }
+  }
 });
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
