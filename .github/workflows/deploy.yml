@@ -69,11 +69,11 @@ jobs:
       - name: Render link-preview image from fresh data
         continue-on-error: true
         run: |
-          (cd public && python3 -m http.server 8765 >/dev/null 2>&1 &)
-          sleep 2
-          google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=10000 \
-            --window-size=1200,630 --screenshot=public/og.png "http://localhost:8765/"
-          fuser -k 8765/tcp || true
+          echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ttf-mscorefonts-installer fonts-wine >/dev/null
+          fc-cache -f >/dev/null
+          scripts/og/render.sh google-chrome
 
       - name: Stamp cache-busting asset versions
         run: |

@@ -1,0 +1,46 @@
+/* Easter-egg skin: maps the site's tokens onto Slopstrap's palette while html[data-slop] is set. */
+html[data-slop] {
+  color-scheme: dark;
+  --outer-bg: transparent;
+  --shell-bg: rgba(15, 23, 42, 0.55);
+  --shell-border: rgba(168, 85, 247, 0.35);
+  --title-top: #7c3aed;
+  --title-bot: #4f46e5;
+  --title-fg: #ffffff;
+  --title-sub: #c4b5fd;
+  --panel-head-top: rgba(139, 92, 246, 0.18);
+  --panel-head-bot: rgba(6, 182, 212, 0.08);
+  --panel-head-fg: #e9d5ff;
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --filter-bg: transparent;
+  --fg: #e2e8f0;
+  --muted: #94a3b8;
+  --zebra: rgba(255, 255, 255, 0.025);
+  --row-hover: rgba(168, 85, 247, 0.12);
+  --cell-border: rgba(255, 255, 255, 0.08);
+  --th-top: rgba(139, 92, 246, 0.16);
+  --th-bot: rgba(139, 92, 246, 0.06);
+  --btn-top: rgba(255, 255, 255, 0.08);
+  --btn-bot: rgba(255, 255, 255, 0.03);
+  --btn-border: rgba(168, 85, 247, 0.45);
+  --btn-fg: #f5f3ff;
+  --btn-shine: transparent;
+  --thumb-shine: transparent;
+  --link: #c084fc;
+  --grid-line: rgba(255, 255, 255, 0.06);
+}
+html[data-slop] body { background: var(--slop-bg); }
+html[data-slop] .shell { border-radius: 1.25rem; overflow: hidden; box-shadow: 0 0 60px rgba(139, 92, 246, 0.25); position: relative; z-index: 1; }
+html[data-slop] .workspace { min-width: 0; }
+html[data-slop] .workspace > * { min-width: 0; max-width: 100%; }
+html[data-slop] .panel { border-radius: 1rem; overflow: hidden; }
+html[data-slop] .slop-card { padding: 0; }
+html[data-slop] .btn { border-radius: 999px; }
+html[data-slop] .bar-fill { background-image: linear-gradient(90deg, #a855f7, #6366f1, #06b6d4) !important; border-radius: 999px; border: 0; }
+html[data-slop] .bar-row:nth-child(even) { background: var(--zebra); }
+html[data-slop] .bar-model,
+html[data-slop] .bar-model a { color: #f1f5f9; -webkit-text-fill-color: #f1f5f9; background: none; }
+html[data-slop] .titlebar h1 { color: #fff; text-shadow: 0 0 18px rgba(236, 72, 153, 0.7), 0 0 4px rgba(255, 255, 255, 0.6); }
+@media (max-width: 600px) {
+  html[data-slop] .workspace { padding: 10px !important; }
+}

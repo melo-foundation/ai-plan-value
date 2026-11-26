@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as REL from "./reliability.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -225,8 +226,12 @@ test("All entries have valid AA cost/task, intelligence, token pricing, and sane
       if (e.subsidyMultiple > 100) console.log(`     Note: ${e.id} subsidyMultiple ${e.subsidyMultiple}x (>100x, upstream value)`);
       // Workload-mix corrections only rescale Fei2411's standard-mix multiple by a blend ratio
       // (~1.0-2.3x today; cheap-cache models can go higher); beyond 4x is a currency/unit error (e.g. CNY list price read as USD).
-      if (e.origin === "fei2411" && e.upstreamSubsidyMultiple > 0) {
-        const ratio = e.subsidyMultiple / e.upstreamSubsidyMultiple;
+      // Fei-native value: the "Fable only" reading where Fei measured that one; pooled cells moved by the pool.
+      const feiNative = e.subsidyReadings && Math.abs(e.subsidyReadings.own * 2 - e.subsidyMultiple) < 0.01 * e.subsidyMultiple && !/周帽不套/.test(e.decisionNote || "")
+        ? e.subsidyReadings.own
+        : e.subsidyMultiple;
+      if (e.origin === "fei2411" && e.upstreamSubsidyMultiple > 0 && !e.pooled) {
+        const ratio = feiNative / e.upstreamSubsidyMultiple;
         assert.ok(
           ratio >= 0.95 && ratio <= 4,
           `${e.id} (${e.feiWorkload}) subsidy ${e.subsidyMultiple}x is ${ratio.toFixed(2)}x Fei2411's standard-mix ${e.upstreamSubsidyMultiple}x — currency/unit mismatch?`
@@ -234,10 +239,10 @@ test("All entries have valid AA cost/task, intelligence, token pricing, and sane
       }
       if (e.origin === "fei2411" && e.monthlyTokens > 0 && e.priceUsd > 0 && e.listBlendedUsdPerMtok > 0) {
         const implied = ((e.monthlyTokens / 1e6) * e.listBlendedUsdPerMtok) / e.priceUsd;
-        const relDiff = Math.abs(implied - e.subsidyMultiple) / e.subsidyMultiple;
+        const relDiff = Math.abs(implied - feiNative) / feiNative;
         assert.ok(
           relDiff <= 0.1,
-          `Subsidy mismatch on ${e.id}: ${e.subsidyMultiple}x vs implied ${implied.toFixed(2)}x (monthlyTokens × listBlended / priceUsd)`
+          `Subsidy mismatch on ${e.id}: ${feiNative}x vs implied ${implied.toFixed(2)}x (monthlyTokens × listBlended / priceUsd)`
         );
       }
     }
@@ -392,11 +397,12 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
 
 // 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
 test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
-  for (const param of ["bench", "min", "mode", "access", "no5h", "noweekly", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
+  for (const param of ["bench", "min", "top", "conf", "fable", "range", "mode", "access", "no5h", "noweekly", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
     assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
   }
   assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
   assert.ok(appJs.includes("passesEffortBounds") && appJs.includes("passesAccessAndWindow"), "Missing effort/access/window filters in public/app.js");
+  assert.ok(html.includes('id="rankMode"') && appJs.includes("pickTopModels"), "Missing Min/Top rank mode (rankMode select + pickTopModels)");
   assert.ok(html.includes('href="./styles.css"') && html.includes('src="./app.js"'), "index.html must reference ./styles.css and ./app.js");
   assert.ok(workflowYml.includes("GITHUB_SHA") && workflowYml.includes("?v="), "deploy.yml missing ?v=${GITHUB_SHA} cache-busting step");
 });
@@ -447,6 +453,278 @@ test("Pricing fallbacks recover Fei2411 and Priors rows with omitted listPrice",
         `${ladder[i + 1]} missing lower-tier models from ${ladder[i]}: ${missing.join(", ")}`
       );
     }
+  }
+});
+
+// 12. Reliability model (docs/RELIABILITY.md)
+const relStats = dataset.stats?.reliability || {};
+const chains = dataset.stats?.chains || {};
+const LEVEL_RANK = { high: 0, medium: 1, low: 2, speculative: 3 };
+const genDate = String(dataset.generatedAt || "").slice(0, 10);
+const baseOf = (id) => id.split("@")[0];
+const byId = new Map(entries.map((e) => [e.id, e]));
+const COST_OF = {
+  task: (e) => e.aaCostPerTaskUsd > 0,
+  agent: (e) => e.codingAgent?.costPerTaskUsd > 0,
+  cursor: (e) => e.cursorBench?.costPerTaskUsd > 0,
+  turn: (e) => e.t3Turn?.costPerTurnUsd > 0,
+  tokens: () => true,
+};
+
+test("Every entry has rel with a valid level, finite σ terms, and a chain in stats.chains", () => {
+  for (const e of entries) {
+    const r = e.rel;
+    assert.ok(r, `Missing rel on ${e.id}`);
+    assert.ok(REL.LEVELS.includes(r.level), `Bad rel.level on ${e.id}: ${r.level}`);
+    assert.ok(Number.isFinite(r.s) && r.s >= 0, `Bad rel.s on ${e.id}`);
+    assert.ok(Number.isFinite(r.sigma) && r.sigma >= r.s - 1e-9, `Bad rel.sigma on ${e.id}`);
+    assert.ok(chains[r.chain], `rel.chain ${r.chain} of ${e.id} missing from stats.chains`);
+    for (const [m, has] of Object.entries(COST_OF)) {
+      if (!has(e)) continue;
+      assert.ok(Number.isFinite(r.c?.[m]) && r.c[m] > 0, `Missing rel.c.${m} on ${e.id}`);
+      assert.ok(Number.isFinite(r.w?.[m]) && r.w[m] >= 0, `Missing rel.w.${m} on ${e.id}`);
+    }
+    assert.ok(Number.isFinite(r.score?.ii) && r.score.ii >= 0, `Missing rel.score.ii on ${e.id}`);
+    if (Number.isFinite(r.lo)) assert.ok(r.lo < r.hi, `rel range inverted on ${e.id}`);
+  }
+});
+
+test("Chain arithmetic: rel.s² = Σ step σ²; default level and range follow σ", () => {
+  for (const e of entries) {
+    const c = chains[e.rel.chain];
+    const sum = c.steps.reduce((a, x) => a + x.s * x.s, 0);
+    assert.ok(Math.abs(Math.sqrt(sum) - e.rel.s) < 2e-3, `${e.id}: rel.s ${e.rel.s} vs √Σσ² ${Math.sqrt(sum).toFixed(4)}`);
+    const sigma = REL.qsum(e.rel.s, e.rel.w.task, e.rel.c.task);
+    assert.ok(Math.abs(sigma - e.rel.sigma) < 2e-3, `${e.id}: rel.sigma mismatch`);
+    const lvl = REL.worseLevel(REL.levelFromSigma(sigma), REL.levelFromScore(e.rel.score.ii), e.rel.cap);
+    assert.equal(e.rel.level, lvl, `${e.id}: level ${e.rel.level} != ${lvl}`);
+    if (c.steps.some((x) => x.k === "M4" || x.k === "M5")) assert.equal(e.rel.level, "speculative", `${e.id}: M4/M5 step must be Speculative`);
+    const S = e.billing === "metered" ? 1 : e.subsidyMultiple * (e.quotaMix?.task?.f ?? 1);
+    if (!e.unmetered && S > 0 && Number.isFinite(e.rel.lo)) {
+      const real = e.aaCostPerTaskUsd / S;
+      assert.ok(Math.abs(e.rel.lo / (real * Math.exp(-REL.Z80 * sigma)) - 1) < 2e-3, `${e.id}: rel.lo off`);
+      assert.ok(Math.abs(e.rel.hi / (real * Math.exp(REL.Z80 * sigma)) - 1) < 2e-3, `${e.id}: rel.hi off`);
+    }
+  }
+});
+
+test("A derived value is never above its source's level; upstream grade is a ceiling", () => {
+  let checked = 0;
+  for (const e of entries) {
+    const c = chains[e.rel.chain];
+    const anchorId = c.anchors?.[0];
+    if (anchorId && REL.chainDerived(c)) {
+      const effId = e.effort && e.id.includes("@") ? `${anchorId}@${e.effort}` : anchorId;
+      const a = byId.get(effId) || entries.find((x) => baseOf(x.id) === anchorId);
+      if (a) {
+        checked++;
+        const drop = c.drop || 0;
+        assert.ok(e.rel.s * e.rel.s + drop >= a.rel.s * a.rel.s - 1e-6, `${e.id} σ_S ${e.rel.s} below its anchor ${a.id} ${a.rel.s}`);
+        const lvl = (x, d = 0) => REL.levelFromSigma(Math.sqrt(x.rel.s * x.rel.s + d));
+        assert.ok(LEVEL_RANK[lvl(e, drop)] >= LEVEL_RANK[lvl(a)], `${e.id} subsidy level above anchor ${a.id}`);
+      }
+    }
+    if ((e.origin === "fei2411" || e.origin === "priors-repo") && LEVEL_RANK[e.confidence] != null) {
+      assert.ok(LEVEL_RANK[e.rel.level] >= LEVEL_RANK[e.confidence], `${e.id}: level ${e.rel.level} above upstream ${e.confidence}`);
+    }
+  }
+  assert.ok(checked >= 50, `Too few derived rows checked: ${checked}`);
+});
+
+test("Placeholder (M4) carryovers are Speculative; no ChatGPT 10x→20x or Fable 5.1→5.2 placeholder remains", () => {
+  let m4 = 0;
+  for (const e of entries) {
+    const c = chains[e.rel.chain];
+    if (c.steps.some((x) => x.k === "M4" || x.k === "M5")) {
+      m4++;
+      assert.equal(e.rel.level, "speculative", `${e.id} has an M4/M5 step but level ${e.rel.level}`);
+    }
+    assert.ok(!(e.origin === "shared-pool-assumed" && /^ChatGPT Pro 20x$/.test(e.plan)), `ChatGPT 10x→20x carryover still present: ${e.id}`);
+    assert.ok(!(e.origin === "shared-pool-assumed" && /claude-fable/.test(e.baseModelId)), `Fable carryover placeholder still present: ${e.id}`);
+  }
+  console.log(`     M4/M5 rows (Speculative): ${m4}`);
+});
+
+test("Expired promotions and stale quota rows are absent", () => {
+  for (const p of relStats.promoExpiry || []) {
+    if (genDate <= p.until) continue;
+    const hit = entries.filter((e) => e.plan === p.plan && e.baseModelId === p.model);
+    assert.equal(hit.length, 0, `Expired promo still listed: ${p.plan} × ${p.model}`);
+  }
+  assert.ok(!entries.some((e) => e.plan === "Claude Pro" && e.baseModelId === "claude-fable-5-2"), "Claude Pro × Fable 5.2 launch-week row must be gone");
+  for (const q of relStats.quotaChanges || []) {
+    for (const e of entries.filter((x) => x.plan === q.plan && x.baseModelId === q.model && !REL.chainDerived(chains[x.rel.chain]))) {
+      const d = REL.lastDate(e.dataDate);
+      assert.ok(!(d && d < q.date) || e.rel.level === "speculative", `${e.id} predates quota change ${q.date}`);
+    }
+  }
+  for (const r of relStats.modelRetirements || []) {
+    if (genDate > r.after) assert.ok(!entries.some((e) => e.baseModelId === r.model), `Retired model ${r.model} still listed`);
+  }
+  for (const e of entries) {
+    const d = REL.lastDate(e.dataDate);
+    const sampled = chains[e.rel.chain].steps.some((x) => ["S3", "S4", "S5", "S6", "T", "prelim"].includes(x.k));
+    if (sampled && d && REL.daysBetween(d, genDate) > 90) assert.notEqual(e.rel.level, "high", `${e.id}: data older than 90 days is High`);
+  }
+});
+
+test("Cross-plan consistency quads: fails are flagged and allow-listed", () => {
+  const cons = relStats.consistency || [];
+  const quads = cons.filter((x) => x.type === "quad");
+  assert.ok(quads.length >= 5, `Expected informative quads, got ${quads.length}`);
+  // Known pending Fei2411 case: Opus 5 vs Opus 5.5 multiples move ×1.8–2.1 across Claude plans
+  // (Fei notes it on claude_pro::claude-opus-5 as 张力 … 待裁定).
+  const ALLOW = [/^Claude:claude-opus-5\/claude-opus-5-5:/];
+  for (const q of cons) {
+    if (q.verdict !== "fail") continue;
+    const flagged = entries.find((e) => baseOf(e.id) === q.flagged);
+    assert.ok(flagged, `Fail without a flagged cell: ${JSON.stringify(q)}`);
+    assert.ok(chains[flagged.rel.chain].flags.includes("inconsistent"), `${q.flagged} not flagged inconsistent`);
+    if (q.type === "quad") {
+      const key = `${q.family}:${q.a}/${q.b}:${q.p}/${q.q}`;
+      assert.ok(ALLOW.some((re) => re.test(key)), `Consistency fail not allow-listed: ${key} ×${q.ratio}`);
+    }
+  }
+  for (const q of quads) {
+    if (Math.abs(q.D) > Math.log(1.6)) assert.equal(q.verdict, "fail", `|D| > ln 1.6 not failed: ${JSON.stringify(q)}`);
+  }
+  const warns = cons.filter((x) => x.verdict === "warn");
+  console.log(`     Quads: ${quads.length} informative, ${quads.filter((x) => x.verdict === "fail").length} fail, ${warns.length} warn; pool checks: ${cons.filter((x) => x.type === "pool").length}`);
+});
+
+test("Priors records with plans: [] are parsed (ratio, readings, sameAs, paid); free tiers are not plans", () => {
+  const fable = entries.filter((e) => e.plan === "Claude Ultra" && e.baseModelId === "claude-fable-5-2");
+  assert.ok(fable.length > 0, "Missing Fable 5.2 × Claude Ultra");
+  for (const e of fable) {
+    assert.ok(e.subsidyMultiple > 25 && e.subsidyMultiple < 30, `Fable 5.2 × Ultra ${e.subsidyMultiple}× not ≈27×`);
+    assert.ok(e.subsidyReadings && Math.abs(e.subsidyReadings.own - 13.6) < 0.5, `Fable 5.2 × Ultra "own" reading ${e.subsidyReadings?.own}`);
+    assert.equal(e.origin, "priors-repo");
+  }
+  const max = entries.filter((e) => e.plan === "Claude Max" && e.baseModelId === "claude-fable-5-2");
+  assert.ok(max.length > 0 && max.every((e) => e.origin === "ratio-transfer" && e.subsidyMultiple > 25 && e.subsidyMultiple < 37), "Fable 5.2 × Claude Max must come from ratio transfer (≈31×)");
+  assert.ok(entries.some((e) => /^Command Code Max/.test(e.plan) && e.baseModelId === "muse-wonder"), "Missing Priors ratio record Command Code Max 10× × Muse Wonder");
+  assert.ok(!entries.some((e) => /free tier/i.test(e.plan)), "A free tier became a paid plan");
+  const ALLOWED = new Set(["free tier", "carried by shared-pool rule", "no list price"]);
+  for (const sk of relStats.priorsSkipped || []) {
+    assert.ok(ALLOWED.has(sk.reason) || /^sameAs .* has no plans$/.test(sk.reason), `Priors record skipped for "${sk.reason}": ${sk.modelId} ${sk.plan}`);
+  }
+});
+
+test("Neon anchor pools Fei direct and Priors preliminary by 1/σ²", () => {
+  for (const plan of ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"]) {
+    const rows = entries.filter((e) => e.plan === plan && e.baseModelId === "gemini-4-neon");
+    assert.ok(rows.length > 0, `Missing Neon on ${plan}`);
+    assert.ok(rows.every((e) => e.origin === "fei2411" && e.pooled), `Neon on ${plan} is not a pooled Fei row`);
+    const p = rows[0].pooled;
+    const lo = Math.min(p.fei, p.priors), hi = Math.max(p.fei, p.priors);
+    assert.ok(rows[0].subsidyMultiple >= lo - 1e-6 && rows[0].subsidyMultiple <= hi + 1e-6, `Pooled Neon on ${plan} outside its sources`);
+    assert.ok(p.weightFei > 0 && p.weightFei < 1, `Bad pooling weight on ${plan}`);
+    assert.ok(chains[rows[0].rel.chain].flags.includes("pooled"));
+    for (const t of ["gemini-4-carbon", "gemini-4-hydrogen"]) {
+      const c = entries.find((e) => e.plan === plan && e.baseModelId === t);
+      assert.ok(c && Math.abs(c.subsidyMultiple - rows[0].subsidyMultiple) < 1e-3, `${t} on ${plan} must carry the pooled Neon multiple`);
+    }
+  }
+});
+
+test("Kimi K3.1 Pro carries K3's token pool × list-price blend ratio (≈0.667)", () => {
+  for (const plan of ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"]) {
+    const k3 = entries.find((e) => e.plan === plan && e.baseModelId === "kimi-k3");
+    const k31 = entries.find((e) => e.plan === plan && e.baseModelId === "kimi-k3-1-pro");
+    if (!k3 || !k31) continue;
+    const r = k31.subsidyMultiple / k3.subsidyMultiple;
+    assert.ok(Math.abs(r - 2 / 3) < 0.01, `${plan}: K3.1 Pro / K3 = ${r.toFixed(3)}`);
+  }
+});
+
+test("Fable on Claude plans: capShare 0.5, both readings, own = shared × capShare", () => {
+  for (const e of entries.filter((x) => /^Claude (Pro|Max|Ultra)$/.test(x.plan) && /^claude-fable-/.test(x.baseModelId))) {
+    assert.equal(e.capShare, 0.5, `capShare on ${e.id}`);
+    assert.ok(e.subsidyReadings, `readings on ${e.id}`);
+    assert.ok(Math.abs(e.subsidyReadings.own / (e.subsidyReadings.shared * 0.5) - 1) < 0.01, `own ≠ shared × 0.5 on ${e.id}`);
+    assert.equal(e.subsidyMultiple, e.subsidyReadings.shared, `default reading must be Shared on ${e.id}`);
+  }
+  assert.ok(/capShare/.test(appJs), "Tasks/mo must use capShare");
+});
+
+test("Claude quota token-mix correction matches the build flag (with range)", () => {
+  const on = relStats.claudeMixCorrection;
+  assert.equal(typeof on, "boolean", "stats.reliability.claudeMixCorrection missing");
+  assert.deepEqual(REL.phiVector({ output: 1 }), [1, 1, 1, 1], "φ of a pure-output mix must be 1");
+  const claude = entries.filter((e) => /^Claude (Pro|Max|Ultra|Team)\b/.test(e.plan) && e.billing === "subscription");
+  assert.ok(claude.length > 50, "Too few Claude rows");
+  for (const e of entries) {
+    if (!claude.includes(e)) {
+      assert.ok(!e.quotaMix, `Non-Claude row ${e.id} has a mix correction`);
+      continue;
+    }
+    assert.ok(e.rel.w.task >= 0.05 - 1e-9, `${e.id}: Claude mix σ missing`);
+    if (!on) {
+      assert.ok(!e.quotaMix, `${e.id}: correction applied while the flag is off`);
+      continue;
+    }
+    for (const [m, q] of Object.entries(e.quotaMix || {})) {
+      // Doc bound 0.6–1.15; the no-cache 1M-token metric on a 71%-cache-read sample lands at ≈0.60, so 0.55.
+      assert.ok(q.f >= 0.55 && q.f <= 1.15, `${e.id} ${m}: S_eff/S ${q.f} outside 0.55–1.15`);
+      assert.ok(q.lo <= q.f + 1e-9 && q.f <= q.hi + 1e-9, `${e.id} ${m}: f outside its range`);
+    }
+  }
+  if (on) {
+    const opus = entries.find((e) => e.plan === "Claude Max" && e.modelId === "claude-opus-5-5--max");
+    assert.ok(opus?.quotaMix?.task && opus.quotaMix.task.f > 0.7 && opus.quotaMix.task.f < 0.86, `Claude Max × Opus 5.5 (max) task factor ${opus?.quotaMix?.task?.f}, expected ≈0.78`);
+    assert.ok(claude.filter((e) => e.quotaMix?.task).length >= claude.length * 0.5, "Correction missing on most Claude rows");
+  }
+});
+
+test("AA cost breakdowns sum to total; T3 harness ratios present", () => {
+  let n = 0;
+  for (const e of entries) {
+    const b = e.aaCostPerTaskBreakdown;
+    if (!b?.total) continue;
+    n++;
+    const sum = (b.cacheRead || 0) + (b.cacheWrite || 0) + (b.nonCacheInput || 0) + (b.output || 0);
+    assert.ok(Math.abs(sum / b.total - 1) < 0.01, `${e.id}: breakdown sums to ${sum} of ${b.total}`);
+  }
+  assert.ok(n > 0, "No AA cost breakdowns");
+  const h = relStats.t3Harness || {};
+  for (const slug of ["codex", "claude-code"]) {
+    assert.ok(h[slug]?.n >= 5, `t3Harness.${slug} n = ${h[slug]?.n}`);
+    assert.ok(h[slug].ratio > 0 && h[slug].ratio < 5, `t3Harness.${slug} ratio ${h[slug].ratio}`);
+  }
+});
+
+test("Parser coverage: Fei derived rows resolve an anchor; no silent carry", () => {
+  const unresolved = relStats.unresolved || [];
+  assert.ok(relStats.feiDerived > 0, "No Fei derived rows counted");
+  assert.ok(unresolved.length / relStats.feiDerived <= 0.05, `${unresolved.length}/${relStats.feiDerived} Fei derived rows unresolved: ${unresolved.join(", ")}`);
+  for (const e of entries) {
+    if (["shared-pool-assumed", "ratio-transfer", "priors-assumed"].includes(e.origin)) {
+      assert.ok(REL.chainDerived(chains[e.rel.chain]), `${e.id} carries a subsidy without a transfer step`);
+    }
+    assert.ok(!e.replacesId, `${e.id} still uses replacesId`);
+  }
+});
+
+test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () => {
+  const counts = { high: 0, medium: 0, low: 0, speculative: 0 };
+  for (const e of entries) counts[e.rel.level]++;
+  assert.deepEqual(counts, relStats.counts, "stats.reliability.counts out of sync");
+  if (counts.speculative > entries.length * 0.08) console.warn(`WARN  Speculative ${counts.speculative} > 8% of entries`);
+  if (counts.high < entries.length * 0.3) console.warn(`WARN  High ${counts.high} < 30% of entries`);
+  console.log(`     Levels: ${JSON.stringify(counts)}`);
+  for (const id of ["minConf", "costView", "fableCap", "relLegend"]) assert.ok(html.includes(`id="${id}"`), `Missing #${id}`);
+  for (const id of ["hideEstimated", "showTier-high", "estFootnote"]) assert.ok(!html.includes(`id="${id}"`), `Old control #${id} still present`);
+  const opts = (id) => [...(html.match(new RegExp(`<select id="${id}"[\\s\\S]*?</select>`))?.[0] || "").matchAll(/<option value="(\w+)"/g)].map((m) => m[1]);
+  assert.deepEqual(opts("minConf"), ["high", "medium", "low", "speculative"]);
+  assert.deepEqual(opts("costView"), ["point", "range"]);
+  assert.deepEqual(opts("fableCap"), ["shared", "own"]);
+  assert.ok(/<option value="low" selected>/.test(html.match(/<select id="minConf"[\s\S]*?<\/select>/)[0]), "Min confidence default must be Low");
+  assert.ok(appJs.includes('speculative: "◌"') && appJs.includes('high: "●"'), "Level glyphs missing");
+  assert.ok(!/est-star|estMark|interpMark/.test(appJs), "Old * / tier markers still rendered");
+  assert.ok(appJs.includes("CHART_MIN_CONF") && appJs.includes('"medium"'), "Bar chart must be fixed at Medium or better");
+  // Legacy est= mapping
+  for (const [k, v] of [["0", "high"], ["h", "medium"], ["hm", "low"], ["hml", "speculative"]]) {
+    assert.ok(appJs.includes(`${k === "0" ? "0" : k}: "${v}"`), `Legacy est=${k} → ${v} mapping missing`);
   }
 });
 

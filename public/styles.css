@@ -439,6 +439,36 @@ input[type="checkbox"]:checked {
   margin-left: 2px;
 }
 
+.rel-glyph {
+  margin-left: 3px;
+  cursor: help;
+}
+
+.rel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.method-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.method-table th,
+.method-table td {
+  text-align: left;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--cell-border);
+}
+
+.method-table td:not(:first-child),
+.method-table th:not(:first-child) {
+  white-space: nowrap;
+}
+
 .footnote {
   margin: -6px 2px 0;
   font-size: 12px;
@@ -1190,17 +1220,14 @@ tbody tr:hover {
     gap: 12px;
   }
   .filter-bar {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
     padding: 10px 12px;
   }
   .filter-item {
     gap: 3px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--grid-line);
-  }
-  .select {
-    max-width: 195px;
   }
   .filter-actions {
     border-left: 0;
@@ -1226,8 +1253,7 @@ tbody tr:hover {
     white-space: normal;
   }
   .bar-row {
-    grid-template-columns: 1fr;
-    gap: 5px;
+    grid-template-columns: 200px minmax(0, 1fr);
     padding: 8px 10px;
   }
   .bar-model {
@@ -1249,7 +1275,8 @@ tbody tr:hover {
   table:not(.plan-matrix) td {
     padding: 7px 6px;
   }
-  table:not(.plan-matrix) .col-hide-sm {
+  /* Tablet: hide only the two least-used columns */
+  table:not(.plan-matrix) .col-hide-md {
     display: none;
   }
   table:not(.plan-matrix) td:nth-child(1) .model,
@@ -1267,4 +1294,158 @@ tbody tr:hover {
 
 #methodDialog .method-body {
   max-height: calc(100vh - 60px);
+}
+
+.bar-meta {
+  display: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Shared mobile + tablet: bigger tap targets in the same bevelled style */
+@media (max-width: 780px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace > * {
+    min-width: 0;
+  }
+  .titlebar-right .btn {
+    flex: 0 1 auto;
+  }
+  .btn {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .dialog-titlebar .btn {
+    min-height: 36px;
+  }
+  .select,
+  .search-input {
+    min-height: 36px;
+    font-size: 16px;
+  }
+  .search-input {
+    width: 100%;
+  }
+  .plan-exp-btn {
+    min-width: 32px;
+    min-height: 32px;
+    font-size: 13px;
+  }
+  .head-check,
+  .settings-check,
+  .toolbar-check {
+    min-height: 40px;
+    align-items: center;
+  }
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+  input[type="range"] {
+    height: 40px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 22px;
+    height: 30px;
+    margin-top: -12px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 30px;
+  }
+  #enableExtrapBtn,
+  #disableExtrapBtn {
+    display: inline-block;
+    padding: 10px 0;
+  }
+  .bar-meta {
+    display: block;
+  }
+  tr.group-row td {
+    height: 44px;
+  }
+  /* Drawer: pinned model column + right-edge scroll shadow */
+  .plan-matrix .pm-model {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--shell-bg);
+    box-shadow: 1px 0 0 var(--cell-border);
+  }
+  .plan-drawer {
+    background:
+      linear-gradient(to left, var(--shell-bg), var(--shell-bg)) right / 14px 100% no-repeat local,
+      linear-gradient(to left, rgba(0, 0, 0, 0.16), transparent) right / 14px 100% no-repeat scroll,
+      var(--shell-bg);
+  }
+  .plan-matrix th,
+  .pm-score {
+    font-size: 12px;
+  }
+}
+
+/* Phone */
+@media (max-width: 600px) {
+  .filter-bar {
+    grid-template-columns: 1fr;
+  }
+  .bar-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .titlebar-right .btn {
+    flex: 1 1 auto;
+  }
+  .select {
+    max-width: 100%;
+  }
+  .bench-pick {
+    flex: 1 1 auto;
+  }
+  .bench-pick .select {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+  .bench-pick #rankMode {
+    flex: none;
+    width: auto;
+  }
+  .extra-criterion-head .select {
+    max-width: none;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  table:not(.plan-matrix) .col-hide-sm {
+    display: none;
+  }
+  .bar-fill {
+    max-width: calc(100% - 150px);
+  }
+  .bar-val {
+    flex: none;
+  }
+  .bar-note {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table:not(.plan-matrix) th {
+    white-space: normal;
+    font-size: 12px;
+    vertical-align: bottom;
+  }
+  table:not(.plan-matrix) td,
+  table:not(.plan-matrix) th {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  .effort-range {
+    flex-wrap: nowrap;
+  }
+  .effort-range .select {
+    flex: 1;
+  }
 }

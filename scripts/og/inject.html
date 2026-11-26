@@ -1,0 +1,17 @@
+<style>
+  .filter-panel, .bar-note, .bar-plan button, .panel-head label, .titlebar-right,
+  .panel-foot, #tableDetails, footer, .footnote { display: none !important; }
+</style>
+<script>
+  // Fixed bar lengths: the top models' real bars are scaled against the whole dataset and read as noise at card size.
+  (function setBars() {
+    const fills = [...document.querySelectorAll(".bar-fill")];
+    if (!fills.length) return setTimeout(setBars, 100);
+    const W = [18, 30, 44, 60, 80];
+    fills.forEach((e, i) => {
+      const w = (W[i] ?? 96) + "px";
+      for (const p of ["width", "min-width", "max-width"]) e.style.setProperty(p, w, "important");
+      e.style.setProperty("flex", "none", "important");
+    });
+  })();
+</script>

@@ -14,7 +14,7 @@ Data refreshes automatically every 6 hours via GitHub Actions (`.github/workflow
 4. **[GitHub Copilot Plans](https://github.com/features/copilot/plans):** Live-parsed first-party AI Credit tiers and per-plan available model matrix.
 5. **[Ollama Cloud Pricing](https://ollama.com/pricing):** Live-parsed first-party Ollama Team credit pool.
 6. **[Kilo Pass Pricing](https://kilo.ai/pricing):** Live-parsed first-party Kilo Pass annual credit pools (net of the 5% credit purchase processing fee).
-7. **[adamholter/priors](https://github.com/adamholter/priors):** Secondary backfill only (`data/snapshots/latest.json.gz`) for per-effort sub-tests and preliminary/carryover estimates (marked with `*`).
+7. **[adamholter/priors](https://github.com/adamholter/priors):** Secondary backfill only (`data/snapshots/latest.json.gz`) for per-effort sub-tests and preliminary/carryover estimates (graded in [docs/RELIABILITY.md](docs/RELIABILITY.md)).
 8. **[ARC Prize](https://arcprize.org/leaderboard):** Optional ARC-AGI-2 (`v2_Semi_Private`) fallback for opt-in extrapolated reasoning efforts (`‡`) on model families without multi-effort AA data.
 
 See **[docs/EFFORT-ESTIMATES.md](./docs/EFFORT-ESTIMATES.md)** for leave-one-out cross-validation error and confidence scores by degree of separation (`†` interpolation vs `‡` extrapolation).

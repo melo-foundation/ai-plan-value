@@ -56,6 +56,7 @@ const BENCHMARKS = {
 };
 
 const ACCESS_FILTERS = new Set(["any", "open", "locked"]);
+const TOP_N_MAX = 20;
 
 const state = {
   dataset: null,
@@ -67,12 +68,15 @@ const state = {
   no5h: false, // hide plans with a 5h or daily limit
   noWeekly: false, // hide plans with a weekly / 7-day limit
   minScore: 45,
+  rankMode: "min", // "min" (score threshold) | "top" (N highest-scoring models)
+  topN: 5,
   budgetIdx: 5,
   maxCostIdx: 4,
   hideLegacy: true,
   hideOffPeak: true,
-  hideEstimated: false,
-  estShow: { high: true, medium: false, low: false }, // estimate confidence tiers shown
+  minConf: "low", // lowest reliability level shown: high | medium | low | speculative
+  costView: "point", // "point" | "range" (80% band in Real cost cells)
+  fableCap: "shared", // "shared" | "own" (Fable only) reading for Fable on Claude plans
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
@@ -95,7 +99,24 @@ const COST_MODES = {
   turn: { unit: "turn", heading: "Best Real Cost per T3 Code Turn", maxLabel: "Max cost/turn:", vol: "Turns/mo" },
   tokens: { unit: "1M", heading: "Best Real Cost per 1M Tokens", maxLabel: "Max $/1M tokens:", vol: "Mtok/mo" },
 };
-const worseTier = (a, b) => (!a ? b || null : !b ? a : TIER_RANK[a] >= TIER_RANK[b] ? a : b);
+
+// Reliability levels (docs/RELIABILITY.md): σ = sd of ln(real cost); level from the 80% band.
+const LEVELS = ["high", "medium", "low", "speculative"];
+const LEVEL_RANK = { high: 0, medium: 1, low: 2, speculative: 3 };
+const LEVEL_LABEL = { high: "High", medium: "Medium", low: "Low", speculative: "Speculative" };
+const LEVEL_GLYPH = { high: "●", medium: "◐", low: "○", speculative: "◌" };
+const LEVEL_PARAM = { high: "h", medium: "m", low: "l", speculative: "s" };
+const LEVEL_SIGMA = { high: 0.18, medium: 0.4, low: 0.7 };
+const LEVEL_SCORE_PTS = { high: 1.5, medium: 3, low: 5 };
+const Z80 = 1.2816;
+const qsum = (...xs) => Math.sqrt(xs.reduce((a, x) => a + (Number.isFinite(x) ? x * x : 0), 0));
+const levelFromSigma = (s) =>
+  s <= LEVEL_SIGMA.high + 1e-9 ? "high" : s <= LEVEL_SIGMA.medium + 1e-9 ? "medium" : s <= LEVEL_SIGMA.low + 1e-9 ? "low" : "speculative";
+const levelFromScore = (p) =>
+  !(p > 0) || p <= LEVEL_SCORE_PTS.high ? "high" : p <= LEVEL_SCORE_PTS.medium ? "medium" : p <= LEVEL_SCORE_PTS.low ? "low" : "speculative";
+const worseLevel = (...ls) => ls.filter(Boolean).reduce((a, b) => (LEVEL_RANK[b] > LEVEL_RANK[a] ? b : a), "high");
+// "Best" picks in the bar chart never rest on a Low or Speculative row.
+const CHART_MIN_CONF = "medium";
 
 function currentCostStops() {
   return state.costMode === "tokens" ? COST_STOPS_TOKENS : COST_STOPS_TASK;
@@ -214,62 +235,54 @@ function renderLink(text, url) {
   return `<a class="row-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
 }
 
-function estMark(r) {
-  if (!r.isPreliminary) return "";
-  const tip =
-    r.estimateType === "assumed"
-      ? "Estimated subsidy (prior-generation quota carryover)"
-      : "Estimated subsidy (preliminary user report)";
-  return `<span class="est-star" title="${esc(tip)}">*</span>`;
+// "~" prefix on a derived (not measured) cell value
+const tilde = (on) => (on ? "~" : "");
+
+function fmtUsdShort(n) {
+  return fmtUsd(n).replace(/^\$/, "");
 }
 
-const TIER_RANK = { high: 0, medium: 1, low: 2 };
-const TIER_GLYPH = { high: "●", medium: "◐", low: "○" };
-const TIER_LABEL = { high: "High", medium: "Medium", low: "Low" };
-
-function agentEstimateText(r) {
-  const a = r.codingAgent || {};
-  if (a.estimate === "same-model") return `Agent run estimated from ${a.fromAgent} at ${a.fromEffort} effort`;
-  if (a.estimate === "terminal-bench") return `Agent run estimated from Terminal-Bench 4.0${a.outOfRange ? " (below the measured range)" : ""}`;
-  return null;
-}
-
-function effortEstimateText(r) {
-  if (!r.effortEstimate) return null;
-  if (r.effortEstimate === "interpolated") {
-    return "Interpolated reasoning effort (bracketed between measured efforts on this model)";
+// Real cost cell value: point, or the 80% band in Range mode (High rows stay a point).
+function realCostText(r, cost = r.effectiveCost, lo = r.relLo, hi = r.relHi) {
+  if (state.costView === "range" && r.level !== "high" && Number.isFinite(lo) && Number.isFinite(hi) && cost > 0) {
+    return `${fmtUsd(lo)}–${fmtUsdShort(hi)}`;
   }
-  const n = r.effortEstimateSteps;
-  const src =
-    r.effortEstimateSource === "arc-agi-2"
-      ? "ARC-AGI-2 effort ratios"
-      : `other measured models in the same family${n ? `, ${n} effort ${n === 1 ? "step" : "steps"} from a measured result` : ""}`;
-  return `Extrapolated reasoning effort (estimated from ${src}, not directly benchmarked)`;
+  return `${tilde(r.costDerivedReal)}${fmtUsd(cost)}`;
 }
 
-function estimateTip(r) {
-  const parts = [];
-  if (r.estSources.has("agent")) parts.push(agentEstimateText(r));
-  if (r.estSources.has("effort")) parts.push(effortEstimateText(r));
-  parts.push(`${TIER_LABEL[r.estTier]} confidence`);
-  return parts.filter(Boolean).join(" · ");
+function relTooltip(r) {
+  const rl = r.rel || {};
+  const chain = state.dataset?.stats?.chains?.[rl.chain];
+  const pad = (s) => s.padEnd(9, " ");
+  const lines = [`${LEVEL_LABEL[r.level]} · ×${Math.exp(Z80 * r.sigma).toFixed(1)}`];
+  const sub = [];
+  const mix = r.quotaMix?.[state.costMode];
+  if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
+  if (mix && Math.abs(mix.f - 1) > 0.005) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
+  sub.push(...(chain?.lines || []));
+  const subVal = r.isApi ? "1×" : r.unmetered ? "∞" : fmtMult(r.subsidy);
+  lines.push(`${pad("Subsidy")}${subVal}  ${sub[0] || ""}`);
+  for (const l of sub.slice(1)) lines.push(`${pad("")}${l}`);
+  lines.push(`${pad("Cost")}${fmtUsd(r.apiMetric)}  ${rl.cl?.[state.costMode] || ""}`);
+  if (r.scorePts > 0) lines.push(`${pad("Score")}~${fmtScore(r.score, state.benchKey)}  ±${r.scorePts.toFixed(1)} pts`);
+  if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) lines.push(`${pad("Range")}${fmtUsd(r.relLo)}–${fmtUsdShort(r.relHi)}`);
+  return lines.join("\n");
 }
 
-// Escape, then wrap tier glyphs so they render in a symbol font
+// One graded glyph per row, after the Real cost value
+function relGlyph(r) {
+  if (!r.level) return "";
+  return `<span class="tier-glyph rel-glyph rel-${r.level}" title="${esc(relTooltip(r))}">${LEVEL_GLYPH[r.level]}</span>`;
+}
+
+// Escape, then wrap level glyphs so they render in a symbol font
 function glyphHtml(text) {
-  return esc(text).replace(/[●◐○]/g, (g) => `<span class="tier-glyph">${g}</span>`);
+  return esc(text).replace(/[●◐○◌]/g, (g) => `<span class="tier-glyph">${g}</span>`);
 }
 
-function interpMark(r) {
-  if (!r.estTier) return "";
-  return `<span class="est-star est-tier" title="${esc(estimateTip(r))}">${TIER_GLYPH[r.estTier]}</span>`;
-}
-
-const ALL_TIERS = { high: true, medium: true, low: true };
-function passesEstTier(r, show = state.estShow) {
-  return !r.estTier || Boolean(show[r.estTier]);
-}
-const showsRough = () => state.estShow.medium || state.estShow.low;
+const passesConf = (r, min = state.minConf) => LEVEL_RANK[r.level] <= LEVEL_RANK[min];
+const isFaded = (r) => r.level === "low" || r.level === "speculative";
+const stricterLevel = (a, b) => (LEVEL_RANK[a] <= LEVEL_RANK[b] ? a : b);
 
 function isLegacyEntry(r) {
   if (typeof r.isLegacy === "boolean") return r.isLegacy;
@@ -334,25 +347,29 @@ function getAllEntriesResolved() {
   }
   const mode = state.costMode;
   const benchAgent = state.benchKey === "codingAgentIndex";
-  const benchCursor = state.benchKey === "cursorBench";
   const agentInvolved = benchAgent || mode === "agent";
 
+  const NO_SCORE_ERR = new Set(["cursorBench", "contextWindow", "outputSpeed"]);
   return raw
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
-      const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
+      const reading = state.fableCap === "own" && e.subsidyReadings ? e.subsidyReadings.own : e.subsidyMultiple;
+      const mixF = (m) => e.quotaMix?.[m]?.f ?? 1;
+      const subFor = (m) => (isApi ? 1 : e.unmetered ? Infinity : reading * mixF(m));
+      const subsidy = subFor(mode);
       const accessMeta = getPlanAccessMeta(e);
       const score = getScore(e, state.benchKey);
       const unmeteredFree = Boolean(e.unmetered);
-      const real = (v) => (v == null ? null : unmeteredFree ? 0 : v / (subsidy || 1));
+      const real = (v, m = mode) => (v == null ? null : unmeteredFree ? 0 : v / (subFor(m) || 1));
 
       const p = e.aaPricing || {};
       const apiMtok = p.blended3to1Per1M ?? p.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok ?? null;
+      const subTok = subFor("tokens");
       const realMtok = unmeteredFree
         ? 0
-        : apiMtok != null && subsidy > 0
-          ? apiMtok / subsidy
+        : apiMtok != null && subTok > 0
+          ? apiMtok / subTok
           : e.realUsdPerMtok ?? null;
 
       const API_COST = {
@@ -364,29 +381,38 @@ function getAllEntriesResolved() {
       };
       const apiMetric = API_COST[mode] ?? null;
       const effectiveCost = mode === "tokens" ? realMtok : real(apiMetric);
-      const realTaskCost = real(API_COST.task);
+      const realTaskCost = real(API_COST.task, "task");
 
-      // Estimate tiers: the score's (benchmark) and the cost's (cost metric) are tracked separately.
-      const scoreTier = benchAgent ? e.codingAgent?.confidence ?? null : benchCursor ? null : e.estimateConfidence ?? null;
-      const costTier = mode === "task" ? e.estimateConfidence ?? null : mode === "agent" ? e.codingAgent?.confidence ?? null : null;
-      const estSources = new Set();
-      if (benchAgent && scoreTier) estSources.add("agent");
-      if (mode === "agent" && costTier) estSources.add("agent");
-      if (!benchAgent && !benchCursor && scoreTier) estSources.add("effort");
-      if (mode === "task" && costTier) estSources.add("effort");
+      // Reliability: σ of ln real cost = subsidy chain ⊕ token mix ⊕ cost metric; level also bounded by the score error.
+      const rl = e.rel || {};
+      const sigma = qsum(rl.s, rl.w?.[mode], rl.c?.[mode]);
+      const scorePts = benchAgent ? rl.score?.agent ?? 0 : NO_SCORE_ERR.has(state.benchKey) ? 0 : rl.score?.ii ?? 0;
+      const level = e.rel ? worseLevel(levelFromSigma(sigma), levelFromScore(scorePts), rl.cap) : "speculative";
+      const costDerived = Boolean(rl.ce?.includes(mode));
+      const subDerived = Boolean(rl.sd);
+      const relLo = effectiveCost > 0 ? effectiveCost * Math.exp(-Z80 * sigma) : null;
+      const relHi = effectiveCost > 0 ? effectiveCost * Math.exp(Z80 * sigma) : null;
 
+      // Volume uses the model's share of the pool (Fable: half the weekly limit) in both readings.
+      const capShare = state.fableCap === "own" ? 1 : e.capShare ?? 1;
       const volumePerMonth =
         !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
-          ? e.priceUsd / effectiveCost
+          ? (e.priceUsd / effectiveCost) * capShare
           : null;
 
       return {
         ...e,
         ...accessMeta,
-        estTier: worseTier(scoreTier, costTier),
-        scoreTier,
-        costTier,
-        estSources,
+        level,
+        sigma,
+        scorePts,
+        relLo,
+        relHi,
+        scoreDerived: scorePts > 0,
+        subDerived,
+        costDerived,
+        costDerivedReal: costDerived || subDerived,
+        altDerived: (mode === "tokens" ? Boolean(rl.ce?.includes("task")) : false) || subDerived,
         ...(agentInvolved ? { harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
         isApi,
         score,
@@ -400,14 +426,13 @@ function getAllEntriesResolved() {
     });
 }
 
-function getFilteredRows(allResolved, includeExtrapOverride = null) {
+function getFilteredRows(allResolved, minConf = state.minConf) {
   const maxBudget = BUDGET_STOPS[state.budgetIdx].max;
   const maxCost = currentCostStops()[state.maxCostIdx].max;
-  const tierShow = includeExtrapOverride ?? state.estShow;
 
   const out = [];
   for (const r of allResolved) {
-    if (r.score == null || r.score < state.minScore) continue;
+    if (r.score == null || (state.rankMode !== "top" && r.score < state.minScore)) continue;
     if (!passesExtraCriteria(r)) continue;
     if (!passesModelSpecs(r)) continue;
     if (!passesEffortBounds(r)) continue;
@@ -417,15 +442,29 @@ function getFilteredRows(allResolved, includeExtrapOverride = null) {
     if (!r.isApi && state.hideLegacy && isLegacyEntry(r)) continue;
     if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
-    if (state.hideEstimated && r.isPreliminary) continue;
-    if (!passesEstTier(r, tierShow)) continue;
+    if (!passesConf(r, minConf)) continue;
     if (!r.isApi && Number.isFinite(maxBudget) && (r.priceUsd == null || r.priceUsd > maxBudget + 0.5)) {
       continue;
     }
     if (Number.isFinite(maxCost) && r.effectiveCost > maxCost) continue;
     out.push(r);
   }
-  return out;
+  return state.rankMode === "top" ? pickTopModels(out, state.topN) : out;
+}
+
+// Top-N mode: rank base models by their best score among the rows that passed every other
+// filter, keep the N best, and keep only each one's highest-scoring reasoning level.
+function pickTopModels(rows, n) {
+  const best = new Map();
+  for (const r of rows) {
+    const key = r.baseModelId || r.modelId;
+    if (!best.has(key) || r.score > best.get(key)) best.set(key, r.score);
+  }
+  const keep = new Set([...best.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k));
+  return rows.filter((r) => {
+    const key = r.baseModelId || r.modelId;
+    return keep.has(key) && r.score === best.get(key);
+  });
 }
 
 function renderPlanDrawer(planName, allResolved) {
@@ -435,8 +474,7 @@ function renderPlanDrawer(planName, allResolved) {
       !e.isApi &&
       cleanPlan(e) === planName &&
       e.effectiveCost != null &&
-      !(state.hideEstimated && e.isPreliminary) &&
-      passesEstTier(e)
+      passesConf(e)
   );
 
   // Collect effort columns actually present in this plan, ordered low -> max
@@ -485,10 +523,7 @@ function renderPlanDrawer(planName, allResolved) {
               : e.intelligenceIndex != null && state.benchKey !== "codingAgentIndex"
                 ? `II ${e.intelligenceIndex.toFixed(1)}`
                 : "—";
-          const isExtrap = e.estTier === "medium" || e.estTier === "low";
-          const scoreTilde = e.scoreTier ? "~" : "";
-          const costTilde = e.costTier ? "~" : "";
-          return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costTilde}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${scoreTilde}${esc(scoreStr)}</span></td>`;
+          return `<td class="pm-cell${passes ? "" : " dim"}${isFaded(e) ? " is-extrapolated" : ""}"><span class="pm-cost">${realCostText(e)}${relGlyph(e)}</span><span class="pm-score">${tilde(e.scoreDerived)}${esc(scoreStr)}</span></td>`;
         })
         .join("");
 
@@ -516,8 +551,10 @@ function renderPlanDrawer(planName, allResolved) {
   `;
 }
 
-function renderBarChart(rows, allResolved) {
+function renderBarChart(allRows, allResolved) {
   const host = $("barChart");
+  const chartMin = stricterLevel(state.minConf, CHART_MIN_CONF);
+  const rows = allRows.filter((r) => passesConf(r, chartMin));
 
   // Deduplicate bar chart according to cheapestPlanOnly & cheapestEffortOnly toggles:
   // - both checked (default): 1 bar per base model (cheapest plan + cheapest qualifying effort)
@@ -566,8 +603,8 @@ function renderBarChart(rows, allResolved) {
           : r.color || "#3a6ea5";
 
       const planName = cleanPlan(r);
-      const planText = `${planName}${r.isPreliminary ? "*" : ""}${r.isApi ? "" : ` · ${feeText(r)}`} · ${r.harness} · ${r.quotaWindowLabel}`;
-      const planHtml = `${renderLink(planName, r.planUrl)}${estMark(r)}`;
+      const planText = `${planName}${r.isApi ? "" : ` · ${feeText(r)}`} · ${r.harness} · ${r.quotaWindowLabel}`;
+      const planHtml = renderLink(planName, r.planUrl);
       const note = `${benchMeta.label} ${fmtScore(r.score, scoreKey)}`;
       const expKey = `${r.id}`;
       const isExpanded = !r.isApi && state.expandedPlans.has(expKey);
@@ -575,19 +612,19 @@ function renderBarChart(rows, allResolved) {
         ? ""
         : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
-      const isExtrap = r.estTier === "medium" || r.estTier === "low";
-      const costTilde = r.costTier ? "~" : "";
+      const isExtrap = isFaded(r);
 
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
           <div class="bar-label">
-            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div>
+            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
+            <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
-            <span class="bar-val">${costTilde}${fmtUsd(r.effectiveCost)}</span>
-            <span class="bar-note">${r.scoreTier ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
+            <span class="bar-val">${realCostText(r)}${relGlyph(r)}</span>
+            <span class="bar-note">${r.scoreDerived ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
           ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
         </div>
@@ -631,10 +668,10 @@ function renderTable(rows) {
       cls: "num-col col-hide-sm",
       benchKey: c.benchKey,
     })),
-    { key: "access", label: "Harness / Reset", cls: "col-hide-sm" },
+    { key: "access", label: "Harness / Reset", cls: "col-hide-sm col-hide-md" },
     { key: "fee", label: "Fee", cls: "num-col" },
     { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
-    { key: "apiCost", label: `API $/${unit}`, cls: "num-col col-hide-sm" },
+    { key: "apiCost", label: `API $/${unit}`, cls: "num-col col-hide-sm col-hide-md" },
     { key: "effectiveCost", label: `Real $/${unit}`, cls: "num-col" },
     { key: "altCost", label: isTokens ? "Real $/task" : "Real $/1M", cls: "num-col col-hide-sm" },
     { key: "tasksPerMonth", label: volLabel, cls: "num-col col-hide-sm" },
@@ -721,29 +758,26 @@ function renderTable(rows) {
       .join("");
 
     const nameCell = grouped
-      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div>`
-      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${interpMark(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}${estMark(r)}</div>`;
+      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>`
+      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
 
     const accessCell = grouped
-      ? `<td class="meta-cell col-hide-sm"></td>`
-      : `<td class="meta-cell col-hide-sm"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
+      ? `<td class="meta-cell col-hide-sm col-hide-md"></td>`
+      : `<td class="meta-cell col-hide-sm col-hide-md"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
 
-    const isExtrap = r.estTier === "medium" || r.estTier === "low";
-    const rowCls = [grouped ? "grouped-item" : "", isExtrap ? "is-extrapolated" : ""].filter(Boolean).join(" ");
-    const scoreTilde = r.scoreTier ? "~" : "";
-    const costTilde = r.costTier ? "~" : "";
+    const rowCls = [grouped ? "grouped-item" : "", isFaded(r) ? "is-extrapolated" : ""].filter(Boolean).join(" ");
 
     return `
       <tr${rowCls ? ` class="${rowCls}"` : ""}>
         <td>${nameCell}</td>
-        <td class="num-col">${scoreTilde}${fmtScore(r.score, scoreKey)}</td>
+        <td class="num-col">${tilde(r.scoreDerived)}${fmtScore(r.score, scoreKey)}</td>
         ${extraCells}
         ${accessCell}
         <td class="num-col">${feeText(r)}</td>
-        <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
-        <td class="num-col col-hide-sm">${costTilde}${fmtUsd(r.apiMetric)}</td>
-        <td class="num-col real-cell">${costTilde}${fmtUsd(r.effectiveCost)}</td>
-        <td class="num-col col-hide-sm">${isTokens && r.estimateConfidence ? "~" : ""}${fmtUsd(altCost(r))}</td>
+        <td class="num-col col-hide-sm">${r.unmetered ? "∞" : `${tilde(r.subDerived)}${fmtMult(r.subsidy)}`}</td>
+        <td class="num-col col-hide-sm col-hide-md">${tilde(r.costDerived)}${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col real-cell">${realCostText(r)}${relGlyph(r)}</td>
+        <td class="num-col col-hide-sm">${tilde(isTokens ? r.altDerived : r.subDerived)}${fmtUsd(altCost(r))}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
     `;
@@ -764,7 +798,6 @@ function renderTable(rows) {
       const minAlt = Math.min(...g.rows.map((r) => altCost(r) ?? Infinity));
       const maxTasks = Math.max(...g.rows.map((r) => r.tasksPerMonth ?? -1));
       const hasUnmetered = g.rows.some((r) => r.unmetered);
-      const hasEst = g.rows.some((r) => r.isPreliminary);
       const finiteSubs = g.rows.map((r) => r.subsidy).filter((s) => Number.isFinite(s));
       let subText = hasUnmetered ? "∞" : "—";
       if (!hasUnmetered && finiteSubs.length) {
@@ -772,9 +805,6 @@ function renderTable(rows) {
         const hi = Math.max(...finiteSubs);
         subText = Math.abs(hi - lo) < 0.05 ? fmtMult(hi) : `${fmtMult(lo)}–${fmtMult(hi)}`;
       }
-      const groupEst = hasEst
-        ? `<span class="est-star" title="Contains estimated subsidy">*</span>`
-        : "";
       const extraSummary = state.extraCriteria
         .map((c) => {
           const vals = g.rows.map((r) => getScore(r, c.benchKey)).filter((v) => v != null);
@@ -792,13 +822,13 @@ function renderTable(rows) {
 
       html.push(`
         <tr class="group-row" data-group="${esc(pName)}">
-          <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}${groupEst}</td>
+          <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}</td>
           <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, scoreKey)}</td>
           ${extraSummary}
-          <td class="meta-cell col-hide-sm">${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>
+          <td class="meta-cell col-hide-sm col-hide-md">${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>
           <td class="num-col">${groupFeeText}</td>
-          <td class="num-col col-hide-sm">${subText}${groupEst}</td>
-          <td class="num-col col-hide-sm">—</td>
+          <td class="num-col col-hide-sm">${subText}</td>
+          <td class="num-col col-hide-sm col-hide-md">—</td>
           <td class="num-col real-cell">${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
           <td class="num-col col-hide-sm">${fmtUsd(Number.isFinite(minAlt) ? minAlt : null)}</td>
           <td class="num-col col-hide-sm">${tasksText}</td>
@@ -827,6 +857,15 @@ function renderTable(rows) {
 function syncBenchSlider(resetDefault = false) {
   const meta = activeBenchMeta();
   const slider = $("minScore");
+  $("rankMode").value = state.rankMode;
+  if (state.rankMode === "top") {
+    if (resetDefault) state.minScore = meta.def;
+    slider.min = "1";
+    slider.max = String(TOP_N_MAX);
+    slider.step = "1";
+    slider.value = String(state.topN);
+    return;
+  }
   slider.min = String(meta.min);
   slider.max = String(meta.max);
   slider.step = String(meta.step);
@@ -986,6 +1025,15 @@ function loadStateFromUrl() {
     }
   }
 
+  const topRaw = params.get("top");
+  if (topRaw !== null && topRaw !== "") {
+    const n = Math.round(Number(topRaw));
+    if (Number.isFinite(n) && n >= 1) {
+      state.rankMode = "top";
+      state.topN = Math.min(TOP_N_MAX, n);
+    }
+  }
+
   const modeRaw = params.get("mode");
   if (modeRaw && COST_MODES[modeRaw]) {
     state.costMode = modeRaw;
@@ -1014,20 +1062,30 @@ function loadStateFromUrl() {
   }
 
   state.budgetIdx = stopIdxFromParam(params.get("budget"), BUDGET_STOPS, 5);
-  state.maxCostIdx = stopIdxFromParam(params.get("cost"), currentCostStops(), 4);
+  // cost = max cost stop and/or "range" (comma-separated, e.g. cost=2,range)
+  const costParts = String(params.get("cost") || "").split(",").filter(Boolean);
+  if (costParts.includes("range")) state.costView = "range";
+  state.maxCostIdx = stopIdxFromParam(costParts.find((x) => x !== "range") ?? null, currentCostStops(), 4);
 
   if (params.get("plans") === "all") state.cheapestPlanOnly = false;
   if (params.get("efforts") === "all") state.cheapestEffortOnly = false;
   if (params.get("legacy") === "1") state.hideLegacy = false;
   if (params.get("offpeak") === "1") state.hideOffPeak = false;
-  if (params.get("noest") === "1") state.hideEstimated = true;
-  // est = shown tiers as letters (h/m/l, "0" = none); legacy nointerp=1 hides high, extrap=1 shows medium + low
-  if (params.get("nointerp") === "1") state.estShow.high = false;
-  if (params.get("extrap") === "1") state.estShow = { ...state.estShow, medium: true, low: true };
+  // conf = lowest level shown (h/m/l/s). Legacy estimate-tier params map onto it:
+  // est=0 → h, est=h → m, est=hm → l, est=hml → s; nointerp=1 → h; extrap=1 → s; noest=1 caps at m.
+  const LEGACY_EST = { 0: "high", h: "medium", hm: "low", hml: "speculative" };
+  if (params.get("extrap") === "1") state.minConf = "speculative";
+  if (params.get("nointerp") === "1") state.minConf = "high";
   const estParam = params.get("est");
   if (estParam != null && /^(0|[hml]+)$/.test(estParam)) {
-    state.estShow = { high: estParam.includes("h"), medium: estParam.includes("m"), low: estParam.includes("l") };
+    const key = estParam === "0" ? "0" : ["h", "m", "l"].filter((t) => estParam.includes(t)).join("");
+    state.minConf = LEGACY_EST[key] || (estParam.includes("l") ? "speculative" : estParam.includes("m") ? "low" : "medium");
   }
+  if (params.get("noest") === "1") state.minConf = stricterLevel(state.minConf, "medium");
+  const confParam = params.get("conf");
+  const confLevel = LEVELS.find((l) => LEVEL_PARAM[l] === confParam);
+  if (confLevel) state.minConf = confLevel;
+  if (params.get("fable") === "own") state.fableCap = "own";
   if (params.get("nocn") === "1") state.hideCnPortal = true;
   if (params.get("api") === "1") state.showApi = true;
   if (params.get("open") === "1") state.openWeightsOnly = true;
@@ -1083,8 +1141,9 @@ function syncControlsFromState() {
   $("cheapestEffortOnly").checked = state.cheapestEffortOnly;
   $("hideLegacy").checked = state.hideLegacy;
   $("hideOffPeak").checked = state.hideOffPeak;
-  $("hideEstimated").checked = state.hideEstimated;
-  for (const t of ["high", "medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = state.estShow[t];
+  $("minConf").value = state.minConf;
+  $("costView").value = state.costView;
+  $("fableCap").value = state.fableCap;
   $("hideCnPortal").checked = state.hideCnPortal;
   $("showApi").checked = state.showApi;
   $("openWeightsOnly").checked = state.openWeightsOnly;
@@ -1098,7 +1157,8 @@ function syncUrlFromState() {
     const params = new URLSearchParams();
     const meta = activeBenchMeta();
     if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
-    if (state.minScore !== meta.def) params.set("min", String(state.minScore));
+    if (state.rankMode === "top") params.set("top", String(state.topN));
+    else if (state.minScore !== meta.def) params.set("min", String(state.minScore));
     // Explicit mode=task when the benchmark alone would imply another cost metric (legacy links)
     const impliedMode = state.benchKey === "codingAgentIndex" ? "agent" : state.benchKey === "cursorBench" ? "cursor" : "task";
     if (state.costMode !== impliedMode) params.set("mode", state.costMode);
@@ -1111,17 +1171,19 @@ function syncUrlFromState() {
       const stop = BUDGET_STOPS[state.budgetIdx];
       params.set("budget", Number.isFinite(stop.max) ? String(stop.max) : "any");
     }
+    const costParts = [];
     if (state.maxCostIdx !== 4) {
       const stop = currentCostStops()[state.maxCostIdx];
-      params.set("cost", Number.isFinite(stop.max) ? String(stop.max) : "any");
+      costParts.push(Number.isFinite(stop.max) ? String(stop.max) : "any");
     }
+    if (state.costView === "range") costParts.push("range");
+    if (costParts.length) params.set("cost", costParts.join(","));
     if (!state.cheapestPlanOnly) params.set("plans", "all");
     if (!state.cheapestEffortOnly) params.set("efforts", "all");
     if (!state.hideLegacy) params.set("legacy", "1");
     if (!state.hideOffPeak) params.set("offpeak", "1");
-    if (state.hideEstimated) params.set("noest", "1");
-    const estStr = ["high", "medium", "low"].filter((t) => state.estShow[t]).map((t) => t[0]).join("") || "0";
-    if (estStr !== "h") params.set("est", estStr);
+    if (state.minConf !== "low") params.set("conf", LEVEL_PARAM[state.minConf]);
+    if (state.fableCap === "own") params.set("fable", "own");
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
     if (state.openWeightsOnly) params.set("open", "1");
@@ -1158,7 +1220,9 @@ function render() {
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
-  $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
+  $("cheapestEffortOnly").closest("label").hidden = state.rankMode === "top";
+  $("minScoreOut").textContent =
+    state.rankMode === "top" ? String(state.topN) : `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
   $("maxCostLabel").textContent = modeMeta.maxLabel;
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
@@ -1166,52 +1230,16 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
-  const agentMode = state.benchKey === "codingAgentIndex" || state.costMode === "agent";
-  if ($("extrapBanner")) {
-    $("extrapBanner").hidden = !showsRough();
-    $("extrapBannerText").innerHTML = glyphHtml(agentMode
-      ? "Including rough estimates (◐ ○, faded) for agent and model pairs AA hasn't run."
-      : "Including rough estimates (◐ ○, faded) for reasoning levels AA hasn't measured.");
-  }
-  if ($("extrapFooter")) {
-    const hasHidden = allResolved.some((r) => r.estTier && !passesEstTier(r));
-    const hiddenVariants = hasHidden
-      ? new Set(
-          getFilteredRows(allResolved, ALL_TIERS)
-            .filter((r) => !passesEstTier(r))
-            .map((r) => r.modelId)
-        ).size
-      : 0;
-    // Generic "hidden" line only while rough estimates are off entirely
-    $("extrapFooter").hidden = !hasHidden || (hiddenVariants === 0 && showsRough());
-    if (hasHidden && $("extrapFooterText")) {
-      $("extrapFooterText").textContent = agentMode
-        ? hiddenVariants > 0
-          ? `${hiddenVariants} more ${hiddenVariants === 1 ? "model has" : "models have"} estimated agent scores matching these filters.`
-          : "Estimated agent scores are hidden."
-        : hiddenVariants > 0
-          ? `${hiddenVariants} more reasoning ${hiddenVariants === 1 ? "level is" : "levels are"} estimated to match these filters.`
-          : "Rough estimates for unmeasured reasoning levels are hidden.";
-    }
-  }
-  $("estFootnote").hidden = !rows.some((r) => r.isPreliminary);
-  const FOOTNOTES = agentMode
-    ? {
-        high: "● High-confidence estimate (estimated from the same model and agent at a different reasoning effort).",
-        medium: "◐ Medium-confidence estimate (estimated from another agent's run of the same model, or fitted on Terminal-Bench 4.0).",
-        low: "○ Low-confidence estimate (fitted on Terminal-Bench 4.0 below its measured range, or built on a low-confidence effort estimate).",
-      }
-    : {
-        high: "● High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).",
-        medium: "◐ Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).",
-        low: "○ Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).",
-      };
-  for (const t of ["high", "medium", "low"]) {
-    const el = $(`tierFootnote-${t}`);
-    if (!el) continue;
-    el.innerHTML = glyphHtml(FOOTNOTES[t]);
-    el.hidden = !rows.some((r) => r.estTier === t);
-  }
+  // Rows hidden by Min confidence (live count), or Speculative rows on view
+  const specShown = rows.filter((r) => r.level === "speculative").length;
+  $("extrapBanner").hidden = !(state.minConf === "speculative" && specShown > 0);
+  $("extrapBannerText").textContent = `${specShown} speculative ${specShown === 1 ? "row" : "rows"} shown`;
+  const hidden = state.minConf === "speculative" ? 0 : getFilteredRows(allResolved, "speculative").length - rows.length;
+  $("extrapFooter").hidden = hidden <= 0;
+  $("extrapFooterText").textContent =
+    state.minConf === "low"
+      ? `${hidden} speculative ${hidden === 1 ? "row" : "rows"} hidden`
+      : `${hidden} ${hidden === 1 ? "row" : "rows"} below ${LEVEL_LABEL[state.minConf]} hidden`;
   syncUrlFromState();
 }
 
@@ -1224,13 +1252,10 @@ function renderMeta() {
     : ds.latestDataDate;
   $("updatedAt").textContent = `Updated ${stamp}`;
 
-  const tiers = ds.stats?.estimateTiers || {};
-  for (const t of ["high", "medium", "low"]) {
-    const r = tiers[t];
-    const el = $(`tierErr-${t}`);
-    if (!r || !el) continue;
-    const span = (lo, hi) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
-    el.textContent = ` (typical error ~±${span(r.ptsLo, r.ptsHi)} pts / ±${span(r.costLo, r.costHi)}% $/task)`;
+  const counts = ds.stats?.reliability?.counts || {};
+  for (const l of LEVELS) {
+    const el = $(`relCount-${l}`);
+    if (el) el.textContent = counts[l] != null ? counts[l].toLocaleString() : "—";
   }
 }
 
@@ -1329,7 +1354,14 @@ $("benchSelect").addEventListener("change", (e) => {
 });
 
 $("minScore").addEventListener("input", (e) => {
-  state.minScore = Number(e.target.value);
+  if (state.rankMode === "top") state.topN = Number(e.target.value);
+  else state.minScore = Number(e.target.value);
+  render();
+});
+
+$("rankMode").addEventListener("change", (e) => {
+  state.rankMode = e.target.value === "top" ? "top" : "min";
+  syncBenchSlider();
   render();
 });
 
@@ -1355,32 +1387,28 @@ $("hideOffPeak").addEventListener("change", (e) => {
   render();
 });
 
-$("hideEstimated").addEventListener("change", (e) => {
-  state.hideEstimated = e.target.checked;
-  updateSettingsBadge();
+$("minConf").addEventListener("change", (e) => {
+  state.minConf = LEVELS.includes(e.target.value) ? e.target.value : "low";
   render();
 });
 
-for (const t of ["high", "medium", "low"]) {
-  $(`showTier-${t}`)?.addEventListener("change", (e) => {
-    state.estShow = { ...state.estShow, [t]: e.target.checked };
-    updateSettingsBadge();
-    render();
-  });
-}
+$("costView").addEventListener("change", (e) => {
+  state.costView = e.target.value === "range" ? "range" : "point";
+  render();
+});
 
-function setRough(on) {
-  state.estShow = { ...state.estShow, medium: on, low: on };
-  for (const t of ["medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = on;
-  updateSettingsBadge();
+$("fableCap").addEventListener("change", (e) => {
+  state.fableCap = e.target.value === "own" ? "own" : "shared";
+  render();
+});
+
+function setMinConf(level) {
+  state.minConf = level;
+  $("minConf").value = level;
   render();
 }
-$("disableExtrapBtn")?.addEventListener("click", () => setRough(false));
-$("enableExtrapBtn")?.addEventListener("click", () => {
-  state.estShow.high = true;
-  if ($("showTier-high")) $("showTier-high").checked = true;
-  setRough(true);
-});
+$("disableExtrapBtn").addEventListener("click", () => setMinConf("low"));
+$("enableExtrapBtn").addEventListener("click", () => setMinConf("speculative"));
 
 $("hideCnPortal").addEventListener("change", (e) => {
   state.hideCnPortal = e.target.checked;
@@ -1410,8 +1438,9 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
-  state.hideEstimated = false;
-  state.estShow = { high: true, medium: false, low: false };
+  state.minConf = "low";
+  state.costView = "point";
+  state.fableCap = "shared";
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
@@ -1425,8 +1454,9 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
-  $("hideEstimated").checked = false;
-  for (const t of ["high", "medium", "low"]) if ($(`showTier-${t}`)) $(`showTier-${t}`).checked = t === "high";
+  $("minConf").value = "low";
+  $("costView").value = "point";
+  $("fableCap").value = "shared";
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;
@@ -1572,3 +1602,49 @@ syncControlsFromState();
 initTheme();
 loadData();
 loadStarCount();
+
+// Easter egg: Shift pressed 5 times in a row loads Slopstrap (public/vendor/slopstrap) and slopifies the page.
+// Pressing it again reloads, since unslopify restores innerHTML and would drop app.js's event listeners.
+(() => {
+  let run = 0;
+  let last = 0;
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Shift") {
+      run = 0;
+      return;
+    }
+    if (e.repeat) return;
+    const now = performance.now();
+    run = now - last < 1000 ? run + 1 : 1;
+    last = now;
+    if (run < 5) return;
+    run = 0;
+    if (document.documentElement.dataset.slop) location.reload();
+    else slopMode();
+  });
+
+  const load = (tag, attrs) =>
+    new Promise((resolve, reject) => {
+      const el = Object.assign(document.createElement(tag), attrs, { onload: resolve, onerror: reject });
+      document.head.appendChild(el);
+    });
+
+  async function slopMode() {
+    document.documentElement.dataset.slop = "1";
+    await Promise.all([
+      load("link", { rel: "stylesheet", href: "./vendor/slopstrap/slopstrap.css" }),
+      load("link", { rel: "stylesheet", href: "./vendor/slopstrap/site-slop.css" }),
+      load("script", { src: "./vendor/slopstrap/slopstrap.js" }),
+    ]);
+    const S = window.Slopstrap;
+    document.documentElement.setAttribute("data-slop-level", "3");
+    document.body.classList.add("slop-body", "slop-grid-bg");
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      '<div class="slop-orb-layer" aria-hidden="true"><div class="slop-orb slop-orb-purple"></div><div class="slop-orb slop-orb-cyan"></div></div>'
+    );
+    S.slopify(document.querySelector(".workspace"));
+    S.setLevel(3);
+    S.sparkleBurst(window.innerWidth / 2, window.innerHeight / 3, 24);
+  }
+})();

@@ -17,6 +17,35 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import * as REL from "./reliability.mjs";
+
+// Claude quota token weighting (docs/RELIABILITY.md): rescale Claude first-party subsidies from the
+// sample's token mix to each cost metric's mix (cache reads ≈ 0.5× API price toward quota).
+// When false the subsidy stays uncorrected and the mix term still widens σ (it then also covers the
+// uncorrected bias).
+const APPLY_CLAUDE_MIX_CORRECTION = false;
+
+// Promotions the upstream data does not expire itself. Rows are dropped after `until` (kept only as
+// reference cells for ratio transfers).
+const PROMO_EXPIRY = [
+  // Fable 5.2 launch offer on Pro, Nov 9–16 (support.claude.com/en/articles/17506494); Pro limits exclude Fable.
+  { plan: "Claude Pro", model: "claude-fable-5-2", until: "2026-11-16" },
+];
+// Quota changes after which older rows on that plan × model no longer describe the plan.
+// action "drop" removes the row (a carry rule may refill it); otherwise the row is capped Speculative.
+const QUOTA_CHANGES = [
+  // Separate Argon bucket on Pro removed 2026-11-23; capacity moved into the general Gemini bucket.
+  { plan: "Google AI Pro", model: "gemini-4-argon", date: "2026-11-23", action: "drop" },
+];
+// Models leaving the plans (antigravity.google/docs/models): rows dropped after the date.
+const MODEL_RETIREMENTS = [
+  { model: "gemini-4-argon", after: "2026-11-30" },
+  { model: "gemini-3-8-flash", after: "2026-11-30" },
+];
+// Fable on Claude plans may use at most half the weekly limit (support.claude.com/en/articles/15424964).
+const FABLE_CAP_SHARE = 0.5;
+const isClaudeFirstParty = (plan) => /^Claude (Pro|Max|Ultra|Team)\b/.test(String(plan || ""));
+const isFableOnClaude = (plan, model) => /^Claude (Pro|Max|Ultra)$/.test(String(plan || "")) && /^claude-fable-/.test(String(model || ""));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
@@ -699,14 +728,19 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
     variantsById.set(v.id, v);
   }
 
-  // First pass: collect listPrice & mix by modelId so `sameAs` rows resolve accurately
+  // First pass: collect listPrice & mix by modelId so `sameAs` rows resolve accurately.
+  // A free-tier record nests the paid one under `details.paid`; index the paid record (it carries the plans).
   const subDetailsByModel = new Map();
   for (const obs of snapshot.observations || []) {
     if (obs.benchmarkId !== "subscription-token-price") continue;
     const modelId = String(obs.variantId || "").split("@")[0];
-    const det = obs.details || {};
-    if (det.listPrice) {
-      subDetailsByModel.set(modelId, det);
+    const top = obs.details || {};
+    const det = top.free && top.paid ? top.paid : top;
+    if (det.listPrice || (det.plans || []).length) {
+      const prev = subDetailsByModel.get(modelId);
+      if (!prev || (!prev.listPrice && det.listPrice) || (!(prev.plans || []).length && (det.plans || []).length)) {
+        subDetailsByModel.set(modelId, det);
+      }
     }
   }
 
@@ -867,17 +901,78 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
     }
   }
 
-  // Third pass: extract subscription-token-price items with exact sameAs + poolRate math
+  // Third pass: extract subscription-token-price items with exact sameAs + poolRate math.
+  // Records shapes: `plans: [...]` (per-plan $/Mtok), `plans: []` + `ratio` (fee $ per API $ on `plan`,
+  // with optional `readings`), `plans: []` + `sameAs` (one row per plan of the sameAs model), and free
+  // tiers (`free`, ratio 0) whose paid record sits under `paid`. Free tiers never become paid plans.
   const out = [];
+  const skipped = [];
+  const queue = [];
   for (const obs of snapshot.observations || []) {
     if (obs.benchmarkId !== "subscription-token-price") continue;
-    const modelId = String(obs.variantId || "").split("@")[0];
-    const det = obs.details || {};
+    queue.push({ modelId: String(obs.variantId || "").split("@")[0], det: obs.details || {} });
+  }
+  for (let qi = 0; qi < queue.length; qi++) {
+    const { modelId } = queue[qi];
+    let det = queue[qi].det;
+    if (det.free || (toNum(det.ratio) === 0 && !(det.plans || []).length)) {
+      if (det.paid) {
+        queue.push({ modelId, det: det.paid });
+      } else {
+        skipped.push({ modelId, plan: det.plan || null, reason: "free tier" });
+      }
+      continue;
+    }
     const sameAsDet = det.sameAs ? subDetailsByModel.get(det.sameAs) : null;
+    const modelMeta0 = modelsById.get(modelId);
+    const ratio = toNum(det.ratio);
+    if (!(det.plans || []).length && ratio > 0 && det.plan) {
+      // Ratio record: fee dollars per API dollar on one plan.
+      const readings = {};
+      for (const rd of det.readings || []) {
+        const r = toNum(rd.ratio);
+        if (rd.id && r > 0) readings[rd.id] = 1 / r;
+      }
+      out.push({
+        modelId,
+        modelName: modelMeta0?.name || modelId,
+        plan: normalizePlanName(det.plan),
+        planRaw: det.plan,
+        feeUsd: toNum(det.feeUsd),
+        usdPerMtok: null,
+        blendedList: null,
+        multiple: 1 / ratio,
+        confidence: det.confidence || "medium",
+        isPrelim: false,
+        isAssumed: false,
+        preliminary: null,
+        dataDate: det.dataDate || snapshot.date || null,
+        kind: "ratio",
+        source: det.source || null,
+        readings: readings.shared && readings.own ? { shared: readings.shared, own: readings.own } : null,
+      });
+      continue;
+    }
+    if (!(det.plans || []).length && det.sameAs) {
+      // sameAs record without plans: one assumed row per plan of the sameAs model, at its multiple.
+      const src = sameAsDet;
+      if (!src || !(src.plans || []).length) {
+        skipped.push({ modelId, plan: det.plan || null, reason: `sameAs ${det.sameAs} has no plans` });
+        continue;
+      }
+      queue.push({ modelId, det: { ...src, confidence: "assumed", sameAs: det.sameAs, dataDate: det.dataDate || src.dataDate, _sameAsAnchor: true } });
+      continue;
+    }
+    if (!(det.plans || []).length) {
+      skipped.push({ modelId, plan: det.plan || null, reason: "no plans, ratio or sameAs" });
+      continue;
+    }
     let lp = det.listPrice || sameAsDet?.listPrice || {};
     if (lp.input == null || lp.output == null) {
-      const aaHead = resolveAaModel(modelId, aaByNorm);
-      const orMod = resolveOpenRouterModel(modelId, openRouterIndex, aaByNorm);
+      // A sameAs-anchor record's $/Mtok are priced on the sameAs model, so its prices are the fallback.
+      const priceModel = det._sameAsAnchor ? det.sameAs : modelId;
+      const aaHead = resolveAaModel(priceModel, aaByNorm);
+      const orMod = resolveOpenRouterModel(priceModel, openRouterIndex, aaByNorm);
       const pSrc = aaHead?.pricing?.inputPer1M != null ? aaHead.pricing : orMod?.pricing;
       if (pSrc && pSrc.inputPer1M != null && pSrc.outputPer1M != null) {
         lp = {
@@ -898,7 +993,10 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
       Number(mix.cacheWrite || 0) * cacheWritePrice +
       Number(mix.output || 0) * Number(lp.output || 0);
 
-    if (!Number.isFinite(blendedList) || blendedList <= 0) continue;
+    if (!Number.isFinite(blendedList) || blendedList <= 0) {
+      skipped.push({ modelId, plan: det.plan || null, reason: "no list price" });
+      continue;
+    }
 
     const topIsAssumed = det.confidence === "assumed";
     const modelMeta = modelsById.get(modelId);
@@ -929,10 +1027,14 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
         isAssumed,
         preliminary: p.preliminary || null,
         dataDate: det.dataDate || snapshot.date || null,
+        kind: "plans",
+        sameAs: isAssumed ? det.sameAs || null : null,
+        anchorConfidence: isAssumed && p.confidence && p.confidence !== "assumed" ? p.confidence : null,
+        source: det.source || null,
       });
     }
   }
-  return { date: snapshot.date || null, items: out, aaVariantsByBase, t3Index: parseT3CodeTurns(snapshot, aaByNorm), cursorBenchIndex: parseCursorBench(snapshot, aaByNorm) };
+  return { date: snapshot.date || null, items: out, skipped, aaVariantsByBase, t3Index: parseT3CodeTurns(snapshot, aaByNorm), cursorBenchIndex: parseCursorBench(snapshot, aaByNorm) };
 }
 
 function extractBalancedJsonObject(text, openBraceIdx) {
@@ -1053,6 +1155,7 @@ function parseT3CodeTurns(snapshot, aaByNorm) {
     rec.turns = Math.max(rec.turns || 0, toNum(det.turns) || 0) || null;
     rec.users = Math.max(rec.users || 0, toNum(det.users) || 0) || null;
     rec.window = rec.window || det.window || null;
+    if (det.perTurn && !rec.perTurn) rec.perTurn = det.perTurn; // tokens by kind: fresh / cached / written / output
     index.set(key, rec);
   }
   for (const [k, r] of index) if (r.costPerTurnUsd == null) index.delete(k);
@@ -3231,6 +3334,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceNote: r.source || null,
       decisionNote: r.note || null,
       preliminary: null,
+      _feiRow: r,
     };
 
     entries.push(entry);
@@ -3245,6 +3349,56 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           entryId
         );
       }
+    }
+  }
+
+  // Reliability chains for Fei2411 rows (σ per derivation step; docs/RELIABILITY.md)
+  const today = nowIso.slice(0, 10);
+  const feiById = new Map(feiRows.map((r) => [r.id, r]));
+  const feiByLabel = new Map();
+  for (const r of feiRows) {
+    for (const p of [r.plan_en, r.plan]) if (p) feiByLabel.set(`${p} · ${r.model}`, r);
+  }
+  const feiCtx = {
+    byId: feiById,
+    byLabel: feiByLabel,
+    today,
+    memo: new Map(),
+    modelName: (r) => r.model_display || r.model,
+    cellName: (r) => `${REL.shortModel(r.model_display || r.model)} ${REL.shortPlan(normalizePlanName(r.plan_en || r.plan || ""))}`,
+    subsidyOf: (r) => (toNum(r.monthly_yi) || NaN) / (toNum(r.price_usd) || NaN),
+  };
+  const feiSampleMixMemo = new Map();
+  const feiSampleMix = (r, depth = 0) => {
+    if (!r) return null;
+    if (feiSampleMixMemo.has(r.id)) return feiSampleMixMemo.get(r.id);
+    let m = REL.parseFeiSampleMix(r.note);
+    if (!m && depth < 5) {
+      const ch = feiCtx.memo.get(r.id);
+      const a = ch?.anchors?.[0] ? feiById.get(ch.anchors[0]) : null;
+      m = a ? feiSampleMix(a, depth + 1) : null;
+    }
+    feiSampleMixMemo.set(r.id, m);
+    return m;
+  };
+  for (const e of entries) {
+    if (!e._feiRow) continue;
+    e._chain = structuredClone(REL.feiChain(e._feiRow, feiCtx));
+  }
+  for (const e of entries) {
+    if (!e._feiRow) continue;
+    e._sampleMix = feiSampleMix(e._feiRow);
+    // Fable rows on Claude plans: Fei's Fable 5 / 5.1 values are "Fable only" readings (pool × 50% ÷ weight);
+    // a row Fei marks "50% 周帽不套" (cap not applied) is a "Shared" reading.
+    if (isFableOnClaude(e.plan, e.modelId) && e.subsidyMultiple > 0) {
+      const shared = /周帽不套|不套帽/.test(e.decisionNote || "");
+      const S = e.subsidyMultiple;
+      e.subsidyReadings = shared
+        ? { shared: S, own: REL.r4(S * FABLE_CAP_SHARE) }
+        : { shared: REL.r4(S / FABLE_CAP_SHARE), own: S };
+      e.subsidyMultiple = e.subsidyReadings.shared;
+      e.capShare = FABLE_CAP_SHARE;
+      if (!shared) e._chain.lines.unshift(`Fable only ÷ ${FABLE_CAP_SHARE} (50% cap)`);
     }
   }
 
@@ -3365,6 +3519,92 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let priorsExtraCount = 0;
   const priorsSeen = new Set();
 
+  // Carryover rules for sibling models in one quota pool. Each names its mechanism (docs/RELIABILITY.md):
+  //   "same-pool": price-proportional draw stated by the vendor (M1): S(m, p) = S(anchor, p)
+  //   "token":     token-denominated pool: S(m, p) = S(anchor, p) × blend(m) / blend(anchor), no model step
+  // Rows are skipped whenever a direct measurement of the cell exists.
+  const sharedPoolRules = [
+    {
+      plans: ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"],
+      anchorModel: "gemini-4-neon",
+      targets: ["gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-argon"],
+      mechanism: "same-pool",
+      vendor: "Google",
+      fallbackUrl: "https://one.google.com/about/google-ai-plans/",
+    },
+    {
+      // Fei's Kimi pool samples were K3.1 Pro traffic; K3.1 Pro list price is 2/3 of K3's.
+      plans: ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"],
+      anchorModel: "kimi-k3",
+      targets: ["kimi-k3-1-pro"],
+      mechanism: "token",
+      vendor: "Moonshot",
+      fallbackUrl: "https://kimi.ai",
+    },
+  ];
+  // Ratio transfer (X1): S(m, p) = S(anchor, p) × S(m, q) / S(anchor, q), pooled over reference plans q by 1/σ².
+  const ratioTransferRules = [
+    { plans: ["Claude Max"], model: "claude-fable-5-2", anchorModel: "claude-opus-5-5", refPlans: ["Claude Pro", "Claude Ultra"], vendor: "Anthropic" },
+  ];
+
+  const PRIORS_GRADE_SIGMA = { high: 0.1, medium: 0.22, low: 0.45 };
+  function priorsChain(item, sameAsEntry) {
+    const date = REL.lastDate(item.dataDate) || priorsParsed.date;
+    const conf = String(item.confidence || "medium").toLowerCase();
+    if (item.kind === "ratio") {
+      const tweet = /x\.com|twitter\.com/i.test(item.source || "");
+      // Known account, large sample, figures in text (Theo, 1.1M requests): between S4 and S5.
+      const k = tweet ? (conf === "high" || conf === "medium" ? "T" : "S6") : "S2";
+      const label = tweet ? (k === "T" ? "tweet, large sample" : "tweet") : "official";
+      return REL.applyFloor(REL.makeChain({ steps: [{ k, s: REL.STEP_SIGMA[k], t: label }], lines: [`Priors, ${label}, ${date}`] }), conf, "Priors");
+    }
+    if (item.isPrelim) {
+      const lab = item.preliminary?.label || "";
+      let steps;
+      let line;
+      if (/extrapolated/i.test(lab)) {
+        steps = [{ k: "prelim", s: 0.4, t: "1 user" }, { k: "P1", s: REL.STEP_SIGMA.P1, t: "plan ratio" }];
+        line = `Priors, ${lab.replace(/^Extrapolated from/i, "from")}, ${date}`;
+      } else if (/promotion/i.test(lab)) {
+        steps = [{ k: "S1", s: 0.05, t: "official promotion" }];
+        line = `Priors, official promotion, ${date}`;
+      } else {
+        const n = Number(/(\d+)\s+users?/i.exec(lab)?.[1] || 1);
+        steps = [{ k: "prelim", s: REL.r4(0.4 / Math.sqrt(n)), t: `${n} user${n === 1 ? "" : "s"}` }];
+        line = `Priors, ${n} user${n === 1 ? "" : "s"}, ${date}`;
+      }
+      return REL.makeChain({ steps, lines: [line], cap: "medium" });
+    }
+    if (item.isAssumed) {
+      const seller = item.plan;
+      const step = /^Google AI\b/.test(seller)
+        ? { k: "M1", s: REL.STEP_SIGMA.M1, t: "same pool, price-proportional" }
+        : /^ChatGPT\b/.test(seller)
+          ? { k: "M2", s: REL.STEP_SIGMA.M2, t: "same pool, rate card" }
+          : { k: "M4", s: REL.STEP_SIGMA.M4, t: "assumed equal" };
+      const sameName = REL.shortModel(sameAsEntry?.modelDisplay || item.sameAs || "anchor");
+      if (sameAsEntry?._chain) {
+        return REL.extendChain(structuredClone(sameAsEntry._chain), step, `= ${sameName} (${step.t})`, {
+          at: `${sameName} ${REL.shortPlan(seller)}`,
+          anchorId: sameAsEntry.id,
+        });
+      }
+      const g = item.anchorConfidence || "medium";
+      const base = REL.makeChain({
+        steps: [{ k: "priors", s: PRIORS_GRADE_SIGMA[g] ?? 0.22, t: `Priors ${g}` }],
+        lines: [`Priors ${g}, ${date}`],
+        cap: g,
+      });
+      return REL.extendChain(base, step, `= ${sameName} (${step.t})`, { at: `${sameName} ${REL.shortPlan(seller)}` });
+    }
+    const s = PRIORS_GRADE_SIGMA[conf] ?? 0.22;
+    return REL.applyFloor(
+      REL.makeChain({ steps: [{ k: "priors", s, t: `Priors ${conf}` }], lines: [`Priors ${conf}, ${date}`] }),
+      conf,
+      "Priors"
+    );
+  }
+
   for (const item of priorsParsed.items) {
     const aaModel = resolveAaModel(item.modelId, aaByNorm);
     const priorsVar = !aaModel ? bestPriorsVariantFor(item.modelId) : null;
@@ -3389,15 +3629,68 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         ? feiVendorFeeModelIndex.get(planVendorFeeKey(item.plan, sellerVendor, item.feeUsd, aaSlug, priorsFlags))
         : null);
 
-    // Skip duplicates already covered by Fei2411 unless Priors has a newer preliminary measurement
+    // Skip duplicates already covered by Fei2411 unless Priors has a preliminary measurement (pooled below)
     if (existingId && !item.isPrelim) continue;
+    // Google pool members are carried from the (pooled) Neon anchor by the shared-pool rule, not from Flash.
+    if (item.isAssumed && sharedPoolRules.some((r) => r.plans.includes(item.plan) && r.targets.includes(aaSlug))) {
+      priorsParsed.skipped.push({ modelId: item.modelId, plan: item.plan, reason: "carried by shared-pool rule" });
+      continue;
+    }
+
+    const sameAsEntry = item.sameAs
+      ? entries.find((x) => x.plan === item.plan && x.modelId === canonicalBaseSlug(item.sameAs, aaByNorm) && x._chain)
+      : null;
+    const chain = priorsChain(item, sameAsEntry);
+
+    // A preliminary Priors reading and a Fei2411 measurement of the same cell: pool by 1/σ² when they
+    // agree within 2σ; otherwise keep the lower-σ source and widen it by half the log gap.
+    if (existingId && item.isPrelim) {
+      const fe = entries.find((x) => x.id === existingId);
+      if (fe && /promotion/i.test(item.preliminary?.label || "")) {
+        // An official promotion is the current offer for that cell: it replaces the regular-rate row.
+        fe._drop = true;
+      } else if (fe && fe._chain && fe.subsidyMultiple > 0) {
+        const s1 = fe._chain.s, s2 = chain.s;
+        const d = Math.abs(Math.log(fe.subsidyMultiple / item.multiple));
+        prelimCount++;
+        if (d <= 2 * REL.qsum(s1, s2)) {
+          const w1 = 1 / (s1 * s1), w2 = 1 / (s2 * s2);
+          const pooled = Math.exp((w1 * Math.log(fe.subsidyMultiple) + w2 * Math.log(item.multiple)) / (w1 + w2));
+          const sp = 1 / Math.sqrt(w1 + w2);
+          const scale = pooled / fe.subsidyMultiple;
+          fe.pooled = { fei: fe.subsidyMultiple, priors: REL.r4(item.multiple), weightFei: REL.r4(w1 / (w1 + w2)) };
+          if (fe.monthlyTokens) fe.monthlyTokens = Math.round(fe.monthlyTokens * scale);
+          if (fe.realUsdPerMtok) fe.realUsdPerMtok = fe.realUsdPerMtok / scale;
+          fe.subsidyMultiple = REL.r4(pooled);
+          fe._chain = REL.makeChain({
+            steps: [{ k: "pooled", s: REL.r4(sp), t: "Fei + Priors" }],
+            lines: [
+              `pooled ${fe.pooled.fei.toFixed(1)}× Fei + ${item.multiple.toFixed(1)}× Priors`,
+              `Fei: ${fe._chain.lines[0]}`,
+              `Priors: ${chain.lines[0]}`,
+            ],
+            cap: fe._chain.cap,
+            flags: ["pooled"],
+          });
+          fe._pooledParts = [fe._sampleMix];
+          continue;
+        }
+        const widen = d / 2;
+        if (s1 <= s2) {
+          REL.addPenalty(fe._chain, widen, `disagrees with Priors ${item.multiple.toFixed(1)}×`, "inconsistent");
+          continue;
+        }
+        fe._drop = true;
+        REL.addPenalty(chain, widen, `disagrees with Fei ${fe.subsidyMultiple.toFixed(1)}×`, "inconsistent");
+      }
+    }
 
     let origin = "priors-repo";
     let estimateType = null;
     if (item.isPrelim) {
       origin = "priors-preliminary";
       estimateType = "preliminary";
-      prelimCount++;
+      if (!existingId) prelimCount++;
     } else if (item.isAssumed) {
       origin = "priors-assumed";
       estimateType = "assumed";
@@ -3407,7 +3700,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
 
     const isEstimated = item.isPrelim || item.isAssumed;
-    const replacesId = item.isPrelim ? existingId : null;
+    const replacesId = null; // a losing Fei row is dropped (`_drop`), not hidden client-side
     const creator = aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || sellerVendor;
 
     entries.push({
@@ -3451,7 +3744,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceNote: "adamholter/priors (latest.json.gz)",
       decisionNote: item.preliminary?.note || item.preliminary?.short || null,
       preliminary: item.preliminary,
+      ...(item.readings ? { subsidyReadings: { shared: REL.r4(item.readings.shared), own: REL.r4(item.readings.own) } } : {}),
+      ...(isFableOnClaude(item.plan, aaSlug) ? { capShare: FABLE_CAP_SHARE } : {}),
+      _chain: chain,
+      _sampleKind: item.kind === "ratio" ? "t3" : null,
     });
+    const pe = entries[entries.length - 1];
+    if (isFableOnClaude(pe.plan, pe.modelId) && !pe.subsidyReadings) {
+      pe.subsidyReadings = { shared: pe.subsidyMultiple, own: REL.r4(pe.subsidyMultiple * FABLE_CAP_SHARE) };
+    }
+    if (pe.subsidyReadings) pe.subsidyMultiple = pe.subsidyReadings.shared;
   }
 
   // Layer live-verified first-party GitHub Copilot AI Credits tiers (respecting per-plan Available Models matrix)
@@ -3638,129 +3940,268 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  // Shared-pool carryover for first-party subscription tiers where upstream only measured a
-  // subset of the sibling models included in the same compute/quota pool (marked * as assumed,
-  // and automatically skipped whenever Fei2411/Priors adds a direct measurement).
-  const sharedPoolRules = [
-    {
-      plans: ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"],
-      anchorModel: "gemini-4-neon",
-      targets: ["gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-argon"],
-      vendor: "Google",
-      fallbackUrl: "https://one.google.com/about/google-ai-plans/",
-    },
-    {
-      plans: ["Claude Max", "Claude Ultra"],
-      anchorModel: "claude-fable-5-1",
-      targets: ["claude-fable-5-2"],
-      vendor: "Anthropic",
-      fallbackUrl: "https://claude.com/pricing",
-    },
-    {
-      plans: ["ChatGPT Pro 20x"],
-      anchorPlan: "ChatGPT Pro 10x",
-      anchorModel: "gpt-6-sol",
-      targets: ["gpt-6-sol"],
-      vendor: "OpenAI",
-      fallbackUrl: "https://openai.com/chatgpt/pricing/",
-      priceOverride: 200,
-    },
-    {
-      plans: ["ChatGPT Pro 20x"],
-      anchorPlan: "ChatGPT Pro 10x",
-      anchorModel: "gpt-6-luna",
-      targets: ["gpt-6-luna"],
-      vendor: "OpenAI",
-      fallbackUrl: "https://openai.com/chatgpt/pricing/",
-      priceOverride: 200,
-    },
-    {
-      plans: ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"],
-      anchorModel: "kimi-k3",
-      targets: ["kimi-k3-1-pro"],
-      vendor: "Moonshot",
-      fallbackUrl: "https://kimi.ai",
-    },
+  // ---- Reliability: deterministic sources (API list price, published credit pools) ----
+  for (const e of entries) {
+    if (e._chain) continue;
+    const label = e.billing === "metered" ? "list price" : "official credits";
+    e._chain = REL.makeChain({ steps: [{ k: "S1", s: REL.STEP_SIGMA.S1, t: label }], lines: [label] });
+  }
+
+  // ---- Expired promotions, quota changes, retired models ----
+  const refOnlyRows = []; // expired rows kept only as reference cells for ratio transfers
+  const droppedRows = [];
+  for (const e of entries) {
+    if (e._drop) {
+      droppedRows.push({ id: e.id, reason: "lost to a lower-σ source" });
+      continue;
+    }
+    const promo = PROMO_EXPIRY.find((p) => p.plan === e.plan && p.model === e.modelId);
+    const until = promo?.until || REL.lastDate(e._feiRow?.promo_until);
+    if (until && today > until) {
+      e._drop = true;
+      refOnlyRows.push(e);
+      droppedRows.push({ id: e.id, reason: `promotion ended ${until}` });
+      continue;
+    }
+    const qc = QUOTA_CHANGES.find((c) => c.plan === e.plan && (!c.model || c.model === e.modelId));
+    const dd = REL.lastDate(e.dataDate);
+    if (qc && dd && dd < qc.date) {
+      if (qc.action === "drop") {
+        e._drop = true;
+        droppedRows.push({ id: e.id, reason: `quota change ${qc.date}` });
+        continue;
+      }
+      e._chain.flags.push("stale");
+      e._chain.lines.push(`quota change ${qc.date}`);
+    }
+    const ret = MODEL_RETIREMENTS.find((r) => r.model === e.modelId && today > r.after);
+    if (ret) {
+      e._drop = true;
+      droppedRows.push({ id: e.id, reason: `model retired ${ret.after}` });
+    }
+  }
+  entries.splice(0, entries.length, ...entries.filter((e) => !e._drop));
+
+  const liveCell = (plan, model) =>
+    entries.find((e) => e.billing === "subscription" && e.plan === plan && e.modelId === model && e.subsidyMultiple > 0 && !e.unmetered);
+  const cellName = (e) => `${REL.shortModel(e.modelDisplay)} ${REL.shortPlan(e.plan)}`;
+
+  // ---- Cross-plan consistency (T-quad) and price proportionality (T-pool) ----
+  const CONSISTENCY_FAMILIES = [
+    { name: "Claude", plans: ["Claude Pro", "Claude Max", "Claude Ultra"], pool: /^claude-(opus|sonnet)-/ },
+    { name: "ChatGPT", plans: ["ChatGPT Plus", "ChatGPT Pro 10x", "ChatGPT Pro 20x", "ChatGPT Pro 500"] },
+    { name: "Google AI", plans: ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"], pool: /^gemini-/ },
+    { name: "Kimi", plans: ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra"] },
+    { name: "SuperGrok", plans: ["SuperGrok Lite", "SuperGrok", "SuperGrok Plus", "SuperGrok Heavy"] },
+    { name: "Cursor", plans: ["Cursor Pro", "Cursor Pro+", "Cursor Ultra"] },
   ];
-  const replacedIds = new Set(entries.filter((e) => e.replacesId).map((e) => e.replacesId));
+  const LN13 = Math.log(1.3);
+  const LN16 = Math.log(1.6);
+  const consistency = [];
+  const penalties = new Map(); // entry -> { sigma, line }
+  const penalize = (cells, D, line) => {
+    const pick = [...cells].sort((a, b) => b._chain.s - a._chain.s || String(REL.lastDate(a.dataDate)).localeCompare(String(REL.lastDate(b.dataDate))))[0];
+    const sig = Math.abs(D) / 2;
+    const prev = penalties.get(pick);
+    if (!prev || prev.sigma < sig) penalties.set(pick, { sigma: sig, line });
+    return pick.id;
+  };
+  for (const fam of CONSISTENCY_FAMILIES) {
+    const cells = new Map();
+    for (const e of entries) if (fam.plans.includes(e.plan) && e.subsidyMultiple > 0 && !e.unmetered && !e.isOffPeak) cells.set(`${e.plan}|${e.modelId}`, e);
+    const models = [...new Set([...cells.values()].map((e) => e.modelId))].sort();
+    for (let i = 0; i < models.length; i++) for (let j = i + 1; j < models.length; j++) {
+      for (let pi = 0; pi < fam.plans.length; pi++) for (let qi = pi + 1; qi < fam.plans.length; qi++) {
+        const [a, b, p, q] = [models[i], models[j], fam.plans[pi], fam.plans[qi]];
+        const quad = [cells.get(`${p}|${a}`), cells.get(`${p}|${b}`), cells.get(`${q}|${a}`), cells.get(`${q}|${b}`)];
+        if (quad.some((x) => !x)) continue;
+        const ids = new Set(quad.map((x) => x.id));
+        const nonDerived = quad.filter((x) => !REL.chainDerived(x._chain) && !x._chain.anchors.some((id) => ids.has(id) && id !== x.id)).length;
+        if (nonDerived < 3) continue;
+        const D = Math.log(quad[0].subsidyMultiple / quad[1].subsidyMultiple) - Math.log(quad[2].subsidyMultiple / quad[3].subsidyMultiple);
+        const z = Math.abs(D) / REL.qsum(...quad.map((x) => x._chain.s));
+        const verdict = Math.abs(D) <= LN13 ? "pass" : Math.abs(D) > LN16 || z > 2 ? "fail" : "warn";
+        const rec = { type: "quad", family: fam.name, a, b, p, q, D: REL.r4(D), ratio: REL.r4(Math.exp(Math.abs(D))), z: REL.r4(z), verdict, flagged: null };
+        if (verdict === "fail") {
+          rec.flagged = penalize(quad, D, `inconsistent ×${Math.exp(Math.abs(D)).toFixed(2)} (${REL.shortModel(quad[0].modelDisplay)} / ${REL.shortModel(quad[1].modelDisplay)}, ${REL.shortPlan(p)} vs ${REL.shortPlan(q)})`);
+        }
+        consistency.push(rec);
+      }
+    }
+    if (!fam.pool) continue;
+    for (const p of fam.plans) {
+      const measured = [...cells.values()].filter((e) => e.plan === p && fam.pool.test(e.modelId) && !REL.chainDerived(e._chain));
+      for (let i = 0; i < measured.length; i++) for (let j = i + 1; j < measured.length; j++) {
+        const [x, y] = [measured[i], measured[j]];
+        const D = Math.log(x.subsidyMultiple / y.subsidyMultiple);
+        const verdict = Math.abs(D) <= LN13 ? "pass" : "fail";
+        const rec = { type: "pool", family: fam.name, a: x.modelId, b: y.modelId, p, D: REL.r4(D), ratio: REL.r4(Math.exp(Math.abs(D))), verdict, flagged: null };
+        if (verdict === "fail") {
+          rec.flagged = penalize([x, y], D, `inconsistent ×${Math.exp(Math.abs(D)).toFixed(2)} (${REL.shortModel(x.modelDisplay)} vs ${REL.shortModel(y.modelDisplay)}, same pool)`);
+        }
+        consistency.push(rec);
+      }
+    }
+  }
+  for (const [e, pen] of penalties) REL.addPenalty(e._chain, pen.sigma, pen.line);
+
+  // ---- Carryover rows ----
+  function makeCarryEntry({ planName, targetSlug, anchor, origin, estimateType, subsidy, chain, rule, sourceNote, decisionNote }) {
+    const aaModel = aaByNorm.get(targetSlug);
+    const priorsVar = !aaModel ? bestPriorsVariantFor(targetSlug) : null;
+    const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(targetSlug) : null;
+    const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
+    const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
+    if (intel === null || cpt === null || cpt <= 0) return null;
+    return {
+      id: `${origin === "ratio-transfer" ? "ratio-transfer" : "shared-pool"}::${normPlanSlug(planName)}::${targetSlug}`,
+      origin,
+      isPreliminary: true,
+      estimateType,
+      replacesId: null,
+      billing: "subscription",
+      vendor: rule.vendor,
+      modelCreator: aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || rule.vendor,
+      color: vendorColor(rule.vendor, aaModel),
+      plan: planName,
+      planLocal: planName,
+      planUrl: anchor.planUrl || rule.fallbackUrl || null,
+      isOffPeak: false,
+      isLegacy: false,
+      isCnPortal: false,
+      unmetered: false,
+      modelId: targetSlug,
+      modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || targetSlug,
+      aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
+      aaLive: Boolean(aaModel),
+      aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || `https://artificialanalysis.ai/models/${targetSlug}`,
+      isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
+      contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
+      priceUsd: anchor.priceUsd,
+      monthlyTokens: null,
+      realUsdPerMtok: null,
+      listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? fallbackModel?.listBlendedUsdPerMtok ?? null,
+      subsidyMultiple: REL.r4(subsidy),
+      intelligenceIndex: Number(intel.toFixed(2)),
+      benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
+      aaCostPerTaskUsd: Number(cpt.toFixed(4)),
+      aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
+      aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
+      aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
+      aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
+      confidence: "low",
+      dataDate: anchor.dataDate || today,
+      sourceNote,
+      decisionNote,
+      preliminary: null,
+      _chain: chain,
+    };
+  }
+
   let sharedPoolCount = 0;
+  for (const rule of ratioTransferRules) {
+    for (const planName of rule.plans) {
+      if (liveCell(planName, rule.model)) continue;
+      const anchor = liveCell(planName, rule.anchorModel);
+      if (!anchor) continue;
+      const refs = [];
+      for (const q of rule.refPlans) {
+        const t = liveCell(q, rule.model) || refOnlyRows.find((e) => e.plan === q && e.modelId === rule.model);
+        const a = liveCell(q, rule.anchorModel);
+        if (!t || !a) continue;
+        const r = t.subsidyMultiple / a.subsidyMultiple;
+        const s = REL.qsum(t._chain.s, a._chain.s);
+        refs.push({ t, a, q, lr: Math.log(r), w: 1 / (s * s) });
+      }
+      if (!refs.length) continue;
+      const wSum = refs.reduce((acc, x) => acc + x.w, 0);
+      const ratio = Math.exp(refs.reduce((acc, x) => acc + x.w * x.lr, 0) / wSum);
+      const sRatio = 1 / Math.sqrt(wSum);
+      const fam = (m) => REL.shortModel(m.modelDisplay).replace(/\s+[\d.]+$/, "");
+      const line = `${cellName(anchor)} ÷ ${(1 / ratio).toFixed(2)} (${fam(refs[0].t)}/${fam(anchor)}, ${refs.map((x) => REL.shortPlan(x.q)).join(" + ")})`;
+      const chain = REL.extendChain(
+        structuredClone(anchor._chain),
+        [
+          { k: "ratio", s: REL.r4(sRatio), t: "measured model ratio" },
+          { k: "X1", s: REL.STEP_SIGMA.X1, t: "ratio transfer" },
+        ],
+        line,
+        { at: cellName(anchor), anchorId: anchor.id }
+      );
+      chain.anchors = [...new Set([...chain.anchors, ...refs.flatMap((x) => [x.t.id, x.a.id])])];
+      const e = makeCarryEntry({
+        planName,
+        targetSlug: rule.model,
+        anchor,
+        origin: "ratio-transfer",
+        estimateType: "derived",
+        subsidy: anchor.subsidyMultiple * ratio,
+        chain,
+        rule,
+        sourceNote: `Ratio transfer: ${planName} ${anchor.modelDisplay} ${anchor.subsidyMultiple.toFixed(1)}× × measured ${rule.model}/${rule.anchorModel} ratio ${ratio.toFixed(3)}`,
+        decisionNote: `S = S(${rule.anchorModel}, ${planName}) × S(${rule.model}, q) / S(${rule.anchorModel}, q), q = ${refs.map((x) => x.q).join(", ")}`,
+      });
+      if (!e) continue;
+      e._x1 = { anchor, refs: refs.map((x) => ({ t: x.t, a: x.a, w: x.w })) };
+      if (isFableOnClaude(planName, rule.model)) {
+        e.capShare = FABLE_CAP_SHARE;
+        e.subsidyReadings = { shared: e.subsidyMultiple, own: REL.r4(e.subsidyMultiple * FABLE_CAP_SHARE) };
+      }
+      entries.push(e);
+      sharedPoolCount++;
+    }
+  }
+
   for (const rule of sharedPoolRules) {
     for (const planName of rule.plans) {
-      const sourcePlanName = rule.anchorPlan || planName;
-      const anchor = entries.find(
-        (e) =>
-          e.billing === "subscription" &&
-          e.plan === sourcePlanName &&
-          e.modelId === rule.anchorModel &&
-          !replacedIds.has(e.id) &&
-          e.subsidyMultiple > 0
-      );
+      const anchor = liveCell(planName, rule.anchorModel);
       if (!anchor) continue;
       for (const targetSlug of rule.targets) {
-        const alreadyPresent = entries.some(
-          (e) =>
-            e.billing === "subscription" &&
-            e.plan === planName &&
-            e.modelId === targetSlug &&
-            !replacedIds.has(e.id)
-        );
-        if (alreadyPresent) continue;
-
-        const aaModel = aaByNorm.get(targetSlug);
-        const priorsVar = !aaModel ? bestPriorsVariantFor(targetSlug) : null;
-        const fallbackModel = !aaModel && !priorsVar ? modelInfoBySlug.get(targetSlug) : null;
-        const intel = aaModel?.intelligenceIndex ?? priorsVar?.intelligenceIndex ?? fallbackModel?.intelligenceIndex ?? null;
-        const cpt = aaModel?.costPerTaskUsd ?? priorsVar?.costPerTaskUsd ?? fallbackModel?.aaCostPerTaskUsd ?? null;
-        if (intel === null || cpt === null || cpt <= 0) continue;
-
-        sharedPoolCount++;
-        entries.push({
-          id: `shared-pool::${normPlanSlug(planName)}::${targetSlug}`,
-          origin: "shared-pool-assumed",
-          isPreliminary: true,
-          estimateType: "assumed",
-          replacesId: null,
-          billing: "subscription",
-          vendor: rule.vendor,
-          modelCreator: aaModel?.creatorName || priorsVar?.creatorName || fallbackModel?.modelCreator || rule.vendor,
-          color: vendorColor(rule.vendor, aaModel),
-          plan: planName,
-          planLocal: planName,
-          planUrl: anchor.planUrl || rule.fallbackUrl,
-          isOffPeak: false,
-          isLegacy: false,
-          isCnPortal: false,
-          unmetered: false,
-          modelId: targetSlug,
-          modelDisplay: aaModel?.shortName || priorsVar?.baseDisplay || fallbackModel?.modelDisplay || targetSlug,
-          aaVariant: aaModel?.name || priorsVar?.displayName || fallbackModel?.aaVariant || null,
-          aaLive: Boolean(aaModel),
-          aaUrl: aaModel?.sourceUrl || priorsVar?.aaUrl || fallbackModel?.aaUrl || `https://artificialanalysis.ai/models/${targetSlug}`,
-          isOpenWeights: Boolean(aaModel?.isOpenWeights ?? fallbackModel?.isOpenWeights),
-          contextWindowTokens: aaModel?.contextWindowTokens ?? fallbackModel?.contextWindowTokens ?? null,
-          priceUsd: rule.priceOverride ?? anchor.priceUsd,
-          monthlyTokens: null,
-          realUsdPerMtok: null,
-          listBlendedUsdPerMtok: aaModel?.pricing?.blended7to2to1Per1M ?? fallbackModel?.listBlendedUsdPerMtok ?? null,
-          subsidyMultiple: anchor.subsidyMultiple,
-          intelligenceIndex: Number(intel.toFixed(2)),
-          benchmarks: aaModel?.benchmarks || priorsVar?.benchmarks || fallbackModel?.benchmarks || { intelligenceIndex: round1(intel) },
-          aaCostPerTaskUsd: Number(cpt.toFixed(4)),
-          aaCostPerTaskBreakdown: aaModel?.costPerTaskBreakdown || fallbackModel?.aaCostPerTaskBreakdown || null,
-          aaTotalIndexCostUsd: aaModel?.totalIndexCostUsd ?? fallbackModel?.aaTotalIndexCostUsd ?? null,
-          aaPricing: aaModel?.pricing || fallbackModel?.aaPricing || null,
-          aaSpeed: aaModel?.speed || fallbackModel?.aaSpeed || null,
-          confidence: "low",
-          dataDate: anchor.dataDate || nowIso.slice(0, 10),
-          sourceNote: `Shared quota pool carryover from ${sourcePlanName} ${anchor.modelDisplay} (${anchor.subsidyMultiple.toFixed(2)}×)`,
-          decisionNote: `Estimated using ${sourcePlanName}'s shared quota pool multiplier from ${anchor.modelDisplay} until directly measured.`,
-          preliminary: null,
+        if (entries.some((e) => e.billing === "subscription" && e.plan === planName && e.modelId === targetSlug)) continue;
+        let factor = 1;
+        let step;
+        let line;
+        if (rule.mechanism === "token") {
+          const tp = (aaByNorm.get(targetSlug) || modelInfoBySlug.get(targetSlug))?.aaPricing || aaByNorm.get(targetSlug)?.pricing;
+          const ap = anchor.aaPricing;
+          const mix = feiConventions.mixes.standard;
+          const bt = blendedForMix(tp, mix);
+          const ba = blendedForMix(ap, mix);
+          factor = bt > 0 && ba > 0 ? bt / ba : 2 / 3;
+          step = { k: "token", s: 0, t: "token pool" };
+          line = `${REL.shortModel(anchor.modelDisplay)} × ${factor.toFixed(3)} (token pool)`;
+        } else {
+          step = { k: "M1", s: REL.STEP_SIGMA.M1, t: "same pool, price-proportional" };
+          line = `= ${REL.shortModel(anchor.modelDisplay)} (same pool)`;
+        }
+        const chain = REL.extendChain(structuredClone(anchor._chain), step, line, {
+          at: cellName(anchor),
+          anchorId: anchor.id,
+          dropKinds: rule.mechanism === "token" ? ["M3proxy"] : [],
         });
+        const e = makeCarryEntry({
+          planName,
+          targetSlug,
+          anchor,
+          origin: "shared-pool-assumed",
+          estimateType: "assumed",
+          subsidy: anchor.subsidyMultiple * factor,
+          chain,
+          rule,
+          sourceNote: `Shared quota pool carryover from ${planName} ${anchor.modelDisplay} (${anchor.subsidyMultiple.toFixed(2)}×${factor !== 1 ? ` × ${factor.toFixed(3)}` : ""})`,
+          decisionNote: rule.mechanism === "token"
+            ? `Token-denominated pool measured on ${targetSlug} traffic: ${anchor.modelDisplay} multiple × list-price blend ratio ${factor.toFixed(3)}.`
+            : `Same pool, drawn down at API price: ${anchor.modelDisplay} multiple on ${planName}.`,
+        });
+        if (!e) continue;
+        e._sampleMix = anchor._sampleMix || null;
+        entries.push(e);
+        sharedPoolCount++;
       }
     }
   }
   if (sharedPoolCount > 0) {
-    log(`Added ${sharedPoolCount} shared-pool carryover entries across Google AI, Claude, ChatGPT, and Kimi`);
+    log(`Added ${sharedPoolCount} carryover entries (shared pool, token pool, ratio transfer)`);
   }
 
   // Helper to apply OpenRouter model-level backfill + plan access/window metadata
@@ -3921,6 +4362,254 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     log(`Backfilled contextWindowTokens for ${backfilledContextSlugs.size} models from OpenRouter`);
   }
 
+  // ---- Reliability per entry: σ of ln real cost = subsidy chain ⊕ token mix ⊕ cost metric ----
+  const CS = REL.costSteps(effortAccuracy, codingAgentEstimates?.accuracy);
+  const breakdownByVariant = new Map();
+  const breakdownByBase = new Map();
+  const t3ByVariant = new Map();
+  const t3ByBase = new Map();
+  const EFF_RANK = { none: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, default: 6 };
+  for (const e of expandedEntries) {
+    if (e.aaCostPerTaskBreakdown?.total > 0) {
+      breakdownByVariant.set(e.modelId, e.aaCostPerTaskBreakdown);
+      if (!breakdownByBase.has(e.baseModelId)) breakdownByBase.set(e.baseModelId, e.aaCostPerTaskBreakdown);
+    }
+    if (e.t3Turn?.perTurn) {
+      t3ByVariant.set(e.modelId, { perTurn: e.t3Turn.perTurn, pricing: e.aaPricing });
+      const prev = t3ByBase.get(e.baseModelId);
+      if (!prev || (EFF_RANK[e.effort] ?? 0) > prev.rank) t3ByBase.set(e.baseModelId, { perTurn: e.t3Turn.perTurn, pricing: e.aaPricing, rank: EFF_RANK[e.effort] ?? 0 });
+    }
+  }
+  const anthropicConvention = feiConventions.mixes.anthropic;
+  const phiSampleMemo = new Map();
+  function phiSample(base) {
+    if (phiSampleMemo.has(base.id)) return phiSampleMemo.get(base.id);
+    phiSampleMemo.set(base.id, null);
+    let v = null;
+    if (base._x1) {
+      // φ of a ratio-transferred cell: φ(target, q) × φ(anchor, p) / φ(anchor, q), geometric mean over q.
+      const pa = phiSample(base._x1.anchor);
+      const parts = base._x1.refs.map((r) => ({ t: phiSample(r.t), a: phiSample(r.a), w: r.w })).filter((r) => r.t && r.a && pa);
+      if (parts.length) {
+        const W = parts.reduce((s, r) => s + r.w, 0);
+        v = REL.MIX_SCENARIOS.map((_, i) => Math.exp(parts.reduce((s, r) => s + r.w * Math.log((r.t[i] * pa[i]) / r.a[i]), 0) / W));
+      }
+    } else if (base._sampleKind === "t3") {
+      const t = t3ByBase.get(base.modelId);
+      v = t ? REL.phiVector(REL.dollarMixFromTokens(t.perTurn, t.pricing || base.aaPricing)) : null;
+    } else if (base._sampleMix) {
+      v = REL.phiVector(base._sampleMix);
+    }
+    if (!v) v = REL.phiVector(REL.conventionMix(anthropicConvention, base.aaPricing));
+    phiSampleMemo.set(base.id, v);
+    return v;
+  }
+  const baseById = new Map(entries.map((e) => [e.id, e]));
+  const sampleKnown = (b) => Boolean(b._sampleMix || b._sampleKind === "t3" || (b._x1 && b._x1.refs.every((r) => sampleKnown(r.t) && sampleKnown(r.a))));
+  const vendorMixSigma = (e) => {
+    if (e.billing === "metered" || ["kilo-pass", "ollama-cloud", "artificial-analysis"].includes(e.origin)) return 0;
+    if (/^(ChatGPT|Cursor|GitHub Copilot|GLM)\b/.test(e.plan)) return 0.05;
+    if (/^(Google AI|SuperGrok|Kimi|MiniMax)\b/.test(e.plan)) return 0.15;
+    return 0.1;
+  };
+  const modes = ["task", "agent", "cursor", "turn", "tokens"];
+  const effortCost = (e) => {
+    if (!e.effortEstimate) return { s: CS.aa, t: "AA measured", pts: 0 };
+    if (e.effortEstimate === "interpolated") return { s: CS.interp, t: "interpolated effort", pts: CS.pts.interp };
+    if (e.effortEstimateSource === "arc-agi-2") return { s: CS.arc, t: "ARC-AGI-2 effort ratio", pts: CS.pts.arc };
+    const n = Math.max(1, Math.min(4, e.effortEstimateSteps ?? 4));
+    return { s: CS.extrap[n - 1], t: `${e.effortEstimateSteps ?? "4+"} effort step${n === 1 ? "" : "s"}`, pts: CS.pts.extrap[n - 1] };
+  };
+  const chains = {};
+  const chainKeyById = new Map();
+  let chainSeq = 0;
+  const levelCounts = { high: 0, medium: 0, low: 0, speculative: 0 };
+  const mixSamples = [];
+  for (const e of expandedEntries) {
+    const baseId = e.id.split("@")[0];
+    const base = baseById.get(baseId) || e;
+    const ch = e._chain || REL.makeChain({ steps: [{ k: "unknown", s: 0.5, t: "unknown" }], lines: ["unknown"] });
+    let key = chainKeyById.get(baseId);
+    if (!key) {
+      key = `c${(chainSeq++).toString(36)}`;
+      chainKeyById.set(baseId, key);
+      chains[key] = {
+        entity: baseId,
+        value: e.subsidyMultiple,
+        steps: ch.steps,
+        lines: ch.lines,
+        anchors: ch.anchors,
+        flags: ch.flags,
+        ...(ch.drop ? { drop: REL.r4(ch.drop) } : {}),
+      };
+    }
+    const eff = effortCost(e);
+    const c = {};
+    const cl = {};
+    const ce = [];
+    c.task = REL.r4(eff.s);
+    cl.task = eff.t;
+    if (e.effortEstimate) ce.push("task");
+    const a = e.codingAgent;
+    let agentPts = null;
+    if (a) {
+      let s, t, pts;
+      if (!a.estimate) [s, t, pts] = [CS.aa, `AA agent run, ${a.agent}`, 0];
+      else if (a.estimate === "same-model") {
+        [s, t, pts] = a.crossAgent
+          ? [CS.agentCross, `from ${a.fromAgent} run`, CS.pts.agentCross]
+          : [CS.agentSame, `from ${a.fromEffort} effort run`, CS.pts.agentSame];
+      } else {
+        [s, t, pts] = a.outOfRange
+          ? [CS.agentFitBelow, "Terminal-Bench fit, below range", CS.pts.agentFitBelow]
+          : [CS.agentFit, "Terminal-Bench fit", CS.pts.agentFit];
+      }
+      // An agent estimate built on an effort estimate counts that effort step once.
+      if (a.estimate && e.effortEstimate) {
+        s = REL.qsum(s, eff.s);
+        pts = REL.qsum(pts, eff.pts);
+      }
+      c.agent = REL.r4(s);
+      cl.agent = t;
+      agentPts = REL.r4(pts);
+      if (a.estimate) ce.push("agent");
+    }
+    if (e.t3Turn?.costPerTurnUsd > 0) {
+      c.turn = REL.r4(REL.qsum(CS.t3(e.t3Turn.turns || 0), CS.t3Harness));
+      cl.turn = `T3, ${(e.t3Turn.turns || 0).toLocaleString("en-US")} turns`;
+    }
+    if (e.cursorBench?.costPerTaskUsd > 0) {
+      c.cursor = CS.cursor;
+      cl.cursor = "CursorBench";
+    }
+    c.tokens = CS.tokens;
+    cl.tokens = "list price";
+
+    // Token-mix term (W1). Claude first-party: φ(sample) / φ(metric) with the cache-read weight range.
+    const w = {};
+    let quotaMix = null;
+    if (isClaudeFirstParty(e.plan) && e.billing === "subscription" && !e.unmetered) {
+      const ps = phiSample(base);
+      const aaMix = REL.dollarMixFromAa(breakdownByVariant.get(e.modelId) || breakdownByBase.get(e.baseModelId));
+      const t3 = t3ByVariant.get(e.modelId) || t3ByBase.get(e.baseModelId);
+      const t3Mix = t3 ? REL.dollarMixFromTokens(t3.perTurn, t3.pricing || e.aaPricing) : null;
+      const metricPhi = {
+        task: REL.phiVector(aaMix),
+        agent: REL.phiVector(t3Mix), // AA Coding Agent mix unpublished: T3 mix of the same model as proxy
+        turn: REL.phiVector(t3Mix),
+        tokens: REL.MIX_SCENARIOS.map(() => 1), // 3:1 input:output blend, no cache
+      };
+      const metricPhiAlt = {
+        task: REL.phiVector(REL.asHourWrites(aaMix)),
+        agent: REL.phiVector(REL.asHourWrites(t3Mix)),
+        turn: REL.phiVector(REL.asHourWrites(t3Mix)),
+        tokens: null,
+      };
+      for (const m of modes) {
+        if (m === "cursor") {
+          w.cursor = 0.15;
+          continue;
+        }
+        const mf = REL.mixFactor(ps, metricPhi[m], metricPhiAlt[m]);
+        if (!mf) {
+          w[m] = 0.12;
+          continue;
+        }
+        // Sample mix not recorded: the row's mix is Fei's workload convention, so keep the full W1 term.
+        if (!sampleKnown(base)) mf.sigma = Math.max(mf.sigma, 0.12);
+        if (APPLY_CLAUDE_MIX_CORRECTION) {
+          (quotaMix ||= {})[m] = { f: mf.f, lo: mf.lo, hi: mf.hi };
+          w[m] = mf.sigma;
+        } else {
+          w[m] = REL.r4(REL.qsum(mf.sigma, Math.log(mf.f)));
+        }
+        if (m === "task") mixSamples.push({ id: e.id, f: mf.f, lo: mf.lo, hi: mf.hi });
+      }
+    } else {
+      const ws = vendorMixSigma(e);
+      for (const m of modes) w[m] = ws;
+    }
+    if (quotaMix) e.quotaMix = quotaMix;
+
+    const capped = REL.chainCapped(ch);
+    const rel = {
+      s: REL.r4(ch.s),
+      w,
+      c,
+      score: { ii: REL.r4(eff.pts), ...(agentPts != null ? { agent: agentPts } : {}) },
+      cap: capped ? "speculative" : ch.cap || null,
+      chain: key,
+      flags: ch.flags,
+      sd: REL.chainDerived(ch),
+      ce,
+      cl,
+    };
+    // Default view: AA Intelligence task cost, Intelligence Index score, Shared reading.
+    const sigma = REL.qsum(rel.s, w.task, c.task);
+    const level = REL.worseLevel(REL.levelFromSigma(sigma), REL.levelFromScore(rel.score.ii), rel.cap);
+    const S = e.billing === "metered" ? 1 : (e.subsidyMultiple || 0) * (quotaMix?.task?.f ?? 1);
+    const real = e.unmetered ? 0 : S > 0 ? e.aaCostPerTaskUsd / S : null;
+    rel.level = level;
+    rel.sigma = REL.r4(sigma);
+    if (real != null) {
+      rel.lo = Number((real * Math.exp(-REL.Z80 * sigma)).toPrecision(4));
+      rel.hi = Number((real * Math.exp(REL.Z80 * sigma)).toPrecision(4));
+    }
+    e.rel = rel;
+    levelCounts[level]++;
+  }
+
+  // T3 $/turn vs AA Coding Agent $/task by harness (measured agent runs only)
+  const t3Harness = {};
+  {
+    const seen = new Set();
+    const groups = new Map();
+    for (const e of expandedEntries) {
+      const a = e.codingAgent;
+      if (!a || a.estimate || !(e.t3Turn?.costPerTurnUsd > 0) || !(a.costPerTaskUsd > 0)) continue;
+      const k = `${e.modelId}|${a.agentSlug}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (!groups.has(a.agentSlug)) groups.set(a.agentSlug, []);
+      groups.get(a.agentSlug).push({ r: e.t3Turn.costPerTurnUsd / a.costPerTaskUsd, min: e.t3Turn.minutesPerTurn });
+    }
+    for (const [slug, g] of groups) {
+      const lns = g.map((x) => Math.log(x.r));
+      const mu = lns.reduce((s, x) => s + x, 0) / lns.length;
+      const sd = Math.sqrt(lns.reduce((s, x) => s + (x - mu) ** 2, 0) / Math.max(1, lns.length - 1));
+      const mins = g.map((x) => x.min).filter((x) => x > 0);
+      t3Harness[slug] = { n: g.length, ratio: REL.r4(median(g.map((x) => x.r))), sdLn: REL.r4(sd), minPerTurn: mins.length ? REL.r4(median(mins)) : null };
+    }
+  }
+  log(`Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; Claude mix correction ${APPLY_CLAUDE_MIX_CORRECTION ? "on" : "off"}`);
+  const consFails = consistency.filter((x) => x.verdict === "fail");
+  if (consFails.length) log(`Consistency fails: ${consFails.map((x) => `${x.type}:${x.family}:${x.a}/${x.b}:${x.p}${x.q ? `/${x.q}` : ""} ×${x.ratio}`).join("; ")}`);
+  const feiDerivedRows = feiRows.filter((r) => r.data_date_kind === "derived");
+  const unresolved = feiDerivedRows.filter((r) => feiCtx.memo.get(r.id)?.flags.includes("unresolved")).map((r) => r.id);
+  const reliabilityStats = {
+    claudeMixCorrection: APPLY_CLAUDE_MIX_CORRECTION,
+    levels: REL.LEVELS,
+    levelSigma: REL.LEVEL_SIGMA,
+    levelScorePts: REL.LEVEL_SCORE_PTS,
+    z80: REL.Z80,
+    steps: REL.STEP_SIGMA,
+    upstreamFloor: REL.UPSTREAM_FLOOR,
+    costSteps: { ...CS, t3: { ge1000: CS.t3(1000), ge100: CS.t3(100), lt100: CS.t3(0) } },
+    mixScenarios: REL.MIX_SCENARIOS,
+    counts: levelCounts,
+    consistency,
+    feiDerived: feiDerivedRows.length,
+    unresolved,
+    priorsSkipped: priorsParsed.skipped || [],
+    droppedRows,
+    promoExpiry: PROMO_EXPIRY,
+    quotaChanges: QUOTA_CHANGES,
+    modelRetirements: MODEL_RETIREMENTS,
+    t3Harness,
+    mixSamples: mixSamples.slice(0, 400),
+  };
+  for (const e of expandedEntries) for (const k of Object.keys(e)) if (k.startsWith("_")) delete e[k];
+
   expandedEntries.sort((a, b) => {
     const effA = a.unmetered ? 0 : a.aaCostPerTaskUsd / (a.subsidyMultiple || 1);
     const effB = b.unmetered ? 0 : b.aaCostPerTaskUsd / (b.subsidyMultiple || 1);
@@ -3956,6 +4645,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       t3CodeTurns: { variants: priorsParsed.t3Index.size, entries: expandedEntries.filter((e) => e.t3Turn).length },
       cursorBench: { variants: priorsParsed.cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
+      reliability: reliabilityStats,
+      chains,
     },
     entries: expandedEntries,
   };

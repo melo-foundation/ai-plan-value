@@ -376,14 +376,14 @@ try {
 }
 
 const rows = [
-  { deg: "0 — Measured (Artificial Analysis)", mark: "—", s: { n: null, iMed: 0, iP75: 0, cMed: 0, cP75: 0, tier: "Ground truth" } },
-  { deg: "1 — Bracketed interpolation (same model)", mark: "●", s: summarize(interpI, interpC) },
-  { deg: "2 — Same-family AA, 1 effort step", mark: "●", s: summarize(famByDist[1].i, famByDist[1].c) },
-  { deg: "3 — Same-family AA, 2 effort steps", mark: "◐", s: summarize(famByDist[2].i, famByDist[2].c) },
-  { deg: "4 — Same-family AA, 3 effort steps", mark: "○", s: summarize(famByDist[3].i, famByDist[3].c) },
-  { deg: "5 — Same-family AA, 4+ effort steps", mark: "○", s: summarize(famByDist[4].i, famByDist[4].c) },
-  { deg: "6 — Exact-model ARC-AGI-2 transfer", mark: "◐", s: summarize(arcExactI, arcExactC) },
-  { deg: "7 — Same-family ARC-AGI-2 transfer", mark: "◐", s: summarize(arcFamI, arcFamC) },
+  { deg: "0 — Measured (Artificial Analysis)", mark: "0.05", s: { n: null, iMed: 0, iP75: 0, cMed: 0, cP75: 0, tier: "Ground truth" } },
+  { deg: "1 — Bracketed interpolation (same model)", mark: "σ 0.17", s: summarize(interpI, interpC) },
+  { deg: "2 — Same-family AA, 1 effort step", mark: "σ 0.21", s: summarize(famByDist[1].i, famByDist[1].c) },
+  { deg: "3 — Same-family AA, 2 effort steps", mark: "σ 0.37", s: summarize(famByDist[2].i, famByDist[2].c) },
+  { deg: "4 — Same-family AA, 3 effort steps", mark: "σ 0.52", s: summarize(famByDist[3].i, famByDist[3].c) },
+  { deg: "5 — Same-family AA, 4+ effort steps", mark: "σ 0.70", s: summarize(famByDist[4].i, famByDist[4].c) },
+  { deg: "6 — Exact-model ARC-AGI-2 transfer", mark: "σ 0.39", s: summarize(arcExactI, arcExactC) },
+  { deg: "7 — Same-family ARC-AGI-2 transfer", mark: "σ 0.39", s: summarize(arcFamI, arcFamC) },
 ];
 
 console.log("=== Effort Estimate Accuracy by Degree of Separation (LOOCV) ===");
@@ -405,7 +405,7 @@ if (WRITE_DOC) {
     "",
     "## Empirical Error by Degree of Separation",
     "",
-    "| Degree / Method | Marker | Held-out `n` | Intelligence median err | Intelligence P75 err | `$/task` median err | `$/task` P75 err | Confidence |",
+    "| Degree / Method | Cost σ | Held-out `n` | Intelligence median err | Intelligence P75 err | `$/task` median err | `$/task` P75 err | Confidence |",
     "|---|---:|---:|---:|---:|---:|---:|---|",
     ...rows.map((r) => {
       const s = r.s;
@@ -423,24 +423,24 @@ if (WRITE_DOC) {
           return [
             "## Coding Agent Index Estimates",
             "",
-            "| Method | Marker | Held-out `n` | Agent score median err | `$/task` median err |",
+            "| Method | Cost σ | Held-out `n` | Agent score median err | `$/task` median err |",
             "|---|---:|---:|---:|---:|",
-            `| Same model, other effort | ● | ${a.sameModel.n} | ±${a.sameModel.pts} pts | ±${a.sameModel.costPct}% |`,
-            ...(a.crossAgent ? [`| Same model, other agent | ◐ | ${a.crossAgent.n} | ±${a.crossAgent.pts} pts | ±${a.crossAgent.costPct}% |`] : []),
-            `| Terminal-Bench 4.0 fit | ◐ (○ below measured range) | ${a.model.n} | ±${a.model.pts} pts | ±${a.model.costPct}% |`,
+            `| Same model, other effort | 0.16 | ${a.sameModel.n} | ±${a.sameModel.pts} pts | ±${a.sameModel.costPct}% |`,
+            ...(a.crossAgent ? [`| Same model, other agent | 0.40 | ${a.crossAgent.n} | ±${a.crossAgent.pts} pts | ±${a.crossAgent.costPct}% |`] : []),
+            `| Terminal-Bench 4.0 fit | 0.25 (0.60 below measured range) | ${a.model.n} | ±${a.model.pts} pts | ±${a.model.costPct}% |`,
             "",
           ];
         })()
       : []),
     "## How Each Method Works",
     "",
-    "- **Bracketed interpolation (●):** Only fills missing efforts strictly between a lower and higher measured effort on the *same* model, using empirical cumulative Intelligence and log-cost step weights. Gated on OpenRouter's `reasoning.supported_efforts` (and `mandatory` flag).",
-    "- **Same-family AA extrapolation (● 1 step, ◐ 2 steps, ○ 3+ steps):** Uses median additive Intelligence point deltas (`+Δ`) and multiplicative `$/task` ratios measured on other multi-effort models in the *same* canonical family (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `alibaba`, `zhipu`, `mistral`, `meta`). No cross-family global fallback.",
-    "- **ARC-AGI-2 (`v2_Semi_Private`) fallback (◐):** Only used for model families with no multi-effort AA data (e.g. `moonshot` / Kimi, `thinking machines` / Inkling). Transfers exact-model ARC-AGI-2 cost ratios and a live-fitted IRT logit-space slope (`Δlogit(ARC) → Δlogit(AA)`, following Truong et al., arXiv:2606.07616) first, then pools same-family ARC-AGI-2 step curves for sibling models (e.g. `Kimi K3.1 Pro` from `Kimi K3`).",
-    "- **Coding Agent Index, same model (● same agent, ◐ other agent):** Nearest measured effort of the same model in the plan's agent, else in another agent; score shifted 1:1 by the Intelligence Index gap, `$/task` scaled by the AA Intelligence `$/task` ratio.",
-    "- **Coding Agent Index, Terminal-Bench 4.0 (◐, ○ below the measured Terminal-Bench range):** Models with no agent run; score from a linear fit on Terminal-Bench 4.0, `$/task` = AA `$/task` × median agent/AA ratio. Plans on Cursor, Factory Droid and Command Code stay empty.",
-    "- **Stacking:** an agent estimate whose Intelligence Index or Terminal-Bench input is itself an effort estimate takes the lower of the two tiers.",
-    "- **Settings:** Show high-confidence estimates (●, on by default), medium (◐) and low (○) toggle separately; URL `est=` takes the shown tiers as letters (`h`, `hm`, `hml`, `0`).",
+    "- **Bracketed interpolation:** Only fills missing efforts strictly between a lower and higher measured effort on the *same* model, using empirical cumulative Intelligence and log-cost step weights. Gated on OpenRouter's `reasoning.supported_efforts` (and `mandatory` flag).",
+    "- **Same-family AA extrapolation (1, 2, 3, 4+ steps):** Uses median additive Intelligence point deltas (`+Δ`) and multiplicative `$/task` ratios measured on other multi-effort models in the *same* canonical family (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `alibaba`, `zhipu`, `mistral`, `meta`). No cross-family global fallback.",
+    "- **ARC-AGI-2 (`v2_Semi_Private`) fallback:** Only used for model families with no multi-effort AA data (e.g. `moonshot` / Kimi, `thinking machines` / Inkling). Transfers exact-model ARC-AGI-2 cost ratios and a live-fitted IRT logit-space slope (`Δlogit(ARC) → Δlogit(AA)`, following Truong et al., arXiv:2606.07616) first, then pools same-family ARC-AGI-2 step curves for sibling models (e.g. `Kimi K3.1 Pro` from `Kimi K3`).",
+    "- **Coding Agent Index, same model (same agent, other agent):** Nearest measured effort of the same model in the plan's agent, else in another agent; score shifted 1:1 by the Intelligence Index gap, `$/task` scaled by the AA Intelligence `$/task` ratio.",
+    "- **Coding Agent Index, Terminal-Bench 4.0 (in range, below the measured Terminal-Bench range):** Models with no agent run; score from a linear fit on Terminal-Bench 4.0, `$/task` = AA `$/task` × median agent/AA ratio. Plans on Cursor, Factory Droid and Command Code stay empty.",
+    "- **Stacking:** an agent estimate whose input is an effort estimate adds that effort step's σ and score error once, in quadrature.",
+    "- **Levels:** each σ and score error feeds the row level in [RELIABILITY.md](RELIABILITY.md) (High ≤ ±1.5 pts, Medium ≤ ±3, Low ≤ ±5). Settings: `Min confidence` (URL `conf=`).",
     "",
     "## Reproducing These Numbers",
     "",

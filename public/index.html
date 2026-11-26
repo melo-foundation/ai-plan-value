@@ -4,20 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Plan Value</title>
-    <meta name="description" content="Real cost per task and per 1M tokens for AI coding subscriptions, ranked with Artificial Analysis benchmarks." />
+    <meta name="description" content="AI coding subscriptions, ranked by real cost per task." />
     <meta name="theme-color" content="#2b5d93" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="AI Plan Value" />
     <meta property="og:title" content="AI Plan Value" />
-    <meta property="og:description" content="Real cost per task and per 1M tokens for AI coding subscriptions, ranked with Artificial Analysis benchmarks." />
+    <meta property="og:description" content="AI coding subscriptions, ranked by real cost per task." />
     <meta property="og:url" content="https://melo-foundation.github.io/ai-plan-value/" />
     <meta property="og:image" content="https://melo-foundation.github.io/ai-plan-value/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="AI Plan Value: best real cost per task" />
+    <meta property="og:image:alt" content="AI Plan Value: the 5 smartest models and their real cost per task" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="AI Plan Value" />
-    <meta name="twitter:description" content="Real cost per task and per 1M tokens for AI coding subscriptions, ranked with Artificial Analysis benchmarks." />
+    <meta name="twitter:description" content="AI coding subscriptions, ranked by real cost per task." />
     <meta name="twitter:image" content="https://melo-foundation.github.io/ai-plan-value/og.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -68,7 +68,10 @@
             <div class="filter-item">
               <span class="filter-head">
                 <span class="bench-pick">
-                  <span>Min</span>
+                  <select id="rankMode" class="select" aria-label="Filter mode">
+                    <option value="min" selected>Min</option>
+                    <option value="top">Top</option>
+                  </select>
                   <select id="benchSelect" class="select" aria-label="Benchmark domain or test">
                     <optgroup label="Overall">
                       <option value="intelligenceIndex" selected>Intelligence Index</option>
@@ -148,15 +151,15 @@
               <rect x="7.2" y="5.5" width="1.6" height="4.6" fill="#222" />
               <rect x="7.2" y="11.2" width="1.6" height="1.6" fill="#222" />
             </svg>
-            <span class="infobar-text"><strong>Notice:</strong> <span id="extrapBannerText">Including rough estimates (<span class="tier-glyph">◐</span> <span class="tier-glyph">○</span>, faded) for reasoning levels AA hasn't measured.</span></span>
-            <button id="disableExtrapBtn" class="infobar-link" type="button">Turn off</button>
+            <span class="infobar-text"><span id="extrapBannerText"></span></span>
+            <button id="disableExtrapBtn" class="infobar-link" type="button">Hide</button>
           </div>
           <div class="panel-body">
             <div id="barChart" class="bar-chart"></div>
           </div>
           <div id="extrapFooter" class="panel-foot" hidden>
-            <span id="extrapFooterText">Rough estimates for unmeasured reasoning levels are hidden.</span>
-            <button id="enableExtrapBtn" class="infobar-link" type="button">Show rough estimates (<span class="tier-glyph">◐</span> <span class="tier-glyph">○</span>)</button>
+            <span id="extrapFooterText"></span>
+            <button id="enableExtrapBtn" class="infobar-link" type="button">Show</button>
           </div>
         </section>
 
@@ -179,10 +182,13 @@
           </div>
         </details>
 
-        <p id="estFootnote" class="footnote" hidden>* Estimated subsidy (preliminary user report or prior-generation quota carryover).</p>
-        <p id="tierFootnote-high" class="footnote" hidden><span class="tier-glyph">●</span> High-confidence estimate (interpolated between measured efforts, or one effort step from a measured result on the same model).</p>
-        <p id="tierFootnote-medium" class="footnote" hidden><span class="tier-glyph">◐</span> Medium-confidence estimate (two effort steps from a measured result, or ARC-AGI-2 effort ratios; not directly benchmarked).</p>
-        <p id="tierFootnote-low" class="footnote" hidden><span class="tier-glyph">○</span> Low-confidence estimate (three or more effort steps from a measured result; not directly benchmarked).</p>
+        <p id="relLegend" class="footnote rel-legend">
+          <span>~ derived</span>
+          <span><span class="tier-glyph">●</span> high</span>
+          <span><span class="tier-glyph">◐</span> medium</span>
+          <span><span class="tier-glyph">○</span> low</span>
+          <span><span class="tier-glyph">◌</span> speculative</span>
+        </p>
       </main>
     </div>
 
@@ -204,6 +210,29 @@
               <option value="cursor">Per CursorBench task</option>
               <option value="turn">Per T3 Code turn</option>
               <option value="tokens">Per 1M tokens</option>
+            </select>
+          </div>
+          <div class="settings-head-row">
+            <label class="settings-heading" for="minConf">Min confidence</label>
+            <select id="minConf" class="select" aria-label="Min confidence">
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low" selected>Low</option>
+              <option value="speculative">Speculative</option>
+            </select>
+          </div>
+          <div class="settings-head-row">
+            <label class="settings-heading" for="costView">Cost</label>
+            <select id="costView" class="select" aria-label="Cost">
+              <option value="point" selected>Point</option>
+              <option value="range">Range</option>
+            </select>
+          </div>
+          <div class="settings-head-row">
+            <label class="settings-heading" for="fableCap">Fable cap</label>
+            <select id="fableCap" class="select" aria-label="Fable cap">
+              <option value="shared" selected>Shared</option>
+              <option value="own">Fable only</option>
             </select>
           </div>
           <div class="settings-head-row">
@@ -265,22 +294,6 @@
             <label class="settings-check">
               <input id="hideOffPeak" type="checkbox" checked />
               <span>Hide off-peak / night-only quotas</span>
-            </label>
-            <label class="settings-check">
-              <input id="hideEstimated" type="checkbox" />
-              <span>Hide estimated subsidies (*)</span>
-            </label>
-            <label class="settings-check">
-              <input id="showTier-high" type="checkbox" checked />
-              <span>Show high-confidence estimates (<span class="tier-glyph">●</span>)</span>
-            </label>
-            <label class="settings-check">
-              <input id="showTier-medium" type="checkbox" />
-              <span>Show medium-confidence estimates (<span class="tier-glyph">◐</span>)</span>
-            </label>
-            <label class="settings-check">
-              <input id="showTier-low" type="checkbox" />
-              <span>Show low-confidence estimates (<span class="tier-glyph">○</span>)</span>
             </label>
             <label class="settings-check">
               <input id="hideCnPortal" type="checkbox" />
@@ -360,19 +373,48 @@
 
         <div class="settings-section">
           <div class="settings-head-row">
-            <span class="settings-heading">Footnotes</span>
-            <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/EFFORT-ESTIMATES.md" target="_blank" rel="noopener noreferrer">Accuracy report</a>
+            <span class="settings-heading">Reliability</span>
+            <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/RELIABILITY.md" target="_blank" rel="noopener noreferrer">RELIABILITY.md</a>
           </div>
-          <dl class="method-markers">
-            <dt>*</dt>
-            <dd><strong>Estimated subsidy:</strong> preliminary user report or prior-generation quota carryover.</dd>
-            <dt>●</dt>
-            <dd><strong>High confidence:</strong> missing reasoning level bracketed between a lower and higher measured effort on the same model, or one effort step from a measured effort using same-family step sizes; agent score from the same model and agent measured at another effort, shifted by the Intelligence Index gap<span id="tierErr-high"></span>.</dd>
-            <dt>◐</dt>
-            <dd><strong>Medium confidence:</strong> unmeasured reasoning level two effort steps from a measured effort, or estimated from ARC-AGI-2 effort ratios where a family lacks multi-effort AA data; agent score copied from another agent's run of the same model, or fitted on Terminal-Bench 4.0<span id="tierErr-medium"></span>.</dd>
-            <dt>○</dt>
-            <dd><strong>Low confidence:</strong> unmeasured reasoning level three or more effort steps from a measured effort; agent score fitted on Terminal-Bench 4.0 below the range of measured models, or built on a low-confidence effort estimate<span id="tierErr-low"></span>.</dd>
-          </dl>
+          <table class="method-table">
+            <thead><tr><th>Level</th><th></th><th>σ</th><th>80% within</th><th>Rows</th></tr></thead>
+            <tbody>
+              <tr><td>High</td><td class="tier-glyph">●</td><td>≤ 0.18</td><td>×1.25</td><td id="relCount-high">—</td></tr>
+              <tr><td>Medium</td><td class="tier-glyph">◐</td><td>≤ 0.40</td><td>×1.7</td><td id="relCount-medium">—</td></tr>
+              <tr><td>Low</td><td class="tier-glyph">○</td><td>≤ 0.70</td><td>×2.5</td><td id="relCount-low">—</td></tr>
+              <tr><td>Speculative</td><td class="tier-glyph">◌</td><td>&gt; 0.70</td><td>&gt; ×2.5</td><td id="relCount-speculative">—</td></tr>
+            </tbody>
+          </table>
+          <div class="method-formulas">
+            <div><code>σ</code> = sd of ln(real cost); <code>σ² = Σ step σ²</code> over subsidy chain, token mix and cost metric</div>
+            <div><code>Range</code> = real cost × e<sup>±1.28σ</sup></div>
+            <div><code>Level</code> = worst of cost σ, score error (±1.5 / 3 / 5 pts) and the upstream grade</div>
+            <div><code>~</code> = derived cell (transfer step or estimate)</div>
+          </div>
+          <table class="method-table">
+            <thead><tr><th>Step</th><th>σ</th></tr></thead>
+            <tbody>
+              <tr><td>Official credits, rate table, list price</td><td>0.03</td></tr>
+              <tr><td>Official quota table via workload mix</td><td>0.12</td></tr>
+              <tr><td>Several accounts, ≥100 pp</td><td>0.10</td></tr>
+              <tr><td>One account, own logs + meter</td><td>0.20</td></tr>
+              <tr><td>Screenshot: first-party panel, token breakdown, ≥15 pp</td><td>0.35</td></tr>
+              <tr><td>Tweet, gateway panel, other screenshot</td><td>0.45</td></tr>
+              <tr><td>Promo period / attribution inferred / raw tokens</td><td>+0.20 / 0.15 / 0.10</td></tr>
+              <tr><td>Data older than 45 / 90 days</td><td>+0.15 / 0.30</td></tr>
+              <tr><td>Sibling plan, official / ruled ratio</td><td>0.25 / 0.35</td></tr>
+              <tr><td>Sibling plan via measured model ratio</td><td>0.15 + cells</td></tr>
+              <tr><td>Other model, same pool, price-proportional</td><td>0.15</td></tr>
+              <tr><td>Other model, rate card / price ratio</td><td>0.30 / 0.25–0.45</td></tr>
+              <tr><td>Successor assumed equal (Speculative)</td><td>0.70</td></tr>
+              <tr><td>Token mix: Claude / Google, xAI, Kimi, MiniMax / OpenAI, Cursor, Copilot, GLM</td><td>0.05–0.27 / 0.15 / 0.05</td></tr>
+              <tr><td>AA measured / interpolated / 1–4+ effort steps</td><td>0.05 / 0.17 / 0.21–0.70</td></tr>
+              <tr><td>Agent: same agent / other agent / Terminal-Bench fit</td><td>0.16 / 0.40 / 0.25–0.60</td></tr>
+              <tr><td>T3 turn (+ cross-harness 0.35) / CursorBench</td><td>0.10–0.40 / 0.10</td></tr>
+              <tr><td>Cross-plan inconsistency &gt; ×1.6</td><td>+ |ln D| / 2</td></tr>
+            </tbody>
+          </table>
+          <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/EFFORT-ESTIMATES.md" target="_blank" rel="noopener noreferrer">Effort estimate accuracy</a>
         </div>
 
         <p class="dialog-note method-foot">
