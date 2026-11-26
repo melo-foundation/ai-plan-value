@@ -1084,7 +1084,7 @@ test("Billing: Settings row, URL param and fee text are wired", () => {
   const sel = html.match(/<select id="billing"[\s\S]*?<\/select>/)?.[0] || "";
   assert.deepEqual([...sel.matchAll(/<option value="(\w+)"/g)].map((m) => m[1]), ["monthly", "yearly"]);
   assert.ok(/<option value="monthly" selected>Monthly<\/option>/.test(sel), "Billing default must be Monthly");
-  assert.ok(/<span class="settings-heading" id="billing-label">Billing<\/span>/.test(html), "Missing Billing label");
+  assert.ok(/<input id="billingYearly" type="checkbox" \/>\s*<span>Use cheaper yearly billing where available<\/span>/.test(html), "Missing yearly-billing tick box");
   assert.ok(appJs.includes('state.billing = parseBillingParam(params.get("billing"))') && appJs.includes('params.set("billing", "yearly")'), "billing URL param not read/written");
   assert.ok(/\/yr`/.test(appJs) && appJs.includes('"no annual"'), "Yearly fee text missing");
   assert.ok(html.includes("<code>Yearly</code>: subsidy × monthly price ÷ yearly price per month"), "Methodology Yearly formula missing");
@@ -1461,6 +1461,10 @@ class StubEl {
     (this.listeners[t] ||= []).push(f);
   }
   removeEventListener() {}
+  dispatchEvent(ev) {
+    this.fire(ev.type);
+    return true;
+  }
   fire(type, props = {}) {
     for (const f of this.listeners[type] || []) f({ type, target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...props });
   }
@@ -1526,6 +1530,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
     document,
     location,
     console,
+    Event: class { constructor(type) { this.type = type; } },
     history: { replaceState: (_s, _t, url) => (location.search = new URL(url, "http://test.invalid").search) },
     matchMedia: (q) => {
       if (!mqs.has(q)) mqs.set(q, { matches: q === "(max-width: 600px)" ? phone : false, media: q, addEventListener() {}, removeEventListener() {} });
@@ -1741,7 +1746,7 @@ test("Reliability display: glyph after the model name, tooltip on the whole name
     const names = [...htmlText.matchAll(new RegExp(`<div class="${cls}"( title="([^"]*)")?>([\\s\\S]*?)</div>`, "g"))];
     assert.ok(names.length > 0, `${where}: no model names rendered`);
     for (const [, hasTitle, title, inner] of names) {
-      const m = inner.match(/^(?:<a [^>]*>[^<]*<\/a>|[^<]+)<span class="tier-glyph rel-glyph rel-(\w+)" title="([^"]*)">([^<]+)<\/span>$/);
+      const m = inner.match(/^(?:<a [^>]*>[^<]*<\/a>|[^<]+)<span class="tier-glyph rel-glyph rel-(\w+)" title="([^"]*)">([^<]+)<\/span>(?:<span class="sub-derived" title="[^"]+">†<\/span>)?$/);
       assert.ok(m, `${where}: glyph must follow the model name: ${inner}`);
       assert.ok(hasTitle, `${where}: tooltip must be on the whole model name`);
       assert.equal(m[3], app.LEVEL_GLYPH[m[1]], `${where}: glyph for ${m[1]}`);
@@ -1825,7 +1830,9 @@ test("Methodology: sections, collapsed trust-level details, glyph table, plain l
   const dlg = html.match(/<dialog id="methodDialog"[\s\S]*?<\/dialog>/)?.[0] || "";
   assert.ok(dlg, "Missing #methodDialog");
   const headings = [...dlg.matchAll(/class="settings-heading"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
-  for (const h of ["Real cost", "Cost metrics", "Reliability", "Subsidy sources", "Model data"]) assert.ok(headings.includes(h), `Methodology section "${h}" missing (have ${headings})`);
+  for (const h of ["Real cost", "Cost metrics", "Reliability"]) assert.ok(headings.includes(h), `Methodology section "${h}" missing (have ${headings})`);
+  const sources = dlg.match(/<div class="method-sources"><b>Sources:<\/b>([\s\S]*?)<\/div>/)?.[1] || "";
+  for (const name of ["Real API Pricing", "Priors", "GitHub Copilot", "Ollama Cloud", "Kilo Pass", "OpenRouter", "ARC Prize"]) assert.ok(sources.includes(`>${name}</a>`), `Sources line must link ${name}`);
   const details = dlg.match(/<details class="method-details"([^>]*)>\s*<summary>How the trust levels are calculated<\/summary>[\s\S]*?<\/details>/);
   assert.ok(details, "Collapsed 'How the trust levels are calculated' section missing");
   assert.ok(!/\bopen\b/.test(details[1]), "Trust-level details must start collapsed");
@@ -1844,7 +1851,7 @@ test("Methodology: sections, collapsed trust-level details, glyph table, plain l
   }
   const legend = html.match(/<p id="relLegend"[\s\S]*?<\/p>/)?.[0] || "";
   // The legend explains each mark in a full sentence (terse "◐ medium" labels were flagged as a regression twice)
-  for (const phrase of ["Not measured for this exact model, reasoning level and plan", "Worked out from related measurements", "High confidence:", "usually within 25%", "Medium confidence:", "−40% to +70%", "Low confidence:", "2.5× higher or lower", "Speculative:", "Hidden by default"])
+  for (const phrase of ["next to a circle: the plan's subsidy was worked out from a related plan or model", "before a score: the benchmark didn't run this reasoning level", "High confidence:", "usually within 25%", "Medium confidence:", "−40% to +70%", "Low confidence:", "2.5× higher or lower", "Speculative:", "Hidden by default"])
     assert.ok(legend.includes(phrase), `Legend lost its description: "${phrase}"`);
   assert.deepEqual([...legend.matchAll(/<span class="tier-glyph">([^<]+)<\/span>/g)].map((m) => m[1]), [...app.LEVELS].map((l) => app.LEVEL_GLYPH[l]), "Legend glyph order");
   for (const l of ["low", "speculative"]) assert.match(rows.find((r) => r[4] === l)[3], /Hidden by default/, `${l} row must say Hidden by default`);
@@ -1965,6 +1972,14 @@ test("Mobile CSS: full-screen dialogs ≤600px, card rows, tap targets ≤780px,
   assert.ok(grids >= 1, "no .workspace grid rule found");
 });
 
+test("Chart model names are never cut off with an ellipsis", () => {
+  for (const r of cssRules) {
+    if (!r.selectors.some((x) => /^\.bar-model$/.test(x))) continue;
+    assert.notEqual(r.decls["text-overflow"], "ellipsis", `.bar-model${r.media ? ` in ${r.media}` : ""} must not truncate`);
+    assert.notEqual(r.decls["white-space"], "nowrap", `.bar-model${r.media ? ` in ${r.media}` : ""} must wrap`);
+  }
+});
+
 test("Plan drawer sources: a table with plain-language sources and a date column", () => {
   const app = loadApp("", { data: dataset });
   // Shorthand → plain words
@@ -1997,7 +2012,7 @@ test("Plan drawer sources: a table with plain-language sources and a date column
 });
 
 test("Two-option settings are radio pairs over the hidden select; segmented buttons on phones", () => {
-  for (const [id, values] of [["costView", ["point", "range"]], ["fableCap", ["shared", "own"]], ["billing", ["monthly", "yearly"]]]) {
+  for (const [id, values] of [["costView", ["point", "range"]], ["fableCap", ["shared", "own"]]]) {
     const group = html.match(new RegExp(`<span class="radio-pair"[^>]*data-for="${id}">[\\s\\S]*?</span>\\s*\\n\\s*</div>`))?.[0] || "";
     assert.deepEqual([...group.matchAll(/type="radio" name="([\w-]+)" value="(\w+)"/g)].map((m) => m[2]), values, `${id}: radio values`);
     assert.ok(new RegExp(`<select id="${id}" class="pair-source"`).test(html), `${id}: hidden select stays for URLs and reset`);
@@ -2011,8 +2026,27 @@ test("Two-option settings are radio pairs over the hidden select; segmented butt
   // Behaviour: render() checks the radio that matches the select; clicking a radio drives the select's handler
   const body = fnBody("syncRadioPairs");
   assert.ok(/input\.checked = input\.value === sel\.value/.test(body), "syncRadioPairs must mirror the select");
-  assert.ok(/syncRadioPairs\(\);\s*\n\s*syncUrlFromState\(\);/.test(appJs), "render() must sync the radio pairs");
+  assert.ok(/syncRadioPairs\(\);[\s\S]{0,160}syncUrlFromState\(\);/.test(appJs), "render() must sync the radio pairs");
   assert.ok(/sel\.value = e\.target\.value;\s*\n\s*sel\.dispatchEvent\(new Event\("change"\)\)/.test(appJs), "a radio change must drive the select's change handler");
+});
+
+test("Settings help tips explain Cost metric, Min confidence, Cost and Fable use; yearly billing is a tick box", () => {
+  const tips = [...html.matchAll(/<button class="help-tip" type="button" aria-label="What this means" title="([^"]+)">\?<\/button><span class="help-pop" hidden>([^<]+)<\/span>/g)];
+  assert.ok(tips.length >= 4, `only ${tips.length} help tips`);
+  for (const [, title, pop] of tips) assert.equal(title, pop, "hover text and tap text must match");
+  const byLabel = (label) => new RegExp(`${label}</(?:label|span)><button class="help-tip"`).test(html);
+  for (const label of ["Cost metric", "Min confidence", "Cost", "Fable use"]) assert.ok(byLabel(label), `${label} needs a help tip`);
+  assert.ok(tips.some(([, t]) => /other half goes unused/.test(t)), "Fable use tip must explain the half-week cap");
+  assert.ok(tips.some(([, t]) => /80% chance/.test(t)), "Cost tip must explain Range");
+  // Behaviour: tapping a tip toggles its text; the yearly tick box drives billing and follows state
+  const app = loadApp("", { data: dataset });
+  assert.ok(/pop\.hidden = !pop\.hidden/.test(appJs), "a tap must toggle the inline help text");
+  app.$("billingYearly").checked = true;
+  app.$("billingYearly").fire("change");
+  assert.equal(app.state.billing, "yearly", "ticking the box switches to yearly billing");
+  const app2 = loadApp("?billing=yearly", { data: dataset });
+  app2.render();
+  assert.equal(app2.$("billingYearly").checked, true, "?billing=yearly ticks the box");
 });
 
 test("Phone table: every cell carries its column's data-label; Sort select and Show 50 more page the rows", () => {

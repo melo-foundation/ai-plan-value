@@ -277,7 +277,8 @@ function realCostText(r, cost = r.effectiveCost, lo = r.relLo, hi = r.relHi) {
   if (state.costView === "range" && r.level !== "high" && Number.isFinite(lo) && Number.isFinite(hi) && cost > 0) {
     return `${fmtUsd(lo)}–${fmtUsdShort(hi)}`;
   }
-  return `${tilde(r.costDerivedReal)}${fmtUsd(cost)}`;
+  // Costs carry no "~": every real cost is approximate and the trust mark says how much.
+  return fmtUsd(cost);
 }
 
 // Source lines behind a row's subsidy: cap reading, token-mix factor, then the chain's own lines.
@@ -322,9 +323,11 @@ function relTooltip(r) {
 const relTitle = (r) => (r.level ? ` title="${esc(relTooltip(r))}"` : "");
 
 // One graded glyph per row, after the model name
+const SUB_DERIVED_TIP = "Subsidy worked out from a related plan or model, not measured on this plan";
 function relGlyph(r) {
   if (!r.level) return "";
-  return `<span class="tier-glyph rel-glyph rel-${r.level}" title="${esc(relTooltip(r))}">${LEVEL_GLYPH[r.level]}</span>`;
+  const dagger = r.subDerived ? `<span class="sub-derived" title="${SUB_DERIVED_TIP}">†</span>` : "";
+  return `<span class="tier-glyph rel-glyph rel-${r.level}" title="${esc(relTooltip(r))}">${LEVEL_GLYPH[r.level]}</span>${dagger}`;
 }
 
 // Escape, then wrap level glyphs so they render in a symbol font
@@ -966,10 +969,10 @@ function renderTable(rows) {
         ${extraCells}
         ${accessCell}
         <td class="num-col fee-cell"${dl("fee")}>${feeText(r)}</td>
-        <td class="num-col col-hide-sm"${dl("subsidy")}>${r.unmetered ? "∞" : `${tilde(r.subDerived)}${fmtMult(r.subsidy)}`}</td>
-        <td class="num-col col-hide-sm col-hide-md"${dl("apiCost")}>${tilde(r.costDerived)}${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col col-hide-sm"${dl("subsidy")}>${r.unmetered ? "∞" : fmtMult(r.subsidy)}</td>
+        <td class="num-col col-hide-sm col-hide-md"${dl("apiCost")}>${fmtUsd(r.apiMetric)}</td>
         <td class="num-col real-cell"${dl("effectiveCost")}>${realCostText(r)}</td>
-        <td class="num-col col-hide-sm"${dl("altCost")}>${tilde(isTokens ? r.altDerived : r.subDerived)}${fmtUsd(altCost(r))}</td>
+        <td class="num-col col-hide-sm"${dl("altCost")}>${fmtUsd(altCost(r))}</td>
         <td class="num-col col-hide-sm"${dl("tasksPerMonth")}>${fmtCount(r.tasksPerMonth, r.unmetered)}</td>
         ${isTurn ? `<td class="num-col col-hide-sm"${dl("hoursPerMonth")}>${fmtHours(r.hoursPerMonth)}</td>` : ""}
         ${cardSub([grouped ? null : esc(cleanPlan(r)), feeText(r), scoreLabel(scoreText)])}
@@ -1448,6 +1451,7 @@ function render() {
     ? `${hidden} ${{ medium: "medium-confidence", low: "low-confidence", speculative: "speculative" }[next]} ${hidden === 1 ? "row" : "rows"} hidden`
     : "";
   syncRadioPairs();
+  if ($("billingYearly")) $("billingYearly").checked = state.billing === "yearly";
   syncUrlFromState();
 }
 
@@ -1658,6 +1662,23 @@ $("billing").addEventListener("change", (e) => {
 
 // Two-option settings are radio pairs (segmented buttons on phones) over a hidden <select>,
 // so URLs, reset and the existing change handlers keep working on the select.
+// "?" help tips: hover shows the title; a tap or click toggles the same text inline (phones have no hover)
+if (document.querySelectorAll) {
+  for (const btn of document.querySelectorAll(".help-tip")) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const pop = btn.nextElementSibling;
+      if (pop) pop.hidden = !pop.hidden;
+    });
+  }
+}
+
+// Billing is a tick box over the hidden billing select
+$("billingYearly")?.addEventListener("change", (e) => {
+  $("billing").value = e.target.checked ? "yearly" : "monthly";
+  $("billing").dispatchEvent(new Event("change"));
+});
+
 function syncRadioPairs() {
   if (!document.querySelectorAll) return;
   for (const group of document.querySelectorAll(".radio-pair[data-for]")) {
