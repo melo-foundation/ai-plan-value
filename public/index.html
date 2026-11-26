@@ -236,6 +236,13 @@
             </select>
           </div>
           <div class="settings-head-row">
+            <label class="settings-heading" for="billing">Billing</label>
+            <select id="billing" class="select" aria-label="Billing">
+              <option value="monthly" selected>Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="settings-head-row">
             <span class="settings-heading">Reasoning effort</span>
             <div class="effort-range">
               <label class="effort-pick">
@@ -333,6 +340,7 @@
             <div><code>Real cost</code> = API price of the work ÷ plan subsidy</div>
             <div><code>Subsidy</code> = dollars of API usage the plan's quota covers per $1 you pay. 50× means a $20 plan covers $1,000 of API usage.</div>
             <div><code>Tasks/mo</code> = monthly fee ÷ real cost</div>
+            <div><code>Yearly</code>: subsidy × monthly price ÷ yearly price per month</div>
           </div>
         </div>
 

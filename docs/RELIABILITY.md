@@ -123,6 +123,26 @@ Results: `stats.reliability.consistency`.
 | `sharedPoolRules` | `same-pool` (M1) or `token` carryover; skipped when the cell is measured |
 | `ratioTransferRules` | X1 carryover, pooled over reference plans |
 
+## Billing
+
+```
+Yearly fee     = annual price ÷ 12
+Yearly subsidy = subsidy × monthly price ÷ yearly price per month
+σ²            += 0.03²   (official annual list price, Yearly only)
+```
+
+| Row | Monthly | Yearly |
+|---|---|---|
+| Official annual price | monthly fee | `$X/yr` |
+| No annual option | monthly fee | `$X/mo (no annual)` |
+| Annual price unknown | monthly fee | `$X/mo (annual ?)` |
+| Annual variant (`(Annual)`, `(CN Annual)`) | hidden | shown; its monthly twin for the same model is hidden |
+
+- Prices, sources and check dates: `BILLING_PERIODS` in `scripts/billing-periods.mjs`.
+- To add a plan: add a record with `status` `official` (and `annual`), `none` or `unknown`, plus `url` and `checked`. `legacy: true` applies the record to the `, legacy` row.
+- `stats.billing.unmatched` non-empty: add records for the listed plans.
+- `stats.billing.mismatches` non-empty: recheck the official monthly price.
+
 ## Fable cap
 
 Fable on Claude Pro / Max / Ultra: `capShare` 0.5, `subsidyReadings { shared, own }`, own = shared × 0.5. `Tasks/mo` = fee ÷ real cost × capShare in the Shared reading.
@@ -142,6 +162,7 @@ Fable on Claude Pro / Max / Ultra: `capShare` 0.5, `subsidyReadings { shared, ow
 | Min confidence | High, Medium, Low, Speculative | Medium |
 | Cost | Point, Range | Point |
 | Fable cap | Shared, Fable only | Shared |
+| Billing | Monthly, Yearly | Monthly |
 
 The bar chart and the table both show rows at or above the Min confidence setting. Range shows `$lo–hi` for Medium, Low and Speculative rows.
 
@@ -152,6 +173,7 @@ The bar chart and the table both show rows at or above the Min confidence settin
 | `conf` | `h`, `m`, `s` (`l` is the default) |
 | `cost` | `range`, a max cost, or both: `cost=2,range` |
 | `fable` | `own` |
+| `billing` | `yearly` |
 | `est` (legacy) | `0` → `h`, `h` → `m`, `hm` → `l`, `hml` → `s` |
 | `extrap=1` / `nointerp=1` (legacy) | `s` / `h` |
 | `noest=1` (legacy) | at most `m` |
@@ -160,9 +182,11 @@ The bar chart and the table both show rows at or above the Min confidence settin
 
 - `entry.rel`: `level`, `sigma`, `lo`, `hi` (AA task cost, Intelligence Index, Shared); `s`; `w` and `c` per cost metric; `score { ii, agent }`; `cap`; `chain`; `flags`; `sd` (subsidy derived); `ce` (metrics with an estimated cost); `cl` (cost source labels).
 - `entry.quotaMix[metric]`: `{ f, lo, hi }` on corrected Claude rows.
+- Subscription rows: `priceUsdMonthly`; `priceUsdYearly` (annual fee ÷ 12, or null); `billingYearly` (`official`, `none`, `unknown`, `variant`); `billingOnly: "yearly"` on annual-variant rows; `hideYearly` on their monthly twins; `rel.y` (0.03) on rows with an official annual price.
+- `stats.billing`: row counts per status, `unmatched` plans, `mismatches` (stored vs official monthly price).
 - `stats.chains[id]`: `steps [{k, s, t}]`, `lines` (nearest step first), `anchors`, `flags`.
 - `stats.reliability`: σ tables, thresholds, `counts`, `consistency`, `unresolved`, `priorsSkipped`, `droppedRows`, `t3Harness`.
 
 ## Tests
 
-`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved.
+`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record.

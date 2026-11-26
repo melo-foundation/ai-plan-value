@@ -77,6 +77,7 @@ const state = {
   minConf: "medium", // lowest reliability level shown: high | medium | low | speculative
   costView: "point", // "point" | "range" (80% band in Real cost cells)
   fableCap: "shared", // "shared" | "own" (Fable only) reading for Fable on Claude plans
+  billing: "monthly", // "monthly" | "yearly" (annual fee / 12 where an official annual price exists)
   hideCnPortal: false,
   showApi: false,
   openWeightsOnly: false,
@@ -178,14 +179,28 @@ function cleanPlan(r) {
   return r.isApi ? "Pay-as-you-go API" : r.plan.replace(/\s*\(9\/14\+\)/, "");
 }
 
+function fmtFee(n) {
+  return n >= 100 || Number.isInteger(n) ? Math.round(n).toLocaleString("en-US") : n.toFixed(2);
+}
+
+// Billing period: fee per month and the subsidy factor for one entry (scripts/billing-periods.mjs).
+// subsidyMultiple is per $ of priceUsd, so subsidy at a fee = subsidyMultiple × priceUsd ÷ fee.
+const parseBillingParam = (v) => (v === "yearly" ? "yearly" : "monthly");
+function billingView(e, billing) {
+  const base = e.priceUsd;
+  if (e.billing !== "subscription" || !(base > 0)) return { fee: base, scale: 1, hidden: false, yearly: false, mark: "" };
+  const monthly = e.priceUsdMonthly ?? base;
+  if (billing !== "yearly") return { fee: monthly, scale: base / monthly, hidden: e.billingOnly === "yearly", yearly: false, mark: "" };
+  const y = e.priceUsdYearly;
+  if (y > 0) return { fee: y, scale: base / y, hidden: Boolean(e.hideYearly), yearly: true, mark: "" };
+  return { fee: monthly, scale: base / monthly, hidden: false, yearly: false, mark: e.billingYearly === "none" ? "no annual" : "annual ?" };
+}
+
 function feeText(r) {
   if (r.isApi) return "API";
   if (r.priceUsd == null || !Number.isFinite(r.priceUsd)) return "—";
-  const base =
-    r.priceUsd >= 100 || Number.isInteger(r.priceUsd)
-      ? Math.round(r.priceUsd)
-      : r.priceUsd.toFixed(2);
-  return `$${base}/mo`;
+  if (r.feeYearly) return `$${fmtFee(r.priceUsd * 12)}/yr`;
+  return `$${fmtFee(r.priceUsd)}/mo${r.feeMark ? ` (${r.feeMark})` : ""}`;
 }
 
 function getPlanAccessMeta(r) {
@@ -353,7 +368,8 @@ function getAllEntriesResolved() {
     .filter((e) => !replaced.has(e.id))
     .map((e) => {
       const isApi = e.billing === "metered";
-      const reading = state.fableCap === "own" && e.subsidyReadings ? e.subsidyReadings.own : e.subsidyMultiple;
+      const bill = billingView(e, state.billing);
+      const reading = (state.fableCap === "own" && e.subsidyReadings ? e.subsidyReadings.own : e.subsidyMultiple) * bill.scale;
       const mixF = (m) => e.quotaMix?.[m]?.f ?? 1;
       const subFor = (m) => (isApi ? 1 : e.unmetered ? Infinity : reading * mixF(m));
       const subsidy = subFor(mode);
@@ -384,7 +400,7 @@ function getAllEntriesResolved() {
 
       // Reliability: σ of ln real cost = subsidy chain ⊕ token mix ⊕ cost metric; level also bounded by the score error.
       const rl = e.rel || {};
-      const sigma = qsum(rl.s, rl.w?.[mode], rl.c?.[mode]);
+      const sigma = qsum(rl.s, rl.w?.[mode], rl.c?.[mode], bill.yearly ? rl.y : 0);
       const scorePts = benchAgent ? rl.score?.agent ?? 0 : NO_SCORE_ERR.has(state.benchKey) ? 0 : rl.score?.ii ?? 0;
       const level = e.rel ? worseLevel(levelFromSigma(sigma), levelFromScore(scorePts), rl.cap) : "speculative";
       const costDerived = Boolean(rl.ce?.includes(mode));
@@ -395,8 +411,8 @@ function getAllEntriesResolved() {
       // Volume uses the model's share of the pool (Fable: half the weekly limit) in both readings.
       const capShare = state.fableCap === "own" ? 1 : e.capShare ?? 1;
       const volumePerMonth =
-        !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
-          ? (e.priceUsd / effectiveCost) * capShare
+        !isApi && bill.fee && !e.unmetered && effectiveCost != null && effectiveCost > 0
+          ? (bill.fee / effectiveCost) * capShare
           : null;
 
       return {
@@ -414,6 +430,10 @@ function getAllEntriesResolved() {
         altDerived: (mode === "tokens" ? Boolean(rl.ce?.includes("task")) : false) || subDerived,
         ...(agentInvolved ? { harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
         isApi,
+        priceUsd: isApi ? e.priceUsd : bill.fee,
+        feeYearly: bill.yearly,
+        feeMark: bill.mark,
+        billingHidden: bill.hidden,
         score,
         subsidy,
         apiMetric,
@@ -438,6 +458,7 @@ function getFilteredRows(allResolved, minConf = state.minConf) {
     if (!passesAccessAndWindow(r)) continue;
     if (r.effectiveCost == null || !Number.isFinite(r.effectiveCost)) continue;
     if (r.isApi && !state.showApi) continue;
+    if (r.billingHidden) continue;
     if (!r.isApi && state.hideLegacy && isLegacyEntry(r)) continue;
     if (!r.isApi && state.hideOffPeak && isOffPeakEntry(r)) continue;
     if (!r.isApi && state.hideCnPortal && isCnPortalEntry(r)) continue;
@@ -1084,6 +1105,7 @@ function loadStateFromUrl() {
   const confLevel = LEVELS.find((l) => LEVEL_PARAM[l] === confParam);
   if (confLevel) state.minConf = confLevel;
   if (params.get("fable") === "own") state.fableCap = "own";
+  state.billing = parseBillingParam(params.get("billing"));
   if (params.get("nocn") === "1") state.hideCnPortal = true;
   if (params.get("api") === "1") state.showApi = true;
   if (params.get("open") === "1") state.openWeightsOnly = true;
@@ -1142,6 +1164,7 @@ function syncControlsFromState() {
   $("minConf").value = state.minConf;
   $("costView").value = state.costView;
   $("fableCap").value = state.fableCap;
+  $("billing").value = state.billing;
   $("hideCnPortal").checked = state.hideCnPortal;
   $("showApi").checked = state.showApi;
   $("openWeightsOnly").checked = state.openWeightsOnly;
@@ -1182,6 +1205,7 @@ function syncUrlFromState() {
     if (!state.hideOffPeak) params.set("offpeak", "1");
     if (state.minConf !== "medium") params.set("conf", LEVEL_PARAM[state.minConf]);
     if (state.fableCap === "own") params.set("fable", "own");
+    if (state.billing === "yearly") params.set("billing", "yearly");
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
     if (state.openWeightsOnly) params.set("open", "1");
@@ -1398,6 +1422,11 @@ $("fableCap").addEventListener("change", (e) => {
   render();
 });
 
+$("billing").addEventListener("change", (e) => {
+  state.billing = parseBillingParam(e.target.value);
+  render();
+});
+
 function setMinConf(level) {
   state.minConf = level;
   $("minConf").value = level;
@@ -1437,6 +1466,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.minConf = "medium";
   state.costView = "point";
   state.fableCap = "shared";
+  state.billing = "monthly";
   state.hideCnPortal = false;
   state.showApi = false;
   state.openWeightsOnly = false;
@@ -1450,9 +1480,10 @@ $("resetSettingsBtn").addEventListener("click", () => {
   $("maxCost").value = "4";
   $("hideLegacy").checked = true;
   $("hideOffPeak").checked = true;
-  $("minConf").value = "low";
+  $("minConf").value = "medium";
   $("costView").value = "point";
   $("fableCap").value = "shared";
+  $("billing").value = "monthly";
   $("hideCnPortal").checked = false;
   $("showApi").checked = false;
   $("openWeightsOnly").checked = false;

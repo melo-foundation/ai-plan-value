@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
+import { BILLING_PERIODS, isAnnualVariant } from "./billing-periods.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -397,7 +398,7 @@ test("Interpolated efforts are strictly bracketed and extrapolated efforts are v
 
 // 10. Shareable URL params, reasoning effort bounds, stale-while-revalidate & CI cache-busting wiring
 test("Shareable URL params, effort bounds, stale-while-revalidate cache, and CI cache-busting are wired", () => {
-  for (const param of ["bench", "min", "top", "conf", "fable", "range", "mode", "access", "no5h", "noweekly", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
+  for (const param of ["bench", "min", "top", "conf", "fable", "billing", "range", "mode", "access", "no5h", "noweekly", "minEffort", "maxEffort", "budget", "cost", "plans", "efforts", "nointerp", "extrap", "est", "extra", "q", "group", "sort"]) {
     assert.ok(appJs.includes(`"${param}"`), `Missing URL param "${param}" in public/app.js`);
   }
   assert.ok(appJs.includes("readCachedDataset") && appJs.includes("writeCachedDataset"), "Missing Cache API stale-while-revalidate in public/app.js");
@@ -727,6 +728,94 @@ test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () 
   for (const [k, v] of [["0", "high"], ["h", "medium"], ["hm", "low"], ["hml", "speculative"]]) {
     assert.ok(appJs.includes(`${k === "0" ? "0" : k}: "${v}"`), `Legacy est=${k} → ${v} mapping missing`);
   }
+});
+
+// Billing period (Monthly | Yearly): app.js billingView() is evaluated against the dataset.
+const subsEntries = entries.filter((e) => e.billing === "subscription");
+const extractFn = (re, name) => {
+  const m = appJs.match(re);
+  assert.ok(m, `Missing ${name} in public/app.js`);
+  return m[0];
+};
+const billingSrc = [
+  extractFn(/const parseBillingParam = [^\n]+\n/, "parseBillingParam"),
+  extractFn(/function billingView\(e, billing\) \{[\s\S]*?\n\}\n/, "billingView"),
+].join("\n");
+const { parseBillingParam, billingView } = new Function(`${billingSrc}; return { parseBillingParam, billingView };`)();
+
+test("Billing: every subscription entry has priceUsdMonthly; yearly ≤ monthly; table rows are complete", () => {
+  for (const e of subsEntries) {
+    assert.ok(e.priceUsdMonthly > 0, `${e.id} lacks priceUsdMonthly`);
+    assert.ok(e.priceUsdYearly === null || e.priceUsdYearly > 0, `${e.id} priceUsdYearly must be > 0 or null`);
+    if (e.priceUsdYearly != null) assert.ok(e.priceUsdYearly <= e.priceUsdMonthly + 1e-6, `${e.id} yearly ${e.priceUsdYearly} > monthly ${e.priceUsdMonthly}`);
+    assert.ok(["official", "none", "unknown", "variant"].includes(e.billingYearly), `${e.id} billingYearly ${e.billingYearly}`);
+  }
+  for (const r of BILLING_PERIODS) {
+    assert.ok(["official", "none", "unknown"].includes(r.status), `${r.plan} status ${r.status}`);
+    assert.ok(/^https:\/\//.test(r.url) && /^\d{4}-\d{2}-\d{2}$/.test(r.checked), `${r.plan} needs a source URL and a checked date`);
+    if (r.status === "official") assert.ok(r.annual > 0 && r.annual <= r.monthly * 12 + 1e-6, `${r.plan} annual ${r.annual} vs 12 × ${r.monthly}`);
+    else assert.ok(!(r.annual > 0), `${r.plan} is ${r.status} but has an annual price`);
+  }
+  const unmatched = dataset.stats?.billing?.unmatched || [];
+  assert.deepEqual(unmatched, [], `Plans without a billing record: ${unmatched.join("; ")}`);
+});
+
+test("Billing: no plan × model appears twice in Monthly or Yearly mode", () => {
+  for (const mode of ["monthly", "yearly"]) {
+    const seen = new Map();
+    for (const e of subsEntries) {
+      const v = billingView(e, mode);
+      if (v.hidden) continue;
+      if (mode === "monthly") assert.ok(e.billingOnly !== "yearly", `${e.id} annual-only row shown in Monthly`);
+      // Same plan name once the annual marker is removed = same subscription
+      const k = `${e.plan.replace(/\s*\(CN Annual\)/, " (CN)").replace(/\s*\(Annual\)|\s*年付/, "")}|${e.modelId}`;
+      assert.ok(!seen.has(k), `${mode}: ${e.id} and ${seen.get(k)} are the same plan × model`);
+      seen.set(k, e.id);
+    }
+  }
+  const variants = subsEntries.filter((e) => isAnnualVariant(e.plan));
+  assert.ok(variants.length > 0 && variants.every((e) => e.billingOnly === "yearly"), "Annual-variant rows must be yearly-only");
+});
+
+test("Billing: Yearly subsidy = monthly subsidy × monthly fee ÷ yearly fee per month", () => {
+  let n = 0;
+  for (const e of subsEntries) {
+    if (!(e.subsidyMultiple > 0) || e.billingOnly) continue;
+    const m = billingView(e, "monthly");
+    const y = billingView(e, "yearly");
+    assert.ok(Math.abs(m.fee - e.priceUsdMonthly) < 1e-9 && Math.abs(m.scale - 1) < 1e-9, `${e.id} Monthly must use the stored fee and subsidy`);
+    const sM = e.subsidyMultiple * m.scale;
+    const sY = e.subsidyMultiple * y.scale;
+    if (e.priceUsdYearly > 0) {
+      assert.ok(Math.abs(sY - (sM * e.priceUsdMonthly) / e.priceUsdYearly) < 1e-6 * sM, `${e.id} subsidy identity fails`);
+      assert.ok(Math.abs(sY * y.fee - sM * m.fee) < 1e-6 * sM * m.fee, `${e.id} yearly quota (subsidy × fee) must equal monthly`);
+      assert.ok(y.yearly && y.fee === e.priceUsdYearly, `${e.id} Yearly fee must be priceUsdYearly`);
+      assert.equal(e.rel?.y, REL.BILLING_STEP_SIGMA, `${e.id} official yearly price must carry the list-price σ`);
+      n++;
+    } else {
+      assert.ok(y.fee === e.priceUsdMonthly && Math.abs(sY - sM) < 1e-9, `${e.id} without an annual price must keep the monthly fee`);
+      assert.ok(y.mark === (e.billingYearly === "none" ? "no annual" : "annual ?"), `${e.id} fee mark ${y.mark}`);
+    }
+  }
+  assert.ok(n > 0, "No row has an official yearly price");
+  for (const e of subsEntries.filter((x) => x.billingOnly === "yearly")) {
+    const y = billingView(e, "yearly");
+    assert.ok(Math.abs(y.scale - 1) < 1e-9 && y.fee === e.priceUsd, `${e.id} annual-variant row must keep its own fee and subsidy`);
+  }
+});
+
+test("Billing: Settings row, URL param and fee text are wired", () => {
+  assert.equal(parseBillingParam("yearly"), "yearly");
+  for (const v of [null, "", "monthly", "YEARLY", "annual"]) assert.equal(parseBillingParam(v), "monthly", `billing=${v}`);
+  const sel = html.match(/<select id="billing"[\s\S]*?<\/select>/)?.[0] || "";
+  assert.deepEqual([...sel.matchAll(/<option value="(\w+)"/g)].map((m) => m[1]), ["monthly", "yearly"]);
+  assert.ok(/<option value="monthly" selected>Monthly<\/option>/.test(sel), "Billing default must be Monthly");
+  assert.ok(/<label class="settings-heading" for="billing">Billing<\/label>/.test(html), "Missing Billing label");
+  assert.ok(appJs.includes('state.billing = parseBillingParam(params.get("billing"))') && appJs.includes('params.set("billing", "yearly")'), "billing URL param not read/written");
+  assert.ok(/\/yr`/.test(appJs) && appJs.includes('"no annual"'), "Yearly fee text missing");
+  assert.ok(html.includes("<code>Yearly</code>: subsidy × monthly price ÷ yearly price per month"), "Methodology Yearly formula missing");
+  // Budget, Tasks/mo and sort read the resolved fee
+  assert.ok(appJs.includes("priceUsd: isApi ? e.priceUsd : bill.fee") && appJs.includes("(bill.fee / effectiveCost) * capShare"), "Fee / Tasks/mo must follow the billing setting");
 });
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
