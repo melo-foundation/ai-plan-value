@@ -1141,8 +1141,9 @@ test("Included credits: subsidyMultiple is independent of includedCredits", () =
 });
 
 test("Included credits: meta line, tooltips, drawer, table row and Methodology show the note", () => {
-  assert.ok(/credits-note">\$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits");
-  assert.ok(/credits\]\.filter\(Boolean\)/.test(fnBody("renderBarChart")), "Bar plan tooltip must include credits");
+  assert.ok(/credits-note" title="\$\{esc\(creditsFullText\(r\)\)\}">\$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits with the full list on hover");
+  // Popups can't be hovered further: the plan popup must list every bundled item, not a summary
+  assert.ok(/planText = [^;]*creditsFullText|creditItems = creditsFullText\(r\)[\s\S]{0,300}Bundled \(not counted in the subsidy\)/.test(fnBody("renderBarChart")), "Bar plan popup must list every bundled item");
   assert.ok(/includedCredits/.test(fnBody("relTooltip")) && /not counted in the subsidy/.test(fnBody("relTooltip")), "Reliability tooltip must list every bundled item");
   assert.ok(/includedCredits/.test(fnBody("renderProvenance")) && /Bundled \(not counted\)/.test(fnBody("renderProvenance")), "Drawer provenance must list credits");
   assert.ok((fnBody("renderTable").match(/creditsDiv\(/g) || []).length >= 2, "Table row and group row must show credits");
