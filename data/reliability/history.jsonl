@@ -89,3 +89,4 @@
 {"d":"2026-11-26","id":"Kimi Ultra|kimi-k3-1-pro","v":5.6069,"s":0.3354,"lo":3.648,"hi":8.618,"k":["S4","raw","P1","token"],"x":1}
 {"t":"deploy","d":"2026-11-26T07:22:30.882Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T07:50:23.351Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
+{"t":"deploy","d":"2026-11-26T07:59:48.068Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
