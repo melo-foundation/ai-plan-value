@@ -1512,3 +1512,85 @@ html.egg-undo::after {
 html.egg-undo.egg-reveal::after {
   opacity: 0;
 }
+
+/* Phone bar rows: price beside the name, thin full-width bar, plan + score, then meta */
+@media (max-width: 600px) {
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "model price"
+      "track track"
+      "plan  note"
+      "meta  meta"
+      "drawer drawer";
+    column-gap: 10px;
+    row-gap: 3px;
+    padding: 9px 12px;
+  }
+  .bar-label,
+  .bar-track-wrap {
+    display: contents;
+  }
+  .bar-model {
+    grid-area: model;
+    align-self: center;
+  }
+  .bar-val {
+    grid-area: price;
+    align-self: center;
+    justify-self: end;
+    font-size: 15px;
+  }
+  .bar-row::before {
+    content: "";
+    grid-area: track;
+    height: 6px;
+    margin: 3px 0;
+    border-radius: 3px;
+    background: var(--grid-line);
+  }
+  .bar-fill {
+    grid-area: track;
+    justify-self: start;
+    align-self: center;
+    height: 6px;
+    min-width: 6px;
+    max-width: 100%;
+    border-radius: 3px;
+    border: 0;
+  }
+  .bar-plan {
+    grid-area: plan;
+    min-width: 0;
+    font-size: 12.5px;
+  }
+  .bar-note {
+    grid-area: note;
+    justify-self: end;
+    align-self: center;
+  }
+  .bar-meta {
+    grid-area: meta;
+    font-size: 11.5px;
+  }
+  .bar-row > .plan-drawer {
+    grid-area: drawer;
+  }
+  .plan-exp-btn {
+    min-width: 26px;
+    min-height: 22px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+  .head-checks {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .head-check {
+    min-height: 32px;
+    gap: 8px;
+  }
+}
