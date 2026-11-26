@@ -22,16 +22,18 @@ Spec: `docs/design/quota-weight-methodology.md`.
 
 ## 2. SDK/headless quota multiplier
 
-- [ ] Model the about ÷2.1 SDK/headless burn rate (claude-code #97074, #111890) as its own step for Claude rows in T3 turn mode. Confirm it with the headless arm from step 1.
+- [x] Model the ÷2.1 SDK/headless burn rate (claude-code #97074, #111890) as its own step, `sdkClient`, for Claude rows in T3 turn mode (`APPLY_SDK_CLIENT_MULTIPLIER`).
+- [ ] Confirm it with the headless arm from step 1, on both the 5h and the weekly bar.
 
 ## 3. Reliability calibration
 
-- [ ] Record each deploy's predicted ranges in `stats.reliability.calibration`.
-- [ ] When a derived value later gets a direct measurement, check whether it lands inside its 80% range. Target coverage is about 80%.
-- [ ] Refit a step type's σ once it has n ≥ 15 cases.
-- [ ] Show step σ in coarse buckets (0.05 / 0.1 / 0.2 / 0.35 / 0.5 / 0.7). State in the Methodology that the values are starting estimates and that steps are treated as independent.
-- [ ] Re-examine the T3 cross-harness term (0.35).
-- [ ] Add tests that need deploy history: calibration coverage, T3 harness drift, quad fails ≤ last deploy + 2.
+- [x] Record each deploy's predicted ranges in `data/reliability/history.jsonl` (committed by the deploy workflow); results in `stats.reliability.calibration`.
+- [x] When a derived value later gets a direct measurement, check whether it lands inside its 80% range. Target coverage is about 80%.
+- [x] Report a step type's fitted σ once it has n ≥ 15 cases (`refitDue`).
+- [ ] Apply the first refit to `STEP_SIGMA` once a step type reaches n ≥ 15.
+- [x] Show step σ in coarse buckets (0.05 / 0.1 / 0.2 / 0.35 / 0.5 / 0.7). State in the Methodology that the values are starting estimates and that steps are treated as independent.
+- [x] Re-examine the T3 cross-harness term (0.35 → live `t3HarnessSigma`, 0.15 today).
+- [x] Add tests that need deploy history: calibration coverage, T3 harness drift, quad fails ≤ last deploy + 2.
 
 ## 4. Upstream reports
 

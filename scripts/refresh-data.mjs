@@ -25,6 +25,16 @@ import * as REL from "./reliability.mjs";
 // uncorrected bias).
 const APPLY_CLAUDE_MIX_CORRECTION = false;
 
+// Agent SDK client weighting (REL.SDK_CLIENT; claude-code #97074, #111890): T3 Code reaches Claude
+// through the Agent SDK, which burns the 5h window ≈2.1× faster per token. When true, Claude
+// first-party rows in T3 turn mode get subsidy ÷ 2.1 and the step kind `sdkClient` in σ.
+const APPLY_SDK_CLIENT_MULTIPLIER = true;
+
+// Calibration ledger (docs/RELIABILITY.md § Calibration). Appended on CI runs (GITHUB_ACTIONS) or
+// with --record-history; the deploy workflow commits it back to main. Local runs only read it.
+const HISTORY_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "reliability", "history.jsonl");
+const RECORD_HISTORY = process.env.GITHUB_ACTIONS === "true" || process.argv.includes("--record-history");
+
 // Promotions the upstream data does not expire itself. Rows are dropped after `until` (kept only as
 // reference cells for ratio transfers).
 const PROMO_EXPIRY = [
@@ -4363,7 +4373,30 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   }
 
   // ---- Reliability per entry: σ of ln real cost = subsidy chain ⊕ token mix ⊕ cost metric ----
-  const CS = REL.costSteps(effortAccuracy, codingAgentEstimates?.accuracy);
+  // T3 $/turn vs AA Coding Agent $/task by harness (measured agent runs only)
+  const t3Harness = {};
+  {
+    const seen = new Set();
+    const groups = new Map();
+    for (const e of expandedEntries) {
+      const a = e.codingAgent;
+      if (!a || a.estimate || !(e.t3Turn?.costPerTurnUsd > 0) || !(a.costPerTaskUsd > 0)) continue;
+      const k = `${e.modelId}|${a.agentSlug}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (!groups.has(a.agentSlug)) groups.set(a.agentSlug, []);
+      groups.get(a.agentSlug).push({ r: e.t3Turn.costPerTurnUsd / a.costPerTaskUsd, min: e.t3Turn.minutesPerTurn });
+    }
+    for (const [slug, g] of groups) {
+      const lns = g.map((x) => Math.log(x.r));
+      const mu = lns.reduce((s, x) => s + x, 0) / lns.length;
+      const sd = Math.sqrt(lns.reduce((s, x) => s + (x - mu) ** 2, 0) / Math.max(1, lns.length - 1));
+      const mins = g.map((x) => x.min).filter((x) => x > 0);
+      t3Harness[slug] = { n: g.length, ratio: REL.r4(median(g.map((x) => x.r))), sdLn: REL.r4(sd), minPerTurn: mins.length ? REL.r4(median(mins)) : null };
+    }
+  }
+  const t3HarnessFit = REL.t3HarnessSigma(t3Harness);
+  const CS = REL.costSteps(effortAccuracy, codingAgentEstimates?.accuracy, t3HarnessFit.sigma);
   const breakdownByVariant = new Map();
   const breakdownByBase = new Map();
   const t3ByVariant = new Map();
@@ -4425,6 +4458,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let chainSeq = 0;
   const levelCounts = { high: 0, medium: 0, low: 0, speculative: 0 };
   const mixSamples = [];
+  const historyCells = [];
+  const historyDate = nowIso.slice(0, 10);
+  let sdkClientRows = 0;
+  const levelCountsByMode = {};
   for (const e of expandedEntries) {
     const baseId = e.id.split("@")[0];
     const base = baseById.get(baseId) || e;
@@ -4442,6 +4479,11 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         flags: ch.flags,
         ...(ch.drop ? { drop: REL.r4(ch.drop) } : {}),
       };
+      // Ledger cell: one per plan × model subscription row.
+      if (e.billing === "subscription" && !e.unmetered && e.subsidyMultiple > 0) {
+        const cellId = `${e.plan}|${e.baseModelId}${e.isOffPeak ? "|offpeak" : ""}`;
+        historyCells.push(REL.historyCell(cellId, e.subsidyMultiple, ch.s, ch.steps.map((x) => x.k), REL.chainDerived(ch), historyDate));
+      }
     }
     const eff = effortCost(e);
     const c = {};
@@ -4531,11 +4573,21 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
     if (quotaMix) e.quotaMix = quotaMix;
 
+    // Subsidy steps that apply to one cost metric only (`x`): Agent SDK client weighting in T3 mode.
+    let x = null;
+    if (APPLY_SDK_CLIENT_MULTIPLIER && c.turn && isClaudeFirstParty(e.plan) && e.billing === "subscription" && !e.unmetered) {
+      const k = REL.SDK_CLIENT;
+      e.clientFactor = { turn: { f: REL.r4(1 / k.central), lo: REL.r4(1 / k.hi), hi: REL.r4(1 / k.lo), k: "sdkClient" } };
+      x = { turn: REL.r4(REL.SDK_CLIENT_SIGMA) };
+      sdkClientRows++;
+    }
+
     const capped = REL.chainCapped(ch);
     const rel = {
       s: REL.r4(ch.s),
       w,
       c,
+      ...(x ? { x } : {}),
       score: { ii: REL.r4(eff.pts), ...(agentPts != null ? { agent: agentPts } : {}) },
       cap: capped ? "speculative" : ch.cap || null,
       chain: key,
@@ -4557,31 +4609,43 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
     e.rel = rel;
     levelCounts[level]++;
+    for (const m of modes) {
+      // Same rule as the page with the default benchmark (Intelligence Index score error).
+      if (!(c[m] > 0)) continue;
+      const lv = REL.worseLevel(REL.levelFromSigma(REL.qsum(rel.s, w[m], c[m], x?.[m])), REL.levelFromScore(rel.score.ii), rel.cap);
+      (levelCountsByMode[m] ||= { high: 0, medium: 0, low: 0, speculative: 0 })[lv]++;
+    }
   }
 
-  // T3 $/turn vs AA Coding Agent $/task by harness (measured agent runs only)
-  const t3Harness = {};
-  {
-    const seen = new Set();
-    const groups = new Map();
-    for (const e of expandedEntries) {
-      const a = e.codingAgent;
-      if (!a || a.estimate || !(e.t3Turn?.costPerTurnUsd > 0) || !(a.costPerTaskUsd > 0)) continue;
-      const k = `${e.modelId}|${a.agentSlug}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      if (!groups.has(a.agentSlug)) groups.set(a.agentSlug, []);
-      groups.get(a.agentSlug).push({ r: e.t3Turn.costPerTurnUsd / a.costPerTaskUsd, min: e.t3Turn.minutesPerTurn });
-    }
-    for (const [slug, g] of groups) {
-      const lns = g.map((x) => Math.log(x.r));
-      const mu = lns.reduce((s, x) => s + x, 0) / lns.length;
-      const sd = Math.sqrt(lns.reduce((s, x) => s + (x - mu) ** 2, 0) / Math.max(1, lns.length - 1));
-      const mins = g.map((x) => x.min).filter((x) => x > 0);
-      t3Harness[slug] = { n: g.length, ratio: REL.r4(median(g.map((x) => x.r))), sdLn: REL.r4(sd), minPerTurn: mins.length ? REL.r4(median(mins)) : null };
-    }
+  // Calibration ledger: read, append this run's cells, score old ranges against new direct values.
+  let historyLines = [];
+  try {
+    historyLines = fs.readFileSync(HISTORY_PATH, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  } catch (err) {
+    if (err.code !== "ENOENT") log(`History unreadable (${err.message}); calibration starts empty`);
   }
-  log(`Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; Claude mix correction ${APPLY_CLAUDE_MIX_CORRECTION ? "on" : "off"}`);
+  const lastDeploy = [...historyLines].reverse().find((l) => l.t === "deploy") || null;
+  const newCells = REL.historyAppend(historyLines, historyCells);
+  const quadFails = consistency.filter((q) => q.type === "quad" && q.verdict === "fail").length;
+  const deployLine = {
+    t: "deploy",
+    d: nowIso,
+    counts: levelCounts,
+    quadFails,
+    t3: Object.fromEntries(Object.entries(t3Harness).filter(([, v]) => v.n >= 3).map(([k, v]) => [k, v.ratio])),
+    t3Sigma: REL.r4(CS.t3Harness),
+  };
+  const ledger = [...historyLines, ...newCells, deployLine];
+  const calibration = REL.calibrate(ledger);
+  if (RECORD_HISTORY) {
+    fs.mkdirSync(path.dirname(HISTORY_PATH), { recursive: true });
+    fs.appendFileSync(HISTORY_PATH, [...newCells, deployLine].map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8");
+  }
+  log(
+    `History: ${historyLines.length} lines read, ${newCells.length} cells + 1 deploy ${RECORD_HISTORY ? "appended" : "not recorded (local run)"}; calibration cases ${calibration.cases}${calibration.refitDue.length ? `, refit due: ${calibration.refitDue.join(", ")}` : ""}`
+  );
+
+  log(`Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; T3 turn: ${JSON.stringify(levelCountsByMode.turn)}; Claude mix correction ${APPLY_CLAUDE_MIX_CORRECTION ? "on" : "off"}; SDK client ÷${REL.SDK_CLIENT.central} ${APPLY_SDK_CLIENT_MULTIPLIER ? `on (${sdkClientRows} rows)` : "off"}; T3 cross-harness σ ${CS.t3Harness} (raw ${t3HarnessFit.raw})`);
   const consFails = consistency.filter((x) => x.verdict === "fail");
   if (consFails.length) log(`Consistency fails: ${consFails.map((x) => `${x.type}:${x.family}:${x.a}/${x.b}:${x.p}${x.q ? `/${x.q}` : ""} ×${x.ratio}`).join("; ")}`);
   const feiDerivedRows = feiRows.filter((r) => r.data_date_kind === "derived");
@@ -4593,10 +4657,23 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     levelScorePts: REL.LEVEL_SCORE_PTS,
     z80: REL.Z80,
     steps: REL.STEP_SIGMA,
+    sigmaBuckets: REL.SIGMA_BUCKETS,
     upstreamFloor: REL.UPSTREAM_FLOOR,
     costSteps: { ...CS, t3: { ge1000: CS.t3(1000), ge100: CS.t3(100), lt100: CS.t3(0) } },
+    t3HarnessFit,
+    sdkClient: {
+      on: APPLY_SDK_CLIENT_MULTIPLIER,
+      ...REL.SDK_CLIENT,
+      sigma: REL.r4(REL.SDK_CLIENT_SIGMA),
+      rows: sdkClientRows,
+      sources: ["https://github.com/anthropics/claude-code/issues/97074", "https://github.com/anthropics/claude-code/issues/111890"],
+    },
     mixScenarios: REL.MIX_SCENARIOS,
     counts: levelCounts,
+    countsByMode: levelCountsByMode,
+    calibration,
+    lastDeploy,
+    history: { path: "data/reliability/history.jsonl", lines: ledger.length, deploys: ledger.filter((l) => l.t === "deploy").length, recorded: RECORD_HISTORY },
     consistency,
     feiDerived: feiDerivedRows.length,
     unresolved,

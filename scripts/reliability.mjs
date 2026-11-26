@@ -43,6 +43,59 @@ export const STEP_SIGMA = {
   T90: 0.3, // data older than 90 days
 };
 export const UPSTREAM_FLOOR = { high: 0.08, medium: 0.18, low: 0.4 };
+
+// Display buckets for step σ (Methodology table, docs/RELIABILITY.md).
+// Snapped for display only; the computation keeps the unrounded values. Reasons:
+//  - several values carry their own evidence (X1 0.15 from 7 quads RMS 0.145, M1 0.15 from the
+//    Gemini parity controls, the effort and agent terms from live LOOCV); snapping 0.15 to 0.2 or
+//    0.25 to 0.2 would move them by 25–33% with no new data;
+//  - the level thresholds (0.18 / 0.40 / 0.70) sit between buckets, so snapping would move rows
+//    across levels on rounding alone;
+//  - the calibration ledger compares fitted σ against the prior actually used.
+// The buckets state the precision the priors really have; the exact values stay in
+// stats.reliability.steps for anyone recomputing a row.
+export const SIGMA_BUCKETS = [0.05, 0.1, 0.2, 0.35, 0.5, 0.7];
+/** Nearest bucket in log space; anything ≥ 0.7 shows as 0.7 (Speculative territory). */
+export function bucketSigma(s) {
+  if (!(s > 0)) return 0;
+  let best = SIGMA_BUCKETS[0];
+  for (const b of SIGMA_BUCKETS) if (Math.abs(Math.log(s / b)) < Math.abs(Math.log(s / best))) best = b;
+  return best;
+}
+
+// SDK / headless client weighting of the Claude 5-hour window (roadmap 2).
+// T3 Code drives Claude through the Agent SDK (entrypoint `sdk-ts`), which the 5h meter charges
+// faster than interactive clients for the same tokens:
+//  - anthropics/claude-code#97074 (opened 2026-09-25): Max, Opus 5, controlled A/B 1.8×; Pro repro
+//    2.0× (1.8–2.2); passive desktop-vs-sdk-cli logs 1.30–1.49×; kler/claude-usage-ab (Team,
+//    Opus 5.5) sdk-ts 2.97× (2.80–3.15), sdk-cli 2.83× vs claude-vscode; T3 Code via sdk-ts on
+//    Max 5x 2.4× (1.9–3); Theo (T3 Code maintainer) 1.6–1.7× on the 5h bar, weekly unchanged.
+//  - anthropics/claude-code#111890 (opened 2026-11-23): Pro, 8 controlled runs, 1.86× overall,
+//    1.54× in the latest single run.
+// Central 2.1 is the refit across these reports; 1.8–2.9 is taken as the 80% range.
+// Caveat: two reports (Theo; elmariodev 0–1 weekly pp per arm) see no weekly-bar effect. On a plan
+// whose weekly limit binds at full use the factor would then be smaller than this.
+export const SDK_CLIENT = { central: 2.1, lo: 1.8, hi: 2.9 };
+export const SDK_CLIENT_SIGMA = Math.log(SDK_CLIENT.hi / SDK_CLIENT.lo) / (2 * 1.2816);
+
+/**
+ * T3 cross-harness σ from stats.reliability.t3Harness.
+ * The old 0.35 came from max-effort turn lengths only (11.8 vs 7.3 min, n ≤ 3 per side). The
+ * T3-vs-AA-agent gap (Codex 0.68, Claude Code 0.16) is mostly on the AA side: AA tasks run 16 vs
+ * 53 min in the two harnesses, T3 turns 5.8 vs 6.8. So the term is the spread of T3 turn length
+ * between harnesses: n-weighted sd of ln(min/turn) over groups with n ≥ 3, small-sample corrected.
+ * Floor 0.15: the groups mix models and efforts, and effort-adjusted vendor offsets reach ±0.3
+ * (Google); cap 0.35 (the old value). Fallback 0.2 with fewer than two usable groups.
+ */
+export function t3HarnessSigma(groups) {
+  const g = Object.values(groups || {}).filter((x) => x.n >= 3 && x.minPerTurn > 0);
+  if (g.length < 2) return { sigma: 0.2, raw: null, groups: g.length };
+  const W = g.reduce((a, x) => a + x.n, 0);
+  const mu = g.reduce((a, x) => a + x.n * Math.log(x.minPerTurn), 0) / W;
+  const v = (g.reduce((a, x) => a + x.n * (Math.log(x.minPerTurn) - mu) ** 2, 0) / W) * (g.length / (g.length - 1));
+  const raw = Math.sqrt(v);
+  return { sigma: Math.min(0.35, Math.max(0.15, raw)), raw: Number(raw.toFixed(4)), groups: g.length };
+}
 export const TRANSFER_KINDS = new Set(["P1", "P2", "X1", "M1", "M2", "M3", "M3far", "M3proxy", "M4", "M5", "token"]);
 export const CAPPED_KINDS = new Set(["M4", "M5"]);
 
@@ -358,7 +411,7 @@ export function mixFactor(phiSample, phiMetric, phiMetricAlt = null) {
 // ---------- cost and score steps (C) ----------
 const sigmaFromPct = (pct, fallback) => (Number.isFinite(pct) && pct > 0 ? Math.log(1 + pct / 100) / 0.6745 : fallback);
 
-export function costSteps(effortAcc, agentAcc) {
+export function costSteps(effortAcc, agentAcc, t3HarnessS = 0.2) {
   const x = effortAcc?.extrap || {};
   return {
     aa: 0.05,
@@ -370,7 +423,7 @@ export function costSteps(effortAcc, agentAcc) {
     agentFit: sigmaFromPct(agentAcc?.model?.costPct, 0.25),
     agentFitBelow: 0.6,
     t3: (turns) => (turns >= 1000 ? 0.1 : turns >= 100 ? 0.25 : 0.4),
-    t3Harness: 0.35, // no fixed task: cross-harness turn size spread (1.4–1.6×)
+    t3Harness: t3HarnessS, // no fixed task: cross-harness turn length spread (t3HarnessSigma)
     cursor: 0.1,
     tokens: 0.03,
     pts: {
@@ -386,3 +439,95 @@ export function costSteps(effortAcc, agentAcc) {
 }
 
 export const r4 = (v) => Number(v.toFixed(4));
+
+// ---------- calibration ledger (roadmap 3; data/reliability/history.jsonl) ----------
+// One line per derived subsidy cell whenever its value, σ or chain kinds change, one line when a
+// previously derived cell turns direct, and one "deploy" summary line per recorded run.
+export const CALIBRATION_MIN_N = 15;
+export const CALIBRATION_MIN_COVERAGE = 0.6;
+
+/** Compact ledger record for one subsidy cell. */
+export function historyCell(id, value, sigma, kinds, derived, date) {
+  return {
+    d: date,
+    id,
+    v: Number(value.toPrecision(5)),
+    s: r4(sigma),
+    lo: Number((value * Math.exp(-Z80 * sigma)).toPrecision(4)),
+    hi: Number((value * Math.exp(Z80 * sigma)).toPrecision(4)),
+    k: [...new Set(kinds)],
+    x: derived ? 1 : 0,
+  };
+}
+
+/** Records to append: derived cells that are new or changed; direct cells right after a derived record. */
+export function historyAppend(lines, cells) {
+  const latest = new Map();
+  for (const l of lines) if (!l.t) latest.set(l.id, l);
+  const out = [];
+  for (const c of cells) {
+    const p = latest.get(c.id);
+    if (c.x) {
+      const same = p && p.x === 1 && Math.abs(p.v / c.v - 1) < 0.005 && Math.abs(p.s - c.s) < 0.005 && p.k.join() === c.k.join();
+      if (!same) out.push(c);
+    } else if (p && p.x === 1) {
+      out.push(c);
+    }
+  }
+  return out;
+}
+
+/**
+ * Coverage of the old 80% subsidy ranges once a derived cell gets a direct measurement.
+ * Per step kind: n, coverage, mean and sd of ln(direct / derived), and from n ≥ 15 the fitted σ of
+ * that kind by moments: σ_k² = mean[ln² r − (σ_pred² − σ_k,prior²) − σ_direct²]. Never applied.
+ */
+export function calibrate(lines, priors = STEP_SIGMA) {
+  const lastDerived = new Map();
+  const cases = [];
+  for (const l of lines) {
+    if (l.t) continue;
+    if (l.x) {
+      lastDerived.set(l.id, l);
+      continue;
+    }
+    const p = lastDerived.get(l.id);
+    if (!p) continue;
+    lastDerived.delete(l.id);
+    cases.push({
+      id: l.id, from: p.d, at: l.d, pred: p.v, lo: p.lo, hi: p.hi, s: p.s, v: l.v, sv: l.s, k: p.k,
+      inside: l.v >= p.lo && l.v <= p.hi, lnr: r4(Math.log(l.v / p.v)),
+    });
+  }
+  const byKind = {};
+  for (const c of cases) for (const k of c.k) (byKind[k] ||= []).push(c);
+  const summary = (cs, prior) => {
+    const n = cs.length;
+    const mean = cs.reduce((a, c) => a + c.lnr, 0) / n;
+    const sd = n > 1 ? Math.sqrt(cs.reduce((a, c) => a + (c.lnr - mean) ** 2, 0) / (n - 1)) : null;
+    const out = { n, coverage: r4(cs.filter((c) => c.inside).length / n), meanLn: r4(mean), sdLn: sd == null ? null : r4(sd) };
+    if (prior != null) out.prior = prior;
+    if (n >= CALIBRATION_MIN_N) {
+      out.refitDue = true;
+      if (prior != null) {
+        const v = cs.reduce((a, c) => a + c.lnr * c.lnr - (c.s * c.s - prior * prior) - (c.sv || 0) ** 2, 0) / n;
+        out.fitted = r4(Math.sqrt(Math.max(0, v)));
+      }
+      out.lowCoverage = out.coverage < CALIBRATION_MIN_COVERAGE;
+    }
+    return out;
+  };
+  const kinds = {};
+  for (const [k, cs] of Object.entries(byKind)) kinds[k] = summary(cs, priors[k] ?? null);
+  return {
+    cases: cases.length,
+    coverage: cases.length ? r4(cases.filter((c) => c.inside).length / cases.length) : null,
+    target: 0.8,
+    minN: CALIBRATION_MIN_N,
+    minCoverage: CALIBRATION_MIN_COVERAGE,
+    kinds,
+    refitDue: Object.keys(kinds).filter((k) => kinds[k].refitDue),
+    lowCoverage: Object.keys(kinds).filter((k) => kinds[k].lowCoverage),
+    recent: cases.slice(-50),
+  };
+}

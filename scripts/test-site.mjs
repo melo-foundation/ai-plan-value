@@ -38,6 +38,12 @@ function test(name, fn) {
   }
 }
 
+let skipped = 0;
+function skip(name, reason) {
+  skipped++;
+  console.log(`SKIP  ${name}\n      ${reason}`);
+}
+
 const dataset = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
 const html = fs.readFileSync(HTML_PATH, "utf8");
 const appJs = fs.readFileSync(APP_PATH, "utf8");
@@ -729,7 +735,149 @@ test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () 
   }
 });
 
-console.log(`\nSummary: ${passed} passed, ${failed} failed`);
+test("Agent SDK client step: Claude first-party T3 rows only, ÷2.1, σ from 1.8–2.9, behind the flag", () => {
+  const sdk = relStats.sdkClient;
+  assert.ok(sdk && typeof sdk.on === "boolean", "stats.reliability.sdkClient missing");
+  assert.ok(sdk.lo < sdk.central && sdk.central < sdk.hi, `sdkClient range ${sdk.lo}–${sdk.hi} around ${sdk.central}`);
+  assert.ok(Math.abs(sdk.sigma - Math.log(sdk.hi / sdk.lo) / (2 * REL.Z80)) < 1e-3, `sdkClient σ ${sdk.sigma}`);
+  let n = 0;
+  for (const e of entries) {
+    const claudeT3 = /^Claude (Pro|Max|Ultra|Team)\b/.test(e.plan) && e.billing === "subscription" && !e.unmetered && e.t3Turn?.costPerTurnUsd > 0;
+    if (!claudeT3 || !sdk.on) {
+      assert.ok(!e.clientFactor && !e.rel.x, `${e.id} has an SDK client step`);
+      continue;
+    }
+    n++;
+    assert.ok(Math.abs(e.clientFactor?.turn?.f * sdk.central - 1) < 1e-3, `${e.id}: clientFactor.turn.f ${e.clientFactor?.turn?.f}`);
+    assert.ok(e.clientFactor.turn.lo < e.clientFactor.turn.f && e.clientFactor.turn.f < e.clientFactor.turn.hi, `${e.id}: clientFactor range`);
+    assert.ok(Math.abs(e.rel.x?.turn - sdk.sigma) < 1e-3, `${e.id}: rel.x.turn ${e.rel.x?.turn}`);
+    assert.deepEqual(Object.keys(e.clientFactor), ["turn"], `${e.id}: SDK factor outside T3 turn mode`);
+  }
+  assert.equal(n, sdk.rows, "sdkClient.rows out of sync");
+  if (sdk.on) assert.ok(n >= 20, `Only ${n} Claude T3 rows carry the SDK step`);
+  assert.ok(/clientFactor/.test(appJs) && /rl\.x\?\.\[mode\]/.test(appJs), "app.js must apply clientFactor and rel.x");
+  assert.ok(/Agent SDK client ÷/.test(appJs), "Tooltip chain must list the SDK client step");
+  for (const u of sdk.sources) assert.match(u, /^https:\/\/github\.com\/anthropics\/claude-code\/issues\/(97074|111890)$/);
+});
+
+test("T3 cross-harness σ follows stats.reliability.t3Harness (0.15–0.35)", () => {
+  const fit = REL.t3HarnessSigma(relStats.t3Harness);
+  assert.ok(Math.abs(relStats.costSteps.t3Harness - fit.sigma) < 1e-6, `costSteps.t3Harness ${relStats.costSteps.t3Harness} != fit ${fit.sigma}`);
+  assert.ok(fit.sigma >= 0.15 && fit.sigma <= 0.35, `T3 harness σ ${fit.sigma}`);
+  for (const e of entries.filter((x) => x.t3Turn?.costPerTurnUsd > 0)) {
+    const want = REL.qsum(REL.costSteps(null, null, fit.sigma).t3(e.t3Turn.turns || 0), fit.sigma);
+    assert.ok(Math.abs(e.rel.c.turn - want) < 2e-3, `${e.id}: rel.c.turn ${e.rel.c.turn} vs ${want.toFixed(4)}`);
+  }
+});
+
+test("Methodology and RELIABILITY.md show step σ in buckets 0.05 / 0.1 / 0.2 / 0.35 / 0.5 / 0.7", () => {
+  assert.deepEqual(REL.SIGMA_BUCKETS, [0.05, 0.1, 0.2, 0.35, 0.5, 0.7]);
+  assert.deepEqual(relStats.sigmaBuckets, REL.SIGMA_BUCKETS);
+  const block = html.match(/<summary>How the trust levels are calculated<\/summary>[\s\S]*?<\/details>/)?.[0] || "";
+  assert.ok(block, "Methodology trust-level section missing");
+  assert.match(block, /starting estimates/i, "Methodology must say the step values are starting estimates");
+  assert.match(block, /independent/i, "Methodology must say the steps are treated as independent");
+  const table = block.match(/<table class="method-table">[\s\S]*?<\/table>/)?.[0] || "";
+  const cells = [...table.matchAll(/<tr><td>[^<]*<\/td><td>([^<]*)<\/td><\/tr>/g)].map((m) => m[1]);
+  assert.ok(cells.length >= 15, `Too few σ rows in the Methodology table: ${cells.length}`);
+  const allowed = new Set(REL.SIGMA_BUCKETS.map((b) => String(b)));
+  for (const c of cells) {
+    for (const num of c.match(/\d+(?:\.\d+)?/g) || []) {
+      if (num === "2" || num === "1.6") continue; // "|ln D| / 2", "×1.6" are not σ values
+      assert.ok(allowed.has(String(Number(num))), `Methodology σ "${c}" contains ${num}, not a bucket`);
+    }
+  }
+  const S = REL.STEP_SIGMA;
+  for (const [k, shown] of [["S1", 0.05], ["S2", 0.1], ["S6", 0.5], ["P1", 0.2], ["M1", 0.2], ["M3far", 0.5], ["T90", 0.35]]) {
+    assert.equal(REL.bucketSigma(S[k]), shown, `${k} ${S[k]} should show as ${shown}`);
+  }
+  const doc = fs.readFileSync(path.join(ROOT, "docs", "RELIABILITY.md"), "utf8");
+  const stepRows = [...doc.matchAll(/^\| (S\d|T|P\d|X1|M\d) \| [^|]+ \| ([^|]+) \|$/gm)];
+  assert.ok(stepRows.length >= 15, `RELIABILITY.md step rows: ${stepRows.length}`);
+  for (const [, id, val] of stepRows) {
+    for (const num of val.match(/\d+(?:\.\d+)?/g) || []) assert.ok(allowed.has(String(Number(num))), `RELIABILITY.md ${id} σ "${val.trim()}" not a bucket`);
+  }
+});
+
+// ---- Tests that need deploy history (data/reliability/history.jsonl) ----
+const HISTORY_PATH = path.join(ROOT, "data", "reliability", "history.jsonl");
+const historyLines = fs.existsSync(HISTORY_PATH)
+  ? fs.readFileSync(HISTORY_PATH, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
+  : [];
+const lastDeploy = relStats.lastDeploy;
+const cal = relStats.calibration;
+
+test("Calibration ledger lines are well formed; workflow commits the ledger back", () => {
+  for (const l of historyLines) {
+    if (l.t === "deploy") {
+      assert.ok(l.d && l.counts && Number.isInteger(l.quadFails), `Bad deploy line ${JSON.stringify(l)}`);
+      continue;
+    }
+    assert.ok(l.id && l.d && Number.isFinite(l.v) && Number.isFinite(l.s) && Array.isArray(l.k) && (l.x === 0 || l.x === 1), `Bad ledger line ${JSON.stringify(l)}`);
+    assert.ok(l.lo <= l.v && l.v <= l.hi, `Ledger range excludes its value: ${JSON.stringify(l)}`);
+    assert.match(l.id, /^[^|]+\|[a-z0-9][a-z0-9.-]*(\|offpeak)?$/, `Bad ledger cell id ${l.id}`);
+  }
+  // One line per cell per recorded run (runs end with their deploy line).
+  let run = new Set();
+  for (const l of historyLines) {
+    if (l.t === "deploy") {
+      run = new Set();
+      continue;
+    }
+    assert.ok(!run.has(l.id), `Cell ${l.id} recorded twice in one run`);
+    run.add(l.id);
+  }
+  assert.ok(cal && Number.isInteger(cal.cases) && cal.minN === 15 && cal.minCoverage === 0.6, "stats.reliability.calibration missing");
+  assert.ok(/contents: write/.test(workflowYml) && /\[skip ci\]/.test(workflowYml) && /data\/reliability\/history\.jsonl/.test(workflowYml), "deploy.yml must commit the ledger with [skip ci]");
+  assert.ok(/continue-on-error: true[\s\S]{0,40}shell: bash[\s\S]{0,200}history\.jsonl/.test(workflowYml), "Ledger commit step must not block the deploy");
+  console.log(`     Ledger: ${historyLines.length} lines, ${historyLines.filter((l) => l.t === "deploy").length} deploys; calibration cases ${cal.cases}`);
+});
+
+{
+  const due = Object.entries(cal?.kinds || {}).filter(([, v]) => v.n >= REL.CALIBRATION_MIN_N);
+  const name = "Calibration: coverage ≥ 60% for every step kind with n ≥ 15";
+  if (!due.length) {
+    skip(name, `history too short: ${cal?.cases ?? 0} cases, largest kind n = ${Math.max(0, ...Object.values(cal?.kinds || {}).map((v) => v.n))}`);
+  } else {
+    test(name, () => {
+      for (const [k, v] of due) {
+        assert.ok(v.refitDue, `${k}: refitDue flag missing at n = ${v.n}`);
+        assert.ok(v.coverage >= REL.CALIBRATION_MIN_COVERAGE, `${k}: coverage ${(v.coverage * 100).toFixed(0)}% at n = ${v.n} (prior ${v.prior}, fitted ${v.fitted})`);
+      }
+      console.log(`     Refit due: ${due.map(([k, v]) => `${k} n=${v.n} cov=${v.coverage} prior=${v.prior} fitted=${v.fitted}`).join("; ")}`);
+    });
+  }
+}
+
+{
+  const name = "T3 harness ratios within ×1.5 of the last deploy";
+  const prev = lastDeploy?.t3 || {};
+  const pairs = ["codex", "claude-code"].filter((k) => prev[k] > 0 && relStats.t3Harness?.[k]?.ratio > 0);
+  if (!pairs.length) {
+    skip(name, "no previous deploy with T3 harness ratios");
+  } else {
+    test(name, () => {
+      for (const k of pairs) {
+        const r = relStats.t3Harness[k].ratio / prev[k];
+        assert.ok(r >= 1 / 1.5 && r <= 1.5, `t3Harness.${k} ratio ${relStats.t3Harness[k].ratio} vs last deploy ${prev[k]} (×${r.toFixed(2)})`);
+      }
+    });
+  }
+}
+
+{
+  const name = "Consistency quad fails ≤ last deploy + 2";
+  if (!Number.isInteger(lastDeploy?.quadFails)) {
+    skip(name, "no previous deploy recorded");
+  } else {
+    test(name, () => {
+      const now = (relStats.consistency || []).filter((q) => q.type === "quad" && q.verdict === "fail").length;
+      assert.ok(now <= lastDeploy.quadFails + 2, `${now} quad fails vs ${lastDeploy.quadFails} at ${lastDeploy.d}`);
+    });
+  }
+}
+
+console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);
 if (failed > 0) {
   process.exit(1);
 }
