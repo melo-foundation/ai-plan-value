@@ -1972,6 +1972,40 @@ test("Mobile CSS: full-screen dialogs ≤600px, card rows, tap targets ≤780px,
   assert.ok(grids >= 1, "no .workspace grid rule found");
 });
 
+test("Marks: † exactly on derived subsidies, no ~ on any cost, Fable wording, phone layout rules, legend hint", () => {
+  const app = loadApp("?conf=s", { data: dataset });
+  app.state.cheapestPlanOnly = false;
+  app.state.cheapestEffortOnly = false;
+  app.render();
+  const rows = app.getFilteredRows(app.getAllEntriesResolved());
+  const chart = app.$("barChart").innerHTML;
+  const bars = chart.split('<div class="bar-row').slice(1);
+  assert.equal(bars.length, rows.length, "one bar per row");
+  const sorted = app.chartBars(rows);
+  sorted.forEach((r, i) => {
+    assert.equal(/class="sub-derived"[^>]*>†</.test(bars[i]), Boolean(r.subDerived), `${r.id}: † must appear exactly when the subsidy is derived`);
+    assert.ok(!/~\$/.test(bars[i]), `${r.id}: costs never carry ~`);
+  });
+  assert.ok(sorted.some((r) => r.subDerived) && sorted.some((r) => !r.subDerived), "both derived and measured subsidies on view");
+  // Table and drawer costs carry no ~ either
+  const tableHtml = app.$("rows").innerHTML;
+  assert.ok(!/~\$/.test(tableHtml), "table costs never carry ~");
+  // Fable use wording
+  assert.ok(/<span>With other models<\/span><\/label>/.test(html) && /<span>Fable only<\/span><\/label>/.test(html), "Fable use options");
+  assert.ok(/id="fableCap-label">Fable use</.test(html), "Fable use label");
+  assert.ok(appJs.includes("Fable-only use: counts Fable's half of the weekly limit; the other half is for other Claude models"), "Fable-only tooltip wording");
+  assert.ok(!/Halved: Fable|halved: Fable/.test(appJs), "no 'halved' wording");
+  // Phone: credits note leaves the bar rows; source dates move under the source text
+  assert.equal(cssDecl(PHONE, ".bar-meta .credits-note", "display"), "none");
+  assert.equal(cssDecl(PHONE, ".prov-table .prov-date-inline", "display"), "block");
+  assert.equal(cssDecl(null, ".prov-table .prov-date-inline", "display"), "none");
+  assert.ok(/class="prov-date-inline"/.test(appJs), "inline date rendered for phones");
+  // Legend: one hover hint for all marks
+  const legend = html.match(/<p id="relLegend"[\s\S]*?<\/p>/)?.[0] || "";
+  assert.ok(/<span class="rel-legend-hint">Hover a model name, or tap ▸ next to a plan, to see where its numbers come from\.<\/span>/.test(legend), "legend hover hint");
+  assert.equal((legend.match(/Hover a model name/g) || []).length, 1, "hover hint appears once, not per mark");
+});
+
 test("Chart model names are never cut off with an ellipsis", () => {
   for (const r of cssRules) {
     if (!r.selectors.some((x) => /^\.bar-model$/.test(x))) continue;
