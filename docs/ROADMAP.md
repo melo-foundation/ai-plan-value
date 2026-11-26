@@ -6,17 +6,17 @@ Planned work, in order. Design notes live in `docs/design/`.
 
 Measure how Claude's subscription quota counts each token kind, so the Claude mix correction can be validated and Claude Max/Pro rows can rise from Low.
 
-- [ ] Build `scripts/quota-probe.mjs`. It runs the protocol arms (`input`, `output`, `read`, `write1h`, `write5m`) in Claude Code, reads `/usage` on meter ticks, and writes `quota-weights.session/1` JSONL.
+- [x] Build `scripts/quota-probe.mjs`. It runs the protocol arms (`input`, `output`, `read`, `write1h`, `write5m`) in Claude Code, reads the meter on ticks (status line or `rate_limit_event`; `/usage` with `--meter manual`), and writes `quota-weights.session/1` JSONL.
 - [ ] Record on our own subscription:
   - weekly bar, interactive client
   - 5h bar, interactive client
   - 5h bar, `claude -p` (headless)
   - Target: 3 sessions from 2 accounts, 3 anchored points per arm (about ±5% per weight, about 10% of a week's quota).
-- [ ] Store submissions in `data/quota-weights/`. Store sessions with a hand-set `CLAUDE_CODE_ENTRYPOINT`, but exclude them from validated fits.
-- [ ] Build `scripts/fit-quota-weights.mjs` (prototype: `docs/design/quota-weights-proto/`).
+- [x] Store submissions in `data/quota-weights/`. Store sessions with a hand-set `CLAUDE_CODE_ENTRYPOINT`, but exclude them from validated fits.
+- [x] Build `scripts/fit-quota-weights.mjs` (prototype: `docs/design/quota-weights-proto/`).
   - Output `fit.json` with a status per model × bar × client: `validated`, `provisional` or `unmeasured`.
-- [ ] Replace `APPLY_CLAUDE_MIX_CORRECTION` with `fit.json` status. Apply the correction only to `validated` cells.
-- [ ] Add `docs/QUOTA-WEIGHTS.md`, a Methodology entry, tests, and a GitHub issue template for submissions.
+- [x] Replace `APPLY_CLAUDE_MIX_CORRECTION` with `fit.json` status. Apply the correction only to `validated` cells.
+- [x] Add `docs/QUOTA-WEIGHTS.md`, a Methodology entry, tests, and a GitHub issue template for submissions.
 
 Spec: `docs/design/quota-weight-methodology.md`.
 

@@ -19,11 +19,14 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 
-// Claude quota token weighting (docs/RELIABILITY.md): rescale Claude first-party subsidies from the
-// sample's token mix to each cost metric's mix (cache reads ≈ 0.5× API price toward quota).
-// When false the subsidy stays uncorrected and the mix term still widens σ (it then also covers the
-// uncorrected bias).
-const APPLY_CLAUDE_MIX_CORRECTION = false;
+// Claude quota token weighting (docs/QUOTA-WEIGHTS.md): a Claude first-party subsidy is rescaled from
+// the sample's token mix to each cost metric's mix only when every quota-weight cell the row uses
+// (model × bar × client class) is `validated` in data/quota-weights/fit.json. Other rows stay
+// uncorrected and the mix term widens σ (it then also covers the uncorrected bias).
+// Set true to keep the correction off whatever fit.json says.
+const FORCE_CLAUDE_MIX_CORRECTION_OFF = false;
+// Every Claude subsidy on the site is measured on the weekly bar (quota-weight-methodology.md §0.1).
+const CLAUDE_SAMPLE_BAR = "7d";
 
 // Promotions the upstream data does not expire itself. Rows are dropped after `until` (kept only as
 // reference cells for ratio transfers).
@@ -50,6 +53,8 @@ const isFableOnClaude = (plan, model) => /^Claude (Pro|Max|Ultra)$/.test(String(
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
 const OUTPUT_PATH = path.join(ROOT_DIR, "public", "data", "combined.json");
+const QUOTA_FIT_PATH = path.join(ROOT_DIR, "data", "quota-weights", "fit.json");
+const QUOTA_PRICES_PATH = path.join(ROOT_DIR, "data", "quota-weights", "prices.json");
 
 const SOURCES = {
   feiPointsCsv:
@@ -4420,6 +4425,34 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     const n = Math.max(1, Math.min(4, e.effortEstimateSteps ?? 4));
     return { s: CS.extrap[n - 1], t: `${e.effortEstimateSteps ?? "4+"} effort step${n === 1 ? "" : "s"}`, pts: CS.pts.extrap[n - 1] };
   };
+  // Quota-weight cells (data/quota-weights/fit.json); missing or unreadable → every cell unmeasured.
+  const quotaFit = REL.parseQuotaFit(fs.existsSync(QUOTA_FIT_PATH) ? fs.readFileSync(QUOTA_FIT_PATH, "utf8") : "");
+  if (!quotaFit.present) log(`Quota-weight fit: ${fs.existsSync(QUOTA_FIT_PATH) ? `unreadable (${quotaFit.error})` : "absent"}; every Claude cell unmeasured`);
+  const quotaPrices = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(QUOTA_PRICES_PATH, "utf8")).models || {};
+    } catch {
+      return {};
+    }
+  })();
+  const quotaCell = (key) => quotaFit.cells.get(key) || { key, status: "unmeasured" };
+  const p1hOver5m = (model) => {
+    const p = quotaPrices[model];
+    return p?.cacheWrite1h > 0 && p?.cacheWrite5m > 0 ? p.cacheWrite1h / p.cacheWrite5m : 1.6;
+  };
+  // Cells a Claude row uses: φ(sample) from the measured sample's model (the chain's anchors for a
+  // derived row), φ(metric) from the row's own model; weekly bar; client class from the sample notes.
+  const quotaCellsOf = (e, base, ch) => {
+    const anchorRows = (ch.anchors || []).map((id) => baseById.get(id)).filter(Boolean);
+    const sampleRows = anchorRows.length ? anchorRows : [base];
+    const sampleModels = [...new Set(sampleRows.map((r) => String(r.baseModelId || r.modelId || "").replace(/--.*$/, "")))];
+    const cls = REL.sampleClientClass(sampleRows.map((r) => `${r.sourceNote || ""} ${r.decisionNote || ""}`).join(" "));
+    const sampleKeys = sampleModels.map((m) => REL.quotaCellKey(m, CLAUDE_SAMPLE_BAR, cls));
+    const metricKey = REL.quotaCellKey(e.baseModelId, CLAUDE_SAMPLE_BAR, cls);
+    return { sampleModels, sampleKeys, metricKey, keys: [...new Set([...sampleKeys, metricKey])] };
+  };
+  const quotaRowStatus = { validated: 0, provisional: 0, unmeasured: 0 };
+  let quotaRowsApplied = 0;
   const chains = {};
   const chainKeyById = new Map();
   let chainSeq = 0;
@@ -4488,6 +4521,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     // Token-mix term (W1). Claude first-party: φ(sample) / φ(metric) with the cache-read weight range.
     const w = {};
     let quotaMix = null;
+    let quotaCellRef = null;
     if (isClaudeFirstParty(e.plan) && e.billing === "subscription" && !e.unmetered) {
       const ps = phiSample(base);
       const aaMix = REL.dollarMixFromAa(breakdownByVariant.get(e.modelId) || breakdownByBase.get(e.baseModelId));
@@ -4505,9 +4539,38 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         turn: REL.phiVector(REL.asHourWrites(t3Mix)),
         tokens: null,
       };
+      // Fitted quota weights: only when every cell the row uses is validated.
+      const qc = quotaCellsOf(e, base, ch);
+      const decision = REL.quotaMixDecision({
+        forcedOff: FORCE_CLAUDE_MIX_CORRECTION_OFF,
+        cells: qc.keys.map(quotaCell),
+        sampleKnown: Boolean(base._sampleMix) && !base._x1,
+        singleSampleModel: qc.sampleModels.length === 1,
+      });
+      quotaRowStatus[decision.status]++;
+      const sampleCell = quotaCell(qc.sampleKeys[0]);
+      const metricCell = quotaCell(qc.metricKey);
+      const p = e.aaPricing || {};
+      const metricMixes = {
+        task: aaMix,
+        agent: t3Mix,
+        turn: t3Mix,
+        tokens: p.inputPer1M > 0 && p.outputPer1M > 0 ? { input: 3 * p.inputPer1M, output: p.outputPer1M } : null,
+      };
+      let appliedAny = false;
       for (const m of modes) {
         if (m === "cursor") {
           w.cursor = 0.15;
+          continue;
+        }
+        const fitted = decision.apply
+          ? REL.quotaMixFromCells({ sampleMix: base._sampleMix, metricMix: metricMixes[m], sampleCell, metricCell, p1hOver5m: p1hOver5m(e.baseModelId) })
+          : null;
+        if (fitted) {
+          (quotaMix ||= {})[m] = { f: fitted.f, lo: fitted.lo, hi: fitted.hi, status: "validated" };
+          w[m] = fitted.sigma;
+          appliedAny = true;
+          if (m === "task") mixSamples.push({ id: e.id, f: fitted.f, lo: fitted.lo, hi: fitted.hi, status: "validated" });
           continue;
         }
         const mf = REL.mixFactor(ps, metricPhi[m], metricPhiAlt[m]);
@@ -4517,14 +4580,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         }
         // Sample mix not recorded: the row's mix is Fei's workload convention, so keep the full W1 term.
         if (!sampleKnown(base)) mf.sigma = Math.max(mf.sigma, 0.12);
-        if (APPLY_CLAUDE_MIX_CORRECTION) {
-          (quotaMix ||= {})[m] = { f: mf.f, lo: mf.lo, hi: mf.hi };
-          w[m] = mf.sigma;
-        } else {
-          w[m] = REL.r4(REL.qsum(mf.sigma, Math.log(mf.f)));
-        }
-        if (m === "task") mixSamples.push({ id: e.id, f: mf.f, lo: mf.lo, hi: mf.hi });
+        // Not applied: the range also covers the uncorrected bias.
+        w[m] = REL.r4(REL.qsum(mf.sigma, Math.log(mf.f)));
+        if (m === "task") mixSamples.push({ id: e.id, f: mf.f, lo: mf.lo, hi: mf.hi, status: decision.status });
       }
+      if (appliedAny) quotaRowsApplied++;
+      quotaCellRef = { cells: qc.keys, status: decision.status, applied: appliedAny };
     } else {
       const ws = vendorMixSigma(e);
       for (const m of modes) w[m] = ws;
@@ -4543,6 +4604,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sd: REL.chainDerived(ch),
       ce,
       cl,
+      ...(quotaCellRef ? { mix: quotaCellRef } : {}),
     };
     // Default view: AA Intelligence task cost, Intelligence Index score, Shared reading.
     const sigma = REL.qsum(rel.s, w.task, c.task);
@@ -4581,13 +4643,26 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       t3Harness[slug] = { n: g.length, ratio: REL.r4(median(g.map((x) => x.r))), sdLn: REL.r4(sd), minPerTurn: mins.length ? REL.r4(median(mins)) : null };
     }
   }
-  log(`Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; Claude mix correction ${APPLY_CLAUDE_MIX_CORRECTION ? "on" : "off"}`);
+  const quotaCellStatus = Object.fromEntries([...quotaFit.cells.values()].filter((c) => c.vendor === "anthropic" || /^anthropic\//.test(c.key)).map((c) => [c.key, c.status]));
+  const quotaCellCounts = { validated: 0, provisional: 0, unmeasured: 0 };
+  for (const st of Object.values(quotaCellStatus)) quotaCellCounts[st] = (quotaCellCounts[st] || 0) + 1;
+  const claudeMixCorrection = {
+    forcedOff: FORCE_CLAUDE_MIX_CORRECTION_OFF,
+    fit: { present: quotaFit.present, generatedAt: quotaFit.generatedAt || null, path: "data/quota-weights/fit.json" },
+    bar: CLAUDE_SAMPLE_BAR,
+    cells: quotaCellStatus,
+    cellCounts: quotaCellCounts,
+    rows: { applied: quotaRowsApplied, byStatus: quotaRowStatus },
+  };
+  log(
+    `Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; Claude mix correction: ${quotaRowsApplied} rows applied, rows by cell status ${JSON.stringify(quotaRowStatus)}, cells ${JSON.stringify(quotaCellCounts)}${FORCE_CLAUDE_MIX_CORRECTION_OFF ? " (forced off)" : ""}`
+  );
   const consFails = consistency.filter((x) => x.verdict === "fail");
   if (consFails.length) log(`Consistency fails: ${consFails.map((x) => `${x.type}:${x.family}:${x.a}/${x.b}:${x.p}${x.q ? `/${x.q}` : ""} ×${x.ratio}`).join("; ")}`);
   const feiDerivedRows = feiRows.filter((r) => r.data_date_kind === "derived");
   const unresolved = feiDerivedRows.filter((r) => feiCtx.memo.get(r.id)?.flags.includes("unresolved")).map((r) => r.id);
   const reliabilityStats = {
-    claudeMixCorrection: APPLY_CLAUDE_MIX_CORRECTION,
+    claudeMixCorrection,
     levels: REL.LEVELS,
     levelSigma: REL.LEVEL_SIGMA,
     levelScorePts: REL.LEVEL_SCORE_PTS,

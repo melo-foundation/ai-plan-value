@@ -74,7 +74,7 @@ Add-ons: integer % reading over Δ pp `0.41/Δ`; promo period 0.20; attribution 
 | API, Kilo Pass, Ollama credits | 0 |
 | Other | 0.10 |
 
-Claude correction (`APPLY_CLAUDE_MIX_CORRECTION` in `scripts/refresh-data.mjs`, reported as `stats.reliability.claudeMixCorrection`):
+Claude correction (per quota-weight cell in `data/quota-weights/fit.json`, reported as `stats.reliability.claudeMixCorrection`; `docs/QUOTA-WEIGHTS.md`):
 
 ```
 φ(mix) = Σ w_k · $_k / Σ $_k
@@ -86,7 +86,8 @@ S_eff = S × φ(sample mix) / φ(metric mix)
 - σ_W = ln(max/min factor) / 2.563.
 - Sample mix: Fei's `worth $X（读 … 写 … 入 … 出 …）` breakdown; else the anchor row's; else Fei's anthropic workload convention.
 - Metric mix: AA Intelligence cost breakdown; T3 per-turn tokens (also used for AA Coding Agent); 3:1 input:output for per-1M tokens.
-- Flag off: S stays uncorrected and σ_W = √(σ_range² + (ln factor)²).
+- Cells not `validated` (today: all): S stays uncorrected and σ_W = √(σ_range² + (ln factor)²).
+- `validated` cells: fitted weights replace the scenarios; σ_W = √(sd(ln F)² + τ_b² + 0.03²). `FORCE_CLAUDE_MIX_CORRECTION_OFF = true` in `scripts/refresh-data.mjs` keeps every row uncorrected.
 
 ### C. Cost and score
 
