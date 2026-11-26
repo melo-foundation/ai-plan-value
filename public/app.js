@@ -755,6 +755,8 @@ function chartBars(rows) {
 
 function renderBarChart(allRows, allResolved) {
   const host = $("barChart");
+  // Range labels ("$0.313–0.509") are wider than a single price: the CSS reserves more room beside the bars
+  host.classList.toggle("range-view", state.costView === "range");
   const bars = chartBars(allRows.filter((r) => passesConf(r, state.minConf)));
 
   if (!bars.length) {

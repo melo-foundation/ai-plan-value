@@ -1164,7 +1164,7 @@ test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () 
   assert.ok(appJs.includes('speculative: "◌"') && appJs.includes('high: "●"'), "Level glyphs missing");
   assert.ok(!/est-star|estMark|interpMark/.test(appJs), "Old * / tier markers still rendered");
   // Bar chart follows Min confidence like the table (a fixed Medium floor hid every Claude first-party plan).
-  assert.ok(!appJs.includes("CHART_MIN_CONF") && /renderBarChart[\s\S]{0,200}passesConf\(r, state\.minConf\)/.test(appJs), "Bar chart must follow the Min confidence setting");
+  assert.ok(!appJs.includes("CHART_MIN_CONF") && /renderBarChart[\s\S]{0,500}passesConf\(r, state\.minConf\)/.test(appJs), "Bar chart must follow the Min confidence setting");
   // Legacy est= mapping
   for (const [k, v] of [["0", "high"], ["h", "medium"], ["hm", "low"], ["hml", "speculative"]]) {
     assert.ok(appJs.includes(`${k === "0" ? "0" : k}: "${v}"`), `Legacy est=${k} → ${v} mapping missing`);
@@ -2257,6 +2257,17 @@ test("Claude models are named 'Claude …'; Fable whole-week conversion is worde
   for (const c of Object.values(chains)) for (const l of c.lines || []) assert.ok(!/^Fable only ÷/.test(l), `chain line reads like the Fable-only setting: ${l}`);
   const f51 = entries.filter((e) => e.baseModelId === "claude-fable-5-1" && e.plan === "Claude Max" && e.subsidyReadings);
   for (const e of f51) assert.ok(Math.abs(e.subsidyMultiple - e.subsidyReadings.shared) < 1e-6 && Math.abs(e.subsidyReadings.own * 2 - e.subsidyReadings.shared) < 0.01, `${e.id}: default subsidy must be the whole-week reading`);
+});
+
+test("Range mode reserves room beside the bars so the range label never wraps under the bar", () => {
+  assert.match(cssDecl(null, ".bar-fill", "width") || "", /var\(--bar-label-room, 100px\)/);
+  assert.ok(px(cssDecl(null, ".bar-chart.range-view", "--bar-label-room")) >= 160, "range labels need ≥ 160px beside the bar");
+  const app = loadApp("?cost=range", { data: dataset });
+  app.render();
+  assert.ok(app.$("barChart").classList.contains("range-view"), "chart gets range-view in Range mode");
+  app.state.costView = "point";
+  app.render();
+  assert.ok(!app.$("barChart").classList.contains("range-view"), "no range-view in Point mode");
 });
 
 test("Chart model names are never cut off with an ellipsis", () => {
