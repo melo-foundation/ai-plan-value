@@ -1,0 +1,3947 @@
+{
+ "schema": "quota-weights.fit/1",
+ "generatedAt": "2026-11-26T07:43:31.579Z",
+ "seed": 1,
+ "options": {
+  "boot": 2000,
+  "perm": 1000,
+  "runs": 200
+ },
+ "thresholds": {
+  "anchorMaxPoints": 0.15,
+  "defaultBoundaryPoints": 0.05,
+  "unanchoredVar": 0.16666666666666666,
+  "tau0": 0.03,
+  "tauFloor": 0.01,
+  "identShare": 0.5,
+  "minorShare": 0.05,
+  "condMax": 100,
+  "boot": 2000,
+  "drawsKept": 200,
+  "perm": 1000,
+  "seed": 1,
+  "requiredKinds": [
+   "output",
+   "cacheRead",
+   "cacheWrite1h"
+  ],
+  "g1": {
+   "sessions": 3,
+   "accounts": 2,
+   "identifiedSessions": 2
+  },
+  "g2": {
+   "median": 0.05,
+   "max": 0.15
+  },
+  "g3": {
+   "ratio": 1.15,
+   "p": 0.05
+  },
+  "g4": {
+   "minPoints": 5,
+   "spanPp": 20,
+   "rms": 0.07
+  },
+  "g5": {
+   "runs": 200,
+   "sessions": 3,
+   "points": 3,
+   "noise": 0.03,
+   "parity": 0.68,
+   "bias": 0.01,
+   "half95": 0.07
+  },
+  "hetero": {
+   "p": 0.05,
+   "diff": 0.1
+  },
+  "priceTolerance": 0.01,
+  "sigmaFloor": 0.03,
+  "vendorDefaultSigma": {
+   "anthropic": 0.15,
+   "openai": 0.05,
+   "google": 0.15
+  }
+ },
+ "prices": {
+  "source": "Anthropic API list prices as carried in public/data/combined.json aaPricing (input, output, cache hit); cache writes 1.25× input (5 minutes) and 2× input (1 hour), the multipliers used in docs/design/quota-weight-methodology.md §6",
+  "asOf": "2026-11-26"
+ },
+ "simulation": {
+  "design": "3 sessions × 3 points, noise 0.03",
+  "runs": 200,
+  "trueWeights": {
+   "input": 1,
+   "output": 1,
+   "cacheRead": 0.5,
+   "cacheWrite5m": 0.9,
+   "cacheWrite1h": 0.6
+  },
+  "recovery": {
+   "output": {
+    "bias": 0.00095,
+    "half95": 0.05198
+   },
+   "cacheRead": {
+    "bias": -0.00016,
+    "half95": 0.05642
+   },
+   "cacheWrite5m": {
+    "bias": -0.00044,
+    "half95": 0.05453
+   },
+   "cacheWrite1h": {
+    "bias": 0.00061,
+    "half95": 0.05482
+   }
+  },
+  "tolerance": {
+   "bias": 0.01,
+   "half95": 0.07
+  },
+  "pass": true
+ },
+ "submissions": [
+  {
+   "file": "data/quota-weights/submissions/anthropic/2026-10-03-muscgab-fei98.jsonl",
+   "session": "seed-fei98-2026-10-03",
+   "included": true,
+   "reason": null
+  },
+  {
+   "file": "data/quota-weights/submissions/anthropic/2026-10-17-kler-claude-vscode.jsonl",
+   "session": "seed-kler-2026-10-17T09-41-03Z-claude-vscode",
+   "included": true,
+   "reason": null
+  },
+  {
+   "file": "data/quota-weights/submissions/anthropic/2026-10-17-kler-sdk-cli.jsonl",
+   "session": "seed-kler-2026-10-17T09-41-03Z-sdk-cli",
+   "included": true,
+   "reason": null
+  },
+  {
+   "file": "data/quota-weights/submissions/anthropic/2026-10-17-kler-sdk-ts.jsonl",
+   "session": "seed-kler-2026-10-17T09-41-03Z-sdk-ts",
+   "included": true,
+   "reason": null
+  }
+ ],
+ "cells": [
+  {
+   "key": "anthropic/claude-fable-5-2/5h/interactive",
+   "vendor": "anthropic",
+   "model": "claude-fable-5-2",
+   "bar": "5h",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-fable-5-2/5h/sdk",
+   "vendor": "anthropic",
+   "model": "claude-fable-5-2",
+   "bar": "5h",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-fable-5-2/7d/interactive",
+   "vendor": "anthropic",
+   "model": "claude-fable-5-2",
+   "bar": "7d",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-fable-5-2/7d/sdk",
+   "vendor": "anthropic",
+   "model": "claude-fable-5-2",
+   "bar": "7d",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-haiku-5-5/5h/interactive",
+   "vendor": "anthropic",
+   "model": "claude-haiku-5-5",
+   "bar": "5h",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-haiku-5-5/5h/sdk",
+   "vendor": "anthropic",
+   "model": "claude-haiku-5-5",
+   "bar": "5h",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-haiku-5-5/7d/interactive",
+   "vendor": "anthropic",
+   "model": "claude-haiku-5-5",
+   "bar": "7d",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-haiku-5-5/7d/sdk",
+   "vendor": "anthropic",
+   "model": "claude-haiku-5-5",
+   "bar": "7d",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-opus-5-5/5h/interactive",
+   "vendor": "anthropic",
+   "model": "claude-opus-5-5",
+   "bar": "5h",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite1h": false,
+    "cacheWrite5m": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     null,
+     null,
+     null,
+     null
+    ]
+   ],
+   "n": {
+    "sessions": 1,
+    "accounts": 1,
+    "submitters": 1,
+    "segments": 6,
+    "points": 6,
+    "emulatedSessions": 1,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   },
+   "unidentifiedReason": {
+    "cacheRead": "collinear (condition number 70710)",
+    "cacheWrite1h": "collinear (condition number 70710)",
+    "output": "max quota-$ share 3% < 50%",
+    "cacheWrite5m": "below 5% of list-$ in every segment: held at list price"
+   },
+   "fitRaw": {
+    "output": 0.543751,
+    "cacheRead": 0.97865,
+    "cacheWrite5m": null,
+    "cacheWrite1h": 1.108793
+   },
+   "parityUsdPerPoint": {
+    "2e2faf89|team|5h|interactive|claude-opus-5-5|2026-W42": 0.620657
+   },
+   "diagnostics": {
+    "tau": 0.016322,
+    "rounds": 200,
+    "conditionNumber": 70710.056,
+    "loso": {
+     "n": 0,
+     "sessions": 0,
+     "medianAbsLn": null,
+     "maxAbsLn": null,
+     "perSession": []
+    },
+    "submitterAgreement": {
+     "output": {
+      "submitters": 0,
+      "within": false,
+      "p": null,
+      "pass": false
+     },
+     "cacheRead": {
+      "submitters": 0,
+      "within": false,
+      "p": null,
+      "pass": false
+     },
+     "cacheWrite1h": {
+      "submitters": 0,
+      "within": false,
+      "p": null,
+      "pass": false
+     }
+    },
+    "censoringViolations": 0,
+    "heterogeneity": [],
+    "holdout": {
+     "n": 0,
+     "pass": false
+    },
+    "coverage": {
+     "sessions": 1,
+     "accounts": 1,
+     "parityEverySession": false,
+     "requiredIdentified": false,
+     "emulatedSessions": 1,
+     "noIdleBaseline": 1
+    }
+   }
+  },
+  {
+   "key": "anthropic/claude-opus-5-5/5h/sdk",
+   "vendor": "anthropic",
+   "model": "claude-opus-5-5",
+   "bar": "5h",
+   "clientClass": "sdk",
+   "status": "provisional",
+   "weights": {
+    "input": 1,
+    "output": 0.9951,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": true,
+    "cacheRead": false,
+    "cacheWrite1h": false,
+    "cacheWrite5m": false
+   },
+   "ci95": {
+    "output": [
+     0.949091,
+     1.038968
+    ]
+   },
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [
+    [
+     1,
+     0.977393,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986196,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.964067,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986089,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010858,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.954972,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.031128,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004354,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.023618,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.018099,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.975038,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.028168,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.976326,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998411,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.958659,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.970329,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.018403,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.025683,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012264,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992976,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012243,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.047242,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.025111,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.987234,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.975185,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.01382,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.972009,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.030817,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.990094,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992246,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.939096,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.017679,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.00613,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004985,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.001639,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992302,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.017115,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.014391,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.03911,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.966069,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.979076,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.023297,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.997647,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.016016,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.995958,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.993225,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.015452,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.014617,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.993265,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004246,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.013087,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.973608,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992252,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.99559,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.023153,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010679,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.005612,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.999202,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.015303,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.997899,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.949112,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.023656,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.98855,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.978266,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012386,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.99321,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.011056,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.009552,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010174,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.009819,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.995171,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.991278,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.015278,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.969327,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998473,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010064,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.003992,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.000616,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.03019,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.01382,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992059,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998194,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010434,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.98726,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.984063,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.9296,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.98966,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.020008,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998412,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.979314,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.034845,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.959706,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.020844,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.962609,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.008611,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983376,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.985044,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.999774,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012495,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992295,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.979218,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.978042,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.99223,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.98812,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.96472,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.974342,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.981645,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.969814,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.018365,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.00878,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.929194,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.011541,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.008021,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.043377,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.024647,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.94245,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.981694,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.98399,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.003423,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004912,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012621,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.002604,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992458,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986164,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986931,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.980238,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.013827,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.997845,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.022882,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.999726,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.011684,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.965297,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004296,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010915,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.005163,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.963564,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.980964,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.980069,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983344,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.971993,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.95908,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.953396,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     12.124921,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.972938,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.987179,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.010861,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.951353,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.006291,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.01482,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.990488,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.971381,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.990361,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.01924,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998147,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983056,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.95884,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.036562,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.014752,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.030932,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983519,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.991068,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.000373,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.976407,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.024392,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.00226,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.942255,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.006126,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.96187,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.008037,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.995577,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983406,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.024257,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.997847,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.997679,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.987027,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.01781,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986635,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.974274,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.012391,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.000746,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.974613,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.968524,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.989594,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.992382,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.002511,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.952732,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.993839,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.004366,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.031083,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.002261,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.961172,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.038926,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.031133,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.983363,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.998006,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.001813,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     1.015038,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.977759,
+     null,
+     null,
+     null
+    ],
+    [
+     1,
+     0.986859,
+     null,
+     null,
+     null
+    ]
+   ],
+   "n": {
+    "sessions": 3,
+    "accounts": 2,
+    "submitters": 2,
+    "segments": 19,
+    "points": 24,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   },
+   "unidentifiedReason": {
+    "cacheRead": "max quota-$ share 4% < 50%",
+    "cacheWrite1h": "conditional on cacheRead at the 0 bound (correlation -1.00)",
+    "cacheWrite5m": "below 5% of list-$ in every segment: held at list price"
+   },
+   "fitRaw": {
+    "output": 0.9951,
+    "cacheRead": 0.033207,
+    "cacheWrite5m": null,
+    "cacheWrite1h": 1.56802
+   },
+   "parityUsdPerPoint": {
+    "40eb5f83|max_5x|5h|sdk|claude-opus-5-5|2026-W40": 0.680021,
+    "2e2faf89|team|5h|sdk|claude-opus-5-5|2026-W42": 0.275083
+   },
+   "diagnostics": {
+    "tau": 0.02619,
+    "rounds": 200,
+    "conditionNumber": 72.355,
+    "loso": {
+     "n": 0,
+     "sessions": 0,
+     "medianAbsLn": null,
+     "maxAbsLn": null,
+     "perSession": [
+      {
+       "session": "seed-fei98-2026-10-03",
+       "skipped": "refit without this session does not identify its kinds"
+      }
+     ]
+    },
+    "submitterAgreement": {
+     "output": {
+      "submitters": 1,
+      "within": false,
+      "p": null,
+      "pass": false
+     },
+     "cacheRead": {
+      "submitters": 0,
+      "within": false,
+      "p": null,
+      "pass": false
+     },
+     "cacheWrite1h": {
+      "submitters": 1,
+      "within": false,
+      "p": null,
+      "pass": false
+     }
+    },
+    "censoringViolations": 0,
+    "heterogeneity": [
+     {
+      "dimension": "submitter",
+      "levels": [
+       {
+        "level": "muscgab",
+        "sessions": 1,
+        "weights": {
+         "output": 0.9951
+        }
+       },
+       {
+        "level": "kler",
+        "sessions": 2,
+        "weights": {
+         "cacheWrite1h": 1.5136
+        }
+       }
+      ],
+      "perKind": {},
+      "pPermutation": 0.6643,
+      "flagged": false
+     },
+     {
+      "dimension": "account",
+      "levels": [
+       {
+        "level": "muscgab",
+        "sessions": 1,
+        "weights": {
+         "output": 0.9951
+        }
+       },
+       {
+        "level": "kler",
+        "sessions": 2,
+        "weights": {
+         "cacheWrite1h": 1.5136
+        }
+       }
+      ],
+      "perKind": {},
+      "pPermutation": 0.6643,
+      "flagged": false,
+      "sameAs": "submitter"
+     },
+     {
+      "dimension": "plan",
+      "levels": [
+       {
+        "level": "muscgab",
+        "sessions": 1,
+        "weights": {
+         "output": 0.9951
+        }
+       },
+       {
+        "level": "kler",
+        "sessions": 2,
+        "weights": {
+         "cacheWrite1h": 1.5136
+        }
+       }
+      ],
+      "perKind": {},
+      "pPermutation": 0.6643,
+      "flagged": false,
+      "sameAs": "submitter"
+     },
+     {
+      "dimension": "entrypoint",
+      "levels": [
+       {
+        "level": "sdk-cli",
+        "sessions": 2,
+        "weights": {
+         "output": 0.9951
+        }
+       },
+       {
+        "level": "sdk-ts",
+        "sessions": 1,
+        "weights": {}
+       }
+      ],
+      "perKind": {},
+      "pPermutation": 0.3497,
+      "flagged": false
+     },
+     {
+      "dimension": "clientVersion",
+      "levels": [
+       {
+        "level": "muscgab",
+        "sessions": 1,
+        "weights": {
+         "output": 0.9951
+        }
+       },
+       {
+        "level": "kler",
+        "sessions": 2,
+        "weights": {
+         "cacheWrite1h": 1.5136
+        }
+       }
+      ],
+      "perKind": {},
+      "pPermutation": 0.6643,
+      "flagged": false,
+      "sameAs": "submitter"
+     }
+    ],
+    "holdout": {
+     "n": 0,
+     "pass": false
+    },
+    "coverage": {
+     "sessions": 3,
+     "accounts": 2,
+     "parityEverySession": false,
+     "requiredIdentified": false,
+     "emulatedSessions": 0,
+     "noIdleBaseline": 3
+    }
+   }
+  },
+  {
+   "key": "anthropic/claude-opus-5-5/7d/interactive",
+   "vendor": "anthropic",
+   "model": "claude-opus-5-5",
+   "bar": "7d",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-opus-5-5/7d/sdk",
+   "vendor": "anthropic",
+   "model": "claude-opus-5-5",
+   "bar": "7d",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-sonnet-5-5/5h/interactive",
+   "vendor": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "bar": "5h",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-sonnet-5-5/5h/sdk",
+   "vendor": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "bar": "5h",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-sonnet-5-5/7d/interactive",
+   "vendor": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "bar": "7d",
+   "clientClass": "interactive",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  },
+  {
+   "key": "anthropic/claude-sonnet-5-5/7d/sdk",
+   "vendor": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "bar": "7d",
+   "clientClass": "sdk",
+   "status": "unmeasured",
+   "weights": {
+    "input": 1,
+    "output": null,
+    "cacheRead": null,
+    "cacheWrite5m": null,
+    "cacheWrite1h": null
+   },
+   "identified": {
+    "output": false,
+    "cacheRead": false,
+    "cacheWrite5m": false,
+    "cacheWrite1h": false
+   },
+   "ci95": {},
+   "tauBetween": {},
+   "drawKinds": [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite5m",
+    "cacheWrite1h"
+   ],
+   "draws": [],
+   "n": {
+    "sessions": 0,
+    "accounts": 0,
+    "submitters": 0,
+    "segments": 0,
+    "points": 0,
+    "emulatedSessions": 0,
+    "excludedEmulated": 0,
+    "holdoutChunks": 0
+   },
+   "gate": {
+    "coverage": false,
+    "loso": false,
+    "agreement": false,
+    "holdout": false,
+    "simulation": true
+   }
+  }
+ ]
+}

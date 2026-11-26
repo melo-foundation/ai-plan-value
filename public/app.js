@@ -271,7 +271,8 @@ function subsidySources(r) {
   const sub = [];
   const mix = r.quotaMix?.[state.costMode];
   if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
-  if (mix && Math.abs(mix.f - 1) > 0.005) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
+  if (mix) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)}) · ${mix.status || "validated"}`);
+  else if (r.rel?.mix) sub.push(`token mix not applied · ${r.rel.mix.status}`);
   const client = r.clientFactor?.[state.costMode];
   if (client) sub.push(`Agent SDK client ÷${(1 / client.f).toFixed(1)} (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
   sub.push(...(chain?.lines || []));
@@ -1361,6 +1362,12 @@ function renderMeta() {
   for (const l of LEVELS) {
     const el = $(`relCount-${l}`);
     if (el) el.textContent = counts[l] != null ? counts[l].toLocaleString() : "—";
+  }
+  const qc = ds.stats?.reliability?.claudeMixCorrection;
+  const qEl = $("quotaCellCounts");
+  if (qEl && qc?.cellCounts) {
+    const c = qc.cellCounts;
+    qEl.textContent = qc.forcedOff ? "off" : `cells ${c.validated || 0} validated · ${c.provisional || 0} provisional · ${c.unmeasured || 0} unmeasured`;
   }
 }
 

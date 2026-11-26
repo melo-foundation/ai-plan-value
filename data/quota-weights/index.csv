@@ -1,0 +1,26 @@
+session_id,submitter,account_hash,vendor,plan,model,entrypoint,bar,arm,points,anchored,usd_input,usd_output,usd_cache_read,usd_cache_write_5m,usd_cache_write_1h,included,exclude_reason
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,input,1,true,0.677512,0.002480,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,input,1,true,0.677512,0.002480,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,input,1,true,0.677512,0.002480,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,input,1,true,0.677512,0.002480,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,input,1,true,0.677512,0.002480,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,output,1,true,0.017220,0.682780,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,output,1,true,0.016480,0.653520,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,output,1,true,0.016236,0.643760,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,output,1,true,0.017956,0.712040,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,output,1,true,0.015988,0.634020,0.000000,0.000000,0.000000,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,read,1,true,0.000000,0.010580,0.835796,0.000000,0.413624,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,read,1,true,0.000000,0.010500,0.829163,0.000000,0.410344,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,read,1,true,0.000000,0.010420,0.822530,0.000000,0.407056,true,
+seed-fei98-2026-10-03,muscgab,40eb5f83,anthropic,max_5x,claude-opus-5-5,sdk-cli,5h,read,1,true,0.000000,0.010420,0.822530,0.000000,0.407056,true,
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.005224,0.020040,0.235702,0.008775,0.331216,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.000464,0.033780,0.566720,0.000000,0.042080,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.005220,0.017500,0.244542,0.008755,0.330536,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.000472,0.027560,0.574300,0.000000,0.040272,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.005208,0.016960,0.226111,0.008760,0.329328,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-claude-vscode,kler,2e2faf89,anthropic,team,claude-opus-5-5,claude-vscode,5h,mixed,1,true,0.000472,0.026760,0.572253,0.000000,0.039968,false,label emulated
+seed-kler-2026-10-17T09-41-03Z-sdk-cli,kler,2e2faf89,anthropic,team,claude-opus-5-5,sdk-cli,5h,mixed,2,true,0.005232,0.020860,0.224734,0.014455,0.318120,true,
+seed-kler-2026-10-17T09-41-03Z-sdk-cli,kler,2e2faf89,anthropic,team,claude-opus-5-5,sdk-cli,5h,mixed,2,true,0.005180,0.016480,0.206434,0.008745,0.325832,true,
+seed-kler-2026-10-17T09-41-03Z-sdk-cli,kler,2e2faf89,anthropic,team,claude-opus-5-5,sdk-cli,5h,mixed,2,true,0.005208,0.016960,0.224609,0.008760,0.327016,true,
+seed-kler-2026-10-17T09-41-03Z-sdk-ts,kler,2e2faf89,anthropic,team,claude-opus-5-5,sdk-ts,5h,mixed,2,true,0.005188,0.022120,0.206375,0.008755,0.327968,true,
+seed-kler-2026-10-17T09-41-03Z-sdk-ts,kler,2e2faf89,anthropic,team,claude-opus-5-5,sdk-ts,5h,mixed,2,true,0.005184,0.016220,0.206386,0.008750,0.325728,true,

@@ -359,6 +359,11 @@ export function parseFeiSampleMix(note) {
     else out.output += usd;
     any = true;
   }
+  // The row's stated list worth (φ denominator for the fitted correction; phiVector ignores it).
+  const worth = Number((/worth \$([\d.,]+)/.exec(m0[0])?.[1] || "").replace(/,/g, ""));
+  if (any && worth > 0) out.worth = worth;
+  // "写入是 1h，仍按 5 分钟 $5": 1-hour writes priced at the 5-minute rate.
+  if (any && out.w5m > 0 && /写入(是|为)\s*1h/.test(t)) out.w5mAre1h = true;
   return any ? out : null;
 }
 
@@ -408,6 +413,105 @@ export function mixFactor(phiSample, phiMetric, phiMetricAlt = null) {
   // Treat the scenario spread as an 80% interval.
   const sigma = Math.max(0.05, Math.log(hi / lo) / (2 * Z80));
   return { f: Number(f[MIX_CENTRAL].toFixed(4)), lo: Number(lo.toFixed(4)), hi: Number(hi.toFixed(4)), sigma: Number(sigma.toFixed(4)) };
+}
+
+// ---------- Quota-weight fit (data/quota-weights/fit.json, docs/QUOTA-WEIGHTS.md) ----------
+export const QUOTA_FIT_SCHEMA = "quota-weights.fit/1";
+export const QUOTA_KINDS = ["input", "output", "cacheRead", "cacheWrite5m", "cacheWrite1h"];
+export const QUOTA_STATUS = ["validated", "provisional", "unmeasured"];
+const STATUS_RANK = { validated: 0, provisional: 1, unmeasured: 2 };
+export const worseStatus = (...ss) => ss.reduce((a, b) => ((STATUS_RANK[b] ?? 2) > (STATUS_RANK[a] ?? 2) ? b : a), "validated");
+export const MIX_SIGMA_FLOOR = 0.03;
+
+/** Parse fit.json text; missing or unreadable → no cells (every cell unmeasured). */
+export function parseQuotaFit(text) {
+  try {
+    const j = JSON.parse(text);
+    if (j?.schema !== QUOTA_FIT_SCHEMA || !Array.isArray(j.cells)) return { present: false, error: `schema ${j?.schema}`, cells: new Map() };
+    return { present: true, generatedAt: j.generatedAt || null, cells: new Map(j.cells.map((c) => [c.key, c])) };
+  } catch (err) {
+    return { present: false, error: String(err?.message || err), cells: new Map() };
+  }
+}
+export const quotaCellKey = (model, bar, cls, vendor = "anthropic") => `${vendor}/${model}/${bar}/${cls}`;
+/** Client class of a Fei sample from its source / note text: `sdk` for -p, SDK or relay traffic. */
+export const sampleClientClass = (text) => (/(^|\s)-p\b|claude -p|无头|headless|Agent SDK|\bSDK\b|relay|第三方/i.test(String(text || "")) ? "sdk" : "interactive");
+
+/**
+ * φ of a $ mix { read, w1h, w5m, input, output } under quota weights w (QUOTA_KINDS names).
+ * `writesAs1h`: the mix's write dollars are 5-minute list $ of writes metered at the 1-hour rate
+ * (benchmark mixes on a plan client; Fei rows flagged `w5mAre1h`), so their weight is w_1h × p1h / p5m. Denominator: `d.worth`
+ * when given (the list worth the subsidy was computed from), else the mix total.
+ * Returns null when a weight the mix needs is null.
+ */
+export function phiQuota(d, w, { writesAs1h = false, p1hOver5m = 1.6 } = {}) {
+  if (!d || !w) return null;
+  writesAs1h = writesAs1h || d.w5mAre1h === true;
+  const parts = [
+    ["cacheRead", d.read],
+    ["cacheWrite1h", d.w1h],
+    [writesAs1h ? "cacheWrite1h" : "cacheWrite5m", d.w5m, writesAs1h ? p1hOver5m : 1],
+    ["input", d.input],
+    ["output", d.output],
+  ];
+  let num = 0;
+  let tot = 0;
+  for (const [k, usd, mult = 1] of parts) {
+    const x = usd || 0;
+    tot += x;
+    if (!(x > 0)) continue;
+    const wk = w[k];
+    if (wk == null || !Number.isFinite(wk)) return null;
+    num += wk * mult * x;
+  }
+  const den = d.worth > 0 ? d.worth : tot;
+  return den > 0 ? num / den : null;
+}
+const drawWeights = (cell, i) => {
+  const d = cell?.draws?.[i];
+  return d ? Object.fromEntries((cell.drawKinds || QUOTA_KINDS).map((k, j) => [k, d[j]])) : null;
+};
+
+/**
+ * Correction S_eff / S = φ(sample) / φ(metric) from validated cells (§5.4): central from the fitted
+ * weights, range and σ from paired bootstrap draws (the same draw when both mixes use one cell).
+ * G6: when the 95% range of F contains 1, F = 1. σ = √(sd(ln F)² + τ_b² + 0.03²).
+ */
+export function quotaMixFromCells({ sampleMix, metricMix, sampleCell, metricCell, metricWritesAs1h = true, p1hOver5m = 1.6 }) {
+  if (!sampleMix || !metricMix || !sampleCell || !metricCell) return null;
+  const ps = phiQuota(sampleMix, sampleCell.weights);
+  const pm = phiQuota(metricMix, metricCell.weights, { writesAs1h: metricWritesAs1h, p1hOver5m });
+  if (!(ps > 0) || !(pm > 0)) return null;
+  const n = Math.min(sampleCell.draws?.length || 0, metricCell.draws?.length || 0);
+  const lnF = [];
+  for (let i = 0; i < n; i++) {
+    const a = phiQuota(sampleMix, drawWeights(sampleCell, i));
+    const b = phiQuota(metricMix, drawWeights(metricCell, i), { writesAs1h: metricWritesAs1h, p1hOver5m });
+    if (a > 0 && b > 0) lnF.push(Math.log(a / b));
+  }
+  if (lnF.length < 20) return null;
+  const sorted = [...lnF].sort((x, y) => x - y);
+  const q = (p) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))];
+  const m = lnF.reduce((s, x) => s + x, 0) / lnF.length;
+  const sdLn = Math.sqrt(lnF.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, lnF.length - 1));
+  const tauB = Math.max(0, ...Object.values(sampleCell.tauBetween || {}), ...Object.values(metricCell.tauBetween || {}).filter(Number.isFinite));
+  let f = ps / pm;
+  const lo = Math.exp(q(0.025));
+  const hi = Math.exp(q(0.975));
+  const containsOne = lo <= 1 && hi >= 1;
+  if (containsOne) f = 1;
+  const sigma = qsum(sdLn, tauB, MIX_SIGMA_FLOOR);
+  return { f: Number(f.toFixed(4)), lo: Number(lo.toFixed(4)), hi: Number(hi.toFixed(4)), sigma: Number(sigma.toFixed(4)), g6: containsOne };
+}
+
+/**
+ * Whether the build applies the fitted correction to a row: only when every cell the row uses is
+ * `validated`, the sample has its own token mix, the sample comes from one model, and the
+ * correction is not forced off. Returns { apply, status } (status = worst cell status).
+ */
+export function quotaMixDecision({ forcedOff = false, cells = [], sampleKnown = true, singleSampleModel = true }) {
+  const status = cells.length ? worseStatus(...cells.map((c) => c?.status || "unmeasured")) : "unmeasured";
+  return { apply: !forcedOff && status === "validated" && sampleKnown && singleSampleModel, status };
 }
 
 // ---------- cost and score steps (C) ----------

@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 import { BILLING_PERIODS, isAnnualVariant } from "./billing-periods.mjs";
+import * as QW from "./fit-quota-weights.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -654,33 +655,192 @@ test("Fable on Claude plans: capShare 0.5, both readings, own = shared × capSha
   assert.ok(/capShare/.test(appJs), "Tasks/mo must use capShare");
 });
 
-test("Claude quota token-mix correction matches the build flag (with range)", () => {
-  const on = relStats.claudeMixCorrection;
-  assert.equal(typeof on, "boolean", "stats.reliability.claudeMixCorrection missing");
-  assert.deepEqual(REL.phiVector({ output: 1 }), [1, 1, 1, 1], "φ of a pure-output mix must be 1");
-  const claude = entries.filter((e) => /^Claude (Pro|Max|Ultra|Team)\b/.test(e.plan) && e.billing === "subscription");
+// ---- Quota weights (docs/QUOTA-WEIGHTS.md) ----
+const QW_FIT_PATH = path.join(ROOT, "data", "quota-weights", "fit.json");
+const qwFit = fs.existsSync(QW_FIT_PATH) ? JSON.parse(fs.readFileSync(QW_FIT_PATH, "utf8")) : null;
+const QW_KINDS = ["input", "output", "cacheRead", "cacheWrite5m", "cacheWrite1h"];
+const QW_GATES = ["coverage", "loso", "agreement", "holdout", "simulation"];
+
+test("Quota weights: submissions validate; fit.json schema, gate consistency, identifiability", () => {
+  assert.ok(qwFit, "data/quota-weights/fit.json missing");
+  assert.equal(qwFit.schema, "quota-weights.fit/1");
+  assert.ok(Number.isFinite(Date.parse(qwFit.generatedAt)), "generatedAt");
+  assert.equal(typeof qwFit.simulation?.pass, "boolean", "simulation result missing");
+  const prices = QW.loadPrices();
+  const subs = QW.loadSubmissions(QW.SUBMISSIONS_DIR, prices);
+  assert.ok(subs.length >= 4, `expected the seed submissions, found ${subs.length}`);
+  for (const s of subs) assert.equal(s.error, null, `${s.file} rejected: ${s.error}`);
+  assert.deepEqual(qwFit.submissions.map((s) => s.file).sort(), subs.map((s) => s.file).sort(), "fit.json submissions differ from the files on disk");
+  const keys = new Set();
+  for (const c of qwFit.cells) {
+    assert.match(c.key, /^[a-z]+\/[a-z0-9-]+\/(5h|7d)\/(interactive|sdk)$/, `cell key ${c.key}`);
+    assert.ok(!keys.has(c.key), `duplicate cell ${c.key}`);
+    keys.add(c.key);
+    assert.ok(["validated", "provisional", "unmeasured"].includes(c.status), `${c.key}: status ${c.status}`);
+    assert.deepEqual(Object.keys(c.gate).sort(), [...QW_GATES].sort(), `${c.key}: gate keys`);
+    for (const g of QW_GATES) assert.equal(typeof c.gate[g], "boolean", `${c.key}: gate.${g}`);
+    assert.equal(c.status === "validated", QW_GATES.every((g) => c.gate[g]), `${c.key}: validated iff all five gates pass`);
+    const anyId = Object.values(c.identified).some(Boolean);
+    if (c.status !== "validated") assert.equal(c.status === "provisional", anyId, `${c.key}: provisional iff some kind identified`);
+    assert.equal(c.weights.input, 1, `${c.key}: weights.input must be 1`);
+    assert.deepEqual(c.drawKinds, QW_KINDS, `${c.key}: drawKinds`);
+    assert.ok(c.draws.length <= 200, `${c.key}: too many draws`);
+    for (const k of QW_KINDS.slice(1)) {
+      if (!c.identified[k]) {
+        assert.equal(c.weights[k], null, `${c.key}: unidentified ${k} reported as a number`);
+        assert.ok(!c.ci95[k], `${c.key}: interval on unidentified ${k}`);
+        for (const d of c.draws) assert.equal(d[QW_KINDS.indexOf(k)], null, `${c.key}: draw value on unidentified ${k}`);
+      } else {
+        assert.ok(c.weights[k] >= 0, `${c.key}: ${k} weight`);
+        assert.ok(Array.isArray(c.ci95[k]), `${c.key}: identified ${k} has no interval`);
+        assert.ok(c.ci95[k][0] <= c.weights[k] + 1e-6 && c.weights[k] <= c.ci95[k][1] + 1e-6, `${c.key}: ${k} outside its interval`);
+      }
+    }
+    for (const d of c.draws) assert.equal(d[0], 1, `${c.key}: draw input weight`);
+    // φ of a pure-input mix is 1 in every cell
+    assert.equal(REL.phiQuota({ input: 5 }, c.weights), 1, `${c.key}: φ(pure input) ≠ 1`);
+    assert.ok(Number.isInteger(c.n.sessions) && Number.isInteger(c.n.segments), `${c.key}: n`);
+  }
+  for (const m of Object.keys(prices.models)) for (const b of ["5h", "7d"]) for (const cl of ["interactive", "sdk"]) assert.ok(keys.has(`anthropic/${m}/${b}/${cl}`), `cell anthropic/${m}/${b}/${cl} missing`);
+  // Seeds are public single-account measurements: never validated.
+  assert.ok(!qwFit.cells.some((c) => c.status === "validated" && c.n.sessions && subs.every((s) => s.header.seed)), "a cell built only from seed data is validated");
+  // fit.json is current: point estimates, identification and counts from the files on disk (bootstrap-independent)
+  const segs = QW.buildSegments(subs, prices);
+  for (const c of qwFit.cells.filter((x) => x.n.segments)) {
+    const r = QW.fitCell(c.key, segs, { boot: 40, perm: 0, simulationPass: qwFit.simulation.pass });
+    for (const k of QW_KINDS) assert.ok(r.weights[k] === c.weights[k] || Math.abs(r.weights[k] - c.weights[k]) < 1e-6, `${c.key}: ${k} ${r.weights[k]} ≠ fit.json ${c.weights[k]} (rerun node scripts/fit-quota-weights.mjs)`);
+    assert.deepEqual(r.identified, c.identified, `${c.key}: identified differs from fit.json`);
+    assert.deepEqual({ ...r.n }, { ...c.n }, `${c.key}: counts differ from fit.json`);
+    for (const g of ["coverage", "loso", "holdout", "simulation"]) assert.equal(r.gate[g], c.gate[g], `${c.key}: gate.${g} differs from fit.json`);
+  }
+  // docs table equals fit.json
+  const doc = fs.readFileSync(path.join(ROOT, "docs", "QUOTA-WEIGHTS.md"), "utf8");
+  assert.ok(doc.includes(QW.docTableBlock(qwFit)), "docs/QUOTA-WEIGHTS.md table differs from fit.json (rerun node scripts/fit-quota-weights.mjs)");
+});
+
+test("Quota weights: simulation recovers known weights (|bias| ≤ 1%, 95% half-width ≤ 7%)", () => {
+  const a = QW.simulationAssertion({ runs: 200, seed: 1 });
+  for (const k of QW_KINDS.slice(1)) {
+    const r = a.recovery[k];
+    assert.ok(Math.abs(r.bias) <= 0.01, `${k}: bias ${(100 * r.bias).toFixed(2)}%`);
+    assert.ok(r.half95 <= 0.07, `${k}: 95% half-width ${(100 * r.half95).toFixed(2)}%`);
+  }
+  assert.equal(a.pass, true);
+  // the probe's dry-run path: sessions it writes are segmented and fitted back to the truth
+  const rand = QW.rng(5);
+  const sub = QW.simulateSession({ rand, pointsPerArm: 5, noise: 0 });
+  const price = QW.priceFor({ models: { "claude-opus-5-5": Object.fromEntries(QW_KINDS.map((k) => [k, QW.SIM_PRICE[k] * 1e6])) } }, "claude-opus-5-5");
+  const segs = QW.sessionSegments(sub, price, "5h").map((s) => ({ ...s, group: "g", session: "s", r: (s.boundary[0] ** 2 + s.boundary[1] ** 2) / 12 + 1e-4 }));
+  assert.equal(segs.length, 5, "one anchored segment per arm");
+  const f = QW.fitSegments(segs);
+  for (const k of QW_KINDS.slice(1)) assert.ok(Math.abs(f.w[k] / QW.SIM_TRUE_W[k] - 1) < 0.03, `no-noise recovery of ${k}: ${f.w[k]}`);
+});
+
+test("Quota weights: gate logic (validated / provisional / unmeasured)", () => {
+  const all = Object.fromEntries(QW_GATES.map((g) => [g, true]));
+  assert.equal(QW.gateStatus({ ...all, anyIdentified: true }).status, "validated");
+  for (const g of QW_GATES) {
+    assert.equal(QW.gateStatus({ ...all, [g]: false, anyIdentified: true }).status, "provisional", `${g} failing must block validation`);
+    assert.equal(QW.gateStatus({ ...all, [g]: false, anyIdentified: false }).status, "unmeasured");
+  }
+  // End to end on simulated protocol sessions: 3 sessions, 2 accounts, 2 submitters, a holdout.
+  const prices = { models: { "claude-opus-5-5": { vendor: "anthropic", input: 4, output: 20, cacheRead: 0.2, cacheWrite5m: 5, cacheWrite1h: 8 } } };
+  const rand = QW.rng(11);
+  const mk = (o) => {
+    const s = o.holdout ? QW.simulateHoldoutSession({ rand, ...o }) : QW.simulateSession({ rand, pointsPerArm: 3, noise: 0.01, ...o });
+    const sub = { file: o.sessionId, header: { ...s.header, simulated: false, raw: { url: "sim" }, label_emulated: Boolean(o.emulated) }, rows: s.rows };
+    sub.error = QW.validateSubmission(sub, prices);
+    return sub;
+  };
+  const a1 = mk({ sessionId: "a1", account: "acctA", submitter: "alice" });
+  const a2 = mk({ sessionId: "a2", account: "acctA", submitter: "alice" });
+  const b1 = mk({ sessionId: "b1", account: "acctB", submitter: "bob" });
+  const h1 = mk({ sessionId: "h1", account: "acctH", submitter: "carol", holdout: true });
+  const key = "anthropic/claude-opus-5-5/5h/sdk";
+  const run = (subs, simulationPass = true) => QW.fitCell(key, QW.buildSegments(subs, prices), { boot: 100, perm: 30, simulationPass });
+  const v = run([a1, a2, b1, h1]);
+  assert.equal(v.status, "validated", `expected validated, gate ${JSON.stringify(v.gate)}`);
+  for (const k of QW_KINDS.slice(1)) assert.ok(Math.abs(v.weights[k] / QW.SIM_TRUE_W[k] - 1) < 0.05, `${k}: ${v.weights[k]}`);
+  assert.equal(run([a1, a2, b1]).status, "provisional", "no holdout must not validate");
+  assert.equal(run([a1, a2, h1]).gate.coverage, false, "one account must fail G1");
+  assert.equal(run([a1, a2, b1, h1], false).status, "provisional", "failed simulation must not validate");
+  const e1 = mk({ sessionId: "e1", account: "acctE", submitter: "erin", emulated: true });
+  assert.equal(run([e1]).gate.coverage, false, "emulated-label sessions alone must fail G1");
+  assert.equal(run([a1, a2, b1, h1, e1]).n.excludedEmulated, 1, "emulated sessions excluded when real ones exist");
+  const shared = mk({ sessionId: "s1", account: "acctS", submitter: "sam" });
+  shared.header.shared_account = true;
+  assert.ok(QW.validateSubmission(shared, prices), "shared_account must be rejected");
+  const sim = mk({ sessionId: "d1", account: "acctD", submitter: "dan" });
+  sim.header.simulated = true;
+  assert.ok(QW.validateSubmission(sim, prices), "dry-run files must be rejected");
+  assert.equal(QW.fitCell("anthropic/claude-opus-5-5/7d/interactive", [], {}).status, "unmeasured");
+});
+
+test("Quota weights: the build applies the Claude mix correction only for validated cells", () => {
+  const q = relStats.claudeMixCorrection;
+  assert.ok(q && typeof q === "object", "stats.reliability.claudeMixCorrection missing");
+  assert.equal(typeof q.forcedOff, "boolean");
+  assert.equal(typeof q.fit?.present, "boolean");
+  assert.ok(q.cells && Object.values(q.cells).every((s) => ["validated", "provisional", "unmeasured"].includes(s)), "cell statuses");
+  if (qwFit) for (const c of qwFit.cells) assert.equal(q.cells[c.key], c.status, `${c.key}: build status differs from fit.json`);
+  const claude = entries.filter((e) => /^Claude (Pro|Max|Ultra|Team)\b/.test(e.plan) && e.billing === "subscription" && !e.unmetered);
   assert.ok(claude.length > 50, "Too few Claude rows");
+  let applied = 0;
   for (const e of entries) {
     if (!claude.includes(e)) {
       assert.ok(!e.quotaMix, `Non-Claude row ${e.id} has a mix correction`);
       continue;
     }
-    assert.ok(e.rel.w.task >= 0.05 - 1e-9, `${e.id}: Claude mix σ missing`);
-    if (!on) {
-      assert.ok(!e.quotaMix, `${e.id}: correction applied while the flag is off`);
-      continue;
-    }
-    for (const [m, q] of Object.entries(e.quotaMix || {})) {
-      // Doc bound 0.6–1.15; the no-cache 1M-token metric on a 71%-cache-read sample lands at ≈0.60, so 0.55.
-      assert.ok(q.f >= 0.55 && q.f <= 1.15, `${e.id} ${m}: S_eff/S ${q.f} outside 0.55–1.15`);
-      assert.ok(q.lo <= q.f + 1e-9 && q.f <= q.hi + 1e-9, `${e.id} ${m}: f outside its range`);
+    // σ_mix floor: 0.03 where the fitted correction is applied, the uncorrected range (≥ 0.05) elsewhere
+    assert.ok(e.rel.w.task >= (e.quotaMix?.task ? 0.03 : 0.05) - 1e-9, `${e.id}: Claude mix σ missing`);
+    assert.ok(e.rel.mix && Array.isArray(e.rel.mix.cells), `${e.id}: rel.mix missing`);
+    const statuses = e.rel.mix.cells.map((k) => q.cells[k] || "unmeasured");
+    if (e.quotaMix) {
+      applied++;
+      assert.ok(!q.forcedOff, `${e.id}: correction applied while forced off`);
+      assert.ok(statuses.every((s) => s === "validated"), `${e.id}: correction applied with cells ${JSON.stringify(e.rel.mix.cells)} → ${statuses}`);
+      for (const [m, x] of Object.entries(e.quotaMix)) {
+        assert.ok(x.f >= 0.5 && x.f <= 1.5, `${e.id} ${m}: F ${x.f} outside 0.5–1.5`);
+        assert.ok(x.lo <= x.f + 1e-9 && x.f <= x.hi + 1e-9, `${e.id} ${m}: F outside its range`);
+        assert.ok(e.rel.w[m] >= 0.03 - 1e-9, `${e.id} ${m}: applied σ_mix below 0.03`);
+      }
+    } else if (statuses.every((s) => s === "validated") && !q.forcedOff) {
+      // validated but not applicable (no own token breakdown, several sample models): uncorrected
+      assert.equal(e.rel.mix.applied, false);
     }
   }
-  if (on) {
-    const opus = entries.find((e) => e.plan === "Claude Max" && e.modelId === "claude-opus-5-5--max");
-    assert.ok(opus?.quotaMix?.task && opus.quotaMix.task.f > 0.7 && opus.quotaMix.task.f < 0.86, `Claude Max × Opus 5.5 (max) task factor ${opus?.quotaMix?.task?.f}, expected ≈0.78`);
-    assert.ok(claude.filter((e) => e.quotaMix?.task).length >= claude.length * 0.5, "Correction missing on most Claude rows");
-  }
+  assert.equal(applied, q.rows.applied, "rows.applied out of sync");
+  // Decision rule
+  const V = { status: "validated" };
+  const P = { status: "provisional" };
+  const U = { status: "unmeasured" };
+  assert.equal(REL.quotaMixDecision({ cells: [V, V] }).apply, true);
+  assert.equal(REL.quotaMixDecision({ cells: [V, P] }).apply, false);
+  assert.equal(REL.quotaMixDecision({ cells: [V, U] }).status, "unmeasured");
+  assert.equal(REL.quotaMixDecision({ cells: [V], forcedOff: true }).apply, false);
+  assert.equal(REL.quotaMixDecision({ cells: [V], sampleKnown: false }).apply, false);
+  assert.equal(REL.quotaMixDecision({ cells: [V], singleSampleModel: false }).apply, false);
+  assert.equal(REL.quotaMixDecision({ cells: [] }).apply, false);
+  assert.equal(REL.parseQuotaFit("not json").present, false, "unreadable fit.json → no cells");
+  // Fitted correction on a synthetic validated cell (reads 0.5, 1h writes 0.6)
+  const rand = QW.rng(3);
+  const cell = {
+    status: "validated",
+    weights: { input: 1, output: 1, cacheRead: 0.5, cacheWrite5m: 0.9, cacheWrite1h: 0.6 },
+    drawKinds: QW_KINDS,
+    draws: Array.from({ length: 200 }, () => [1, 1 + 0.01 * (rand() - 0.5), 0.5 + 0.02 * (rand() - 0.5), 0.9, 0.6 + 0.02 * (rand() - 0.5)]),
+    tauBetween: { cacheRead: 0.02 },
+  };
+  const sample = { read: 260, w1h: 44.8, input: 0.092, output: 60 }; // Fei Max 5x × Opus 5.5 sample, list $
+  const aa = { read: 4.738, w5m: 1.796, input: 0.036, output: 3.466 }; // AA Opus 5.5 breakdown, list $
+  const r = REL.quotaMixFromCells({ sampleMix: sample, metricMix: aa, sampleCell: cell, metricCell: cell, p1hOver5m: 1.6 });
+  const ps = (0.5 * 260 + 0.6 * 44.8 + 0.092 + 60) / (260 + 44.8 + 0.092 + 60);
+  const pm = (0.5 * 4.738 + 0.6 * 1.6 * 1.796 + 0.036 + 3.466) / (4.738 + 1.796 + 0.036 + 3.466);
+  assert.ok(Math.abs(r.f - ps / pm) < 1e-3, `F ${r.f} vs ${ps / pm}`);
+  assert.ok(r.lo <= r.f && r.f <= r.hi && r.sigma >= 0.03, `range / σ floor: ${JSON.stringify(r)}`);
+  const wide = { ...cell, draws: cell.draws.map((d, i) => [1, 1, i % 2 ? 0.2 : 1.6, 0.9, 0.6]) };
+  assert.equal(REL.quotaMixFromCells({ sampleMix: sample, metricMix: aa, sampleCell: wide, metricCell: wide }).f, 1, "G6: a range containing 1 sets F = 1");
+  assert.equal(REL.quotaMixFromCells({ sampleMix: sample, metricMix: aa, sampleCell: { ...cell, weights: { ...cell.weights, cacheWrite1h: null } }, metricCell: cell }), null, "a needed weight that is null blocks the correction");
 });
 
 test("AA cost breakdowns sum to total; T3 harness ratios present", () => {
