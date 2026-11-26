@@ -209,11 +209,14 @@ const creditItemText = (c) => (c.usdPerMonth > 0 ? `+$${fmtFee(c.usdPerMonth)}/m
 function creditsText(r) {
   const list = r.isApi ? [] : r.includedCredits || [];
   if (!list.length) return "";
-  return `${creditItemText(list[0])}${list.length > 1 ? `, +${list.length - 1} more` : ""} (not counted)`;
+  const rest = list.length - 1;
+  return `${creditItemText(list[0])}${rest ? ` and ${rest} other bundled ${rest === 1 ? "extra" : "extras"}` : ""} (not counted)`;
 }
+// Every bundled item, one per line (tooltips)
+const creditsFullText = (r) => (r.isApi ? [] : r.includedCredits || []).map(creditItemText).join("\n");
 const creditsDiv = (r) => {
   const t = creditsText(r);
-  return t ? `<div class="plan credits-note">${esc(t)}</div>` : "";
+  return t ? `<div class="plan credits-note" title="${esc(creditsFullText(r))}">${esc(t)}</div>` : "";
 };
 
 function getPlanAccessMeta(r) {
@@ -282,11 +285,11 @@ function subsidySources(r) {
   const chain = state.dataset?.stats?.chains?.[r.rel?.chain];
   const sub = [];
   const mix = r.quotaMix?.[state.costMode];
-  if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
-  if (mix) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)}) · ${mix.status || "validated"}`);
-  else if (r.rel?.mix) sub.push(`token mix not applied · ${r.rel.mix.status}`);
+  if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Halved: Fable alone can use only half the weekly limit`);
+  // Shown only when applied; when not applied its uncertainty is already in the range.
+  if (mix) sub.push(`Adjusted ×${mix.f.toFixed(2)} for how Claude's limit counts cached tokens (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   const client = r.clientFactor?.[state.costMode];
-  if (client) sub.push(`Agent SDK client ÷${(1 / client.f).toFixed(1)} (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
+  if (client) sub.push(`Adjusted ÷${(1 / client.f).toFixed(1)}: T3 Code's SDK client uses the limit faster (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
   sub.push(...(chain?.lines || []));
   return sub;
 }
@@ -306,8 +309,12 @@ function relTooltip(r) {
   for (const l of sub.slice(1)) lines.push(`${pad("")}${l}`);
   lines.push(`${pad("Cost")}${fmtUsd(r.apiMetric)}  ${rl.cl?.[state.costMode] || ""}`);
   if (r.scorePts > 0) lines.push(`${pad("Score")}~${fmtScore(r.score, state.benchKey)}  ±${r.scorePts.toFixed(1)} pts`);
-  const credits = creditsText(r);
-  if (credits) lines.push(`${pad("Bundled")}${credits}`);
+  const items = (r.isApi ? [] : r.includedCredits || []).map(creditItemText);
+  if (items.length) {
+    lines.push(`${pad("Bundled")}${items[0]}`);
+    for (const t of items.slice(1)) lines.push(`${pad("")}${t}`);
+    lines.push(`${pad("")}(not counted in the subsidy)`);
+  }
   return lines.join("\n");
 }
 

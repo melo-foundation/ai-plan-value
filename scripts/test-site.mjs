@@ -1143,13 +1143,13 @@ test("Included credits: subsidyMultiple is independent of includedCredits", () =
 test("Included credits: meta line, tooltips, drawer, table row and Methodology show the note", () => {
   assert.ok(/credits-note">\$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits");
   assert.ok(/credits\]\.filter\(Boolean\)/.test(fnBody("renderBarChart")), "Bar plan tooltip must include credits");
-  assert.ok(/creditsText\(r\)/.test(fnBody("relTooltip")), "Reliability tooltip must include credits");
+  assert.ok(/includedCredits/.test(fnBody("relTooltip")) && /not counted in the subsidy/.test(fnBody("relTooltip")), "Reliability tooltip must list every bundled item");
   assert.ok(/includedCredits/.test(fnBody("renderProvenance")) && /Bundled \(not counted\)/.test(fnBody("renderProvenance")), "Drawer provenance must list credits");
   assert.ok((fnBody("renderTable").match(/creditsDiv\(/g) || []).length >= 2, "Table row and group row must show credits");
   assert.ok(html.includes("Bundled credits (API, cloud) are listed per plan and not counted in the subsidy."), "Methodology credits line missing");
   assert.equal(creditsText({ includedCredits: [] }), "");
   assert.equal(creditsText({ isApi: true, includedCredits: [{ kind: "API credits", usdPerMonth: 5 }] }), "");
-  assert.equal(creditsText({ includedCredits: [{ kind: "API credits", usdPerMonth: 10 }, { kind: "2 TB storage", usdPerMonth: null }] }), "+$10/mo API credits, +1 more (not counted)");
+  assert.equal(creditsText({ includedCredits: [{ kind: "API credits", usdPerMonth: 10 }, { kind: "2 TB storage", usdPerMonth: null }] }), "+$10/mo API credits and 1 other bundled extra (not counted)");
   assert.equal(creditsText({ includedCredits: [{ kind: "web search", usdPerMonth: null }] }), "+web search (not counted)");
 });
 
@@ -1176,7 +1176,7 @@ test("Agent SDK client step: Claude first-party T3 rows only, ÷2.1, σ from 1.8
   assert.equal(n, sdk.rows, "sdkClient.rows out of sync");
   if (sdk.on) assert.ok(n >= 20, `Only ${n} Claude T3 rows carry the SDK step`);
   assert.ok(/clientFactor/.test(appJs) && /rl\.x\?\.\[mode\]/.test(appJs), "app.js must apply clientFactor and rel.x");
-  assert.ok(/Agent SDK client ÷/.test(appJs), "Tooltip chain must list the SDK client step");
+  assert.ok(/SDK client uses the limit faster/.test(appJs), "Tooltip chain must list the SDK client step");
   for (const u of sdk.sources) assert.match(u, /^https:\/\/github\.com\/anthropics\/claude-code\/issues\/(97074|111890)$/);
 });
 
