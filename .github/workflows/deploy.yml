@@ -48,7 +48,17 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node --check public/app.js && node --check scripts/refresh-data.mjs && node --check scripts/check-alerts.mjs && node scripts/test-site.mjs 2>&1 | tee /tmp/test-output.txt
+          node --check public/app.js && node --check scripts/refresh-data.mjs && node --check scripts/check-alerts.mjs && node --check scripts/check-pricing-pages.mjs && node scripts/test-site.mjs 2>&1 | tee /tmp/test-output.txt
+
+      - name: Watch official pricing pages
+        # Scheduled runs only; never fails the deploy. Opens or comments on one "Pricing pages changed" issue.
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHROME_BIN: google-chrome
+        run: node scripts/check-pricing-pages.mjs --issue --out /tmp/pricing-pages.json > /dev/null
 
       - name: Check for fetch failures, test failures, new plans, and new important models
         if: always()

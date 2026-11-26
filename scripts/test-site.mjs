@@ -16,7 +16,8 @@ import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
-import { BILLING_PERIODS, isAnnualVariant } from "./billing-periods.mjs";
+import { BILLING_PERIODS, UNKNOWN_REASONS, isAnnualVariant } from "./billing-periods.mjs";
+import * as PP from "./check-pricing-pages.mjs";
 import { INCLUDED_CREDITS, applyIncludedCredits } from "./included-credits.mjs";
 import * as QW from "./fit-quota-weights.mjs";
 
@@ -1102,6 +1103,113 @@ test("Included credits: every subscription row has a status; listed records cite
   }
   const unmatched = dataset.stats?.includedCredits?.unmatched || [];
   assert.deepEqual(unmatched, [], `Plans without an included-credits record: ${unmatched.join("; ")}`);
+});
+
+test("Unknown billing / credit records carry a valid reason and tried date; listed / official records cite a URL and checked date", () => {
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const rows = [...BILLING_PERIODS.map((r) => ["billing", r]), ...INCLUDED_CREDITS.map((r) => ["credits", r])];
+  let unknowns = 0;
+  for (const [table, r] of rows) {
+    const id = `${table}: ${r.plan}`;
+    if (r.status === "unknown") {
+      unknowns++;
+      assert.ok(UNKNOWN_REASONS.includes(r.reason), `${id} reason ${r.reason} not in ${UNKNOWN_REASONS.join("/")}`);
+      assert.ok(DATE.test(r.tried || ""), `${id} needs a tried date`);
+      assert.ok(/^https:\/\//.test(r.url || ""), `${id} needs the URL that was tried`);
+    } else {
+      assert.ok(!("reason" in r) && !("tried" in r), `${id} is ${r.status} but has an unknown reason`);
+    }
+    if (r.status === "listed" || r.status === "official") {
+      assert.ok(/^https:\/\//.test(r.url || "") && DATE.test(r.checked || ""), `${id} (${r.status}) needs url + checked`);
+      for (const c of r.credits || []) assert.ok(/^https:\/\//.test(c.url || "") && DATE.test(c.checked || ""), `${id} credit ${c.kind} needs url + checked`);
+    }
+  }
+  assert.ok(unknowns > 0, "No unknown records found (reason check would be vacuous)");
+  assert.deepEqual(UNKNOWN_REASONS, ["blocked", "login", "dns", "not-stated", "js-only"]);
+});
+
+test("Pricing page watch: baseline schema; every table URL is watched and in the baseline", () => {
+  const baseline = JSON.parse(fs.readFileSync(PP.BASELINE_PATH, "utf8"));
+  assert.equal(baseline.version, 1);
+  assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(baseline.generated), `baseline.generated ${baseline.generated}`);
+  const urls = PP.watchUrls();
+  assert.equal(new Set(urls).size, urls.length, "watch list has duplicates");
+  const tableUrls = new Set([...BILLING_PERIODS.map((r) => r.url), ...INCLUDED_CREDITS.flatMap((r) => [r.url, ...r.credits.map((c) => c.url)])].filter(Boolean));
+  for (const u of tableUrls) {
+    assert.ok(urls.includes(u), `${u} is cited in a table but not watched`);
+    assert.ok(baseline.pages[u], `${u} is not in data/pricing-pages/baseline.json (run --update-baseline)`);
+  }
+  for (const [u, p] of Object.entries(baseline.pages)) {
+    assert.ok(/^https:\/\//.test(u), `baseline key ${u}`);
+    assert.ok(PP.PAGE_STATES.includes(p.state), `${u} state ${p.state}`);
+    if (p.state === "ok") assert.ok(/^[0-9a-f]{16}$/.test(p.hash) && Number.isInteger(p.priceLines) && p.priceLines >= 0, `${u} ok needs a 16-hex hash and priceLines`);
+    else assert.equal(p.hash, null, `${u} ${p.state} must have hash null`);
+  }
+  const ok = Object.values(baseline.pages).filter((p) => p.state === "ok").length;
+  assert.ok(ok >= urls.length * 0.6, `only ${ok}/${urls.length} baseline pages loaded`);
+});
+
+test("Pricing page watch: diff reports readable / changed / stopped; hash ignores layout, keeps prices", () => {
+  const baseline = {
+    version: 1,
+    generated: "2026-01-01",
+    pages: {
+      "https://a.example/pricing": { state: "blocked", hash: null, priceLines: 0 },
+      "https://b.example/pricing": { state: "ok", hash: "1111111111111111", priceLines: 3 },
+      "https://c.example/pricing": { state: "ok", hash: "2222222222222222", priceLines: 3 },
+      "https://d.example/pricing": { state: "ok", hash: "3333333333333333", priceLines: 3 },
+      "https://e.example/pricing": { state: "dns", hash: null, priceLines: 0 },
+    },
+  };
+  const report = {
+    pages: {
+      "https://a.example/pricing": { state: "ok", hash: "aaaaaaaaaaaaaaaa" },
+      "https://b.example/pricing": { state: "ok", hash: "bbbbbbbbbbbbbbbb" },
+      "https://c.example/pricing": { state: "ok", hash: "2222222222222222" },
+      "https://d.example/pricing": { state: "login", hash: null },
+      "https://e.example/pricing": { state: "dns", hash: null },
+      "https://f.example/pricing": { state: "ok", hash: "ffffffffffffffff" },
+    },
+  };
+  const d = PP.diffPages(baseline, report, { "https://a.example/pricing": ["Plan A (annual)"] });
+  assert.deepEqual(d.readable.map((r) => [r.url, r.was]), [["https://a.example/pricing", "blocked"], ["https://f.example/pricing", "missing"]]);
+  assert.deepEqual(d.readable[0].unknownPlans, ["Plan A (annual)"]);
+  assert.deepEqual(d.changed, [{ url: "https://b.example/pricing", was: "1111111111111111", now: "bbbbbbbbbbbbbbbb" }]);
+  assert.deepEqual(d.stopped, [{ url: "https://d.example/pricing", now: "login" }]);
+  assert.ok(PP.hasChanges(d) && !PP.hasChanges(PP.diffPages(baseline, { pages: { "https://c.example/pricing": { state: "ok", hash: "2222222222222222" } } })));
+  assert.match(PP.issueBody(d), /Readable now \(2\)[\s\S]*Prices changed \(1\)[\s\S]*Stopped loading \(1\)[\s\S]*--update-baseline/);
+  // Hash: whitespace / non-price lines do not matter; a price change does.
+  const page = "Plans\nPlus\n$8/month\nBilled annually $80\nGet started";
+  assert.equal(PP.textHash(page).hash, PP.textHash("Menu\n  Plus \n$8/month\n\nBilled   annually $80\nSign up").hash);
+  assert.notEqual(PP.textHash(page).hash, PP.textHash(page.replace("$80", "$90")).hash);
+  assert.equal(PP.textHash(page).hash, PP.textHash("Billed annually $80\nPlus\n$8/month\n$8/month").hash, "line order / repeats must not change the hash");
+  assert.equal(PP.textHash(page).priceLines, 2);
+  // Classification
+  assert.equal(PP.classify({ errorText: "net::ERR_NAME_NOT_RESOLVED" }), "dns");
+  assert.equal(PP.classify({ status: 403, text: "x".repeat(500) }), "blocked");
+  assert.equal(PP.classify({ status: 200, title: "Just a moment...", text: "x".repeat(500) }), "blocked");
+  assert.equal(PP.classify({ status: 200, text: "登录" }), "login");
+  assert.equal(PP.classify({ status: 200, text: "" }), "empty");
+  assert.equal(PP.classify({ status: 200, text: page.repeat(10) }), "ok");
+});
+
+test("Pricing page watch: deploy.yml step is scheduled-only, continue-on-error, after tests, and opens one issue", () => {
+  const steps = workflowYml.split(/\n      - name: /);
+  const names = steps.map((s) => s.split("\n")[0]);
+  const step = steps.find((s) => /scripts\/check-pricing-pages\.mjs/.test(s) && /^Watch/.test(s)) || "";
+  assert.ok(step, "deploy.yml has no pricing page watch step");
+  assert.match(step, /\n\s+if: github\.event_name == 'schedule'\n/, "watch step must run on scheduled runs only");
+  assert.match(step, /\n\s+continue-on-error: true\n/, "watch step must not fail the deploy");
+  assert.match(step, /--issue/, "watch step must open/update the issue");
+  assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.ok(!/--update-baseline/.test(step), "baseline updates are manual");
+  const iTests = names.findIndex((n) => /^Run automated site and data tests/.test(n));
+  const iWatch = names.indexOf(step.split("\n")[0]);
+  assert.ok(iTests >= 0 && iWatch > iTests, "watch step must come after the tests");
+  assert.ok(/^\s+issues: write$/m.test(workflowYml), "deploy.yml needs issues: write");
+  assert.equal(PP.ISSUE_TITLE, "Pricing pages changed");
+  const src = fs.readFileSync(path.join(ROOT, "scripts", "check-pricing-pages.mjs"), "utf8");
+  assert.ok(!/^import .* from "(?!node:|\.\/)/m.test(src), "check-pricing-pages.mjs must have zero dependencies");
 });
 
 test("Included credits: Claude Max $100 and Claude Ultra $200 API credits per month", () => {

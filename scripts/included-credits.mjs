@@ -6,7 +6,8 @@
  *   [{ kind, usdPerMonth (number when the official page states a $ amount per month, else null), text, url, checked }]
  *   status "listed"  — the official page lists at least one credit
  *          "none"    — the official page is readable and lists nothing outside the quota
- *          "unknown" — the official page could not be read; never filled with a guess
+ *          "unknown" — the official page could not be read or does not say; never filled with a guess.
+ *                      Carries reason (UNKNOWN_REASONS in billing-periods.mjs) and tried (date last rendered).
  * The quota itself (Cursor included usage, Copilot AI Credits, Kilo / Ollama / Command Code credits) is not a credit here.
  */
 
@@ -15,9 +16,11 @@ import { billingKey, isAnnualVariant, monthlyTwinKey } from "./billing-periods.m
 export const CREDITS_CHECKED = "2026-11-26";
 const C = CREDITS_CHECKED;
 const GOOGLE_ONE = "https://one.google.com/intl/en_us/about/google-ai-plans/";
+const X_PREMIUM = "https://docs.x.ai/x-subscription/x-premium";
+const KIMI_HELP = "https://www.kimi.com/en/help/membership/membership-pricing";
 
 const none = (plan, url, extra = {}) => ({ plan, status: "none", url, checked: C, credits: [], ...extra });
-const unknown = (plan, url, extra = {}) => ({ plan, status: "unknown", url, checked: C, credits: [], ...extra });
+const unknown = (plan, url, reason, extra = {}) => ({ plan, status: "unknown", url, checked: C, credits: [], reason, tried: C, ...extra });
 const listed = (plan, url, credits, extra = {}) => ({ plan, status: "listed", url, checked: C, credits: credits.map((c) => ({ url, checked: C, ...c })), ...extra });
 
 // prettier-ignore
@@ -62,18 +65,23 @@ export const INCLUDED_CREDITS = [
     { kind: "2,000 Colab compute units/mo", usdPerMonth: null, text: "Google Colab (Compute units): 2,000/mo", url: GOOGLE_ONE },
   ]),
 
-  // xAI — docs.x.ai/x-subscription/pricing. Cursor access is the shared weekly pool (the quota); Grok API access has no included credit.
+  // xAI — docs.x.ai/x-subscription/pricing. Cursor access is the shared weekly pool (the quota); x.ai/pricing: "API usage is billed
+  // separately … and doesn't draw from your plan's usage pool" (no included API credit). docs.x.ai/x-subscription/x-premium:
+  // "Premium, Super, and Ultra: full X Premium+ benefits".
   listed("X Plus", "https://docs.x.ai/x-subscription/pricing", [{ kind: "X Premium", usdPerMonth: null, text: "Paid individual plans include X Premium benefits when you connect your X account." }]),
+  listed("X Premium", X_PREMIUM, [{ kind: "X Premium+", usdPerMonth: null, text: "Premium, Super, and Ultra: full X Premium+ benefits" }]),
+  listed("X Super", X_PREMIUM, [{ kind: "X Premium+", usdPerMonth: null, text: "Premium, Super, and Ultra: full X Premium+ benefits" }]),
   listed("X Ultra", "https://docs.x.ai/x-subscription/pricing", [{ kind: "X Premium", usdPerMonth: null, text: "Paid individual plans include X Premium benefits when you connect your X account." }]),
-  // Legacy SuperGrok tiers: x.ai/pricing returns 403; docs.x.ai/grok/faq does not list tier contents.
-  unknown("SuperGrok Lite", "https://x.ai/pricing"),
-  unknown("SuperGrok", "https://x.ai/pricing"),
-  unknown("SuperGrok Plus", "https://x.ai/pricing"),
-  unknown("SuperGrok Heavy", "https://x.ai/pricing"),
-  unknown("SuperGrok Lite, legacy", "https://x.ai/pricing"),
-  unknown("SuperGrok, legacy", "https://x.ai/pricing"),
-  unknown("SuperGrok Plus, legacy", "https://x.ai/pricing"),
-  unknown("SuperGrok Heavy, legacy", "https://x.ai/pricing"),
+  // Legacy SuperGrok tiers: x.ai/pricing renders (headless Chrome) and lists only The X Subscription tiers; docs.x.ai/grok/faq
+  // and docs.x.ai/x-subscription/pricing ("Existing Cursor, SuperGrok, and X Premium plans continue") do not list tier contents.
+  unknown("SuperGrok Lite", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok Plus", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok Heavy", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok Lite, legacy", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok, legacy", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok Plus, legacy", "https://x.ai/pricing", "not-stated"),
+  unknown("SuperGrok Heavy, legacy", "https://x.ai/pricing", "not-stated"),
 
   // Cursor — legacy plans page: Cursor Models + Other Models pools are the quota; the "Grok" and "X" rows read "Not included".
   none("Cursor Pro", "https://cursor.com/docs/account/pricing/legacy-cursor-plans", { legacy: true }),
@@ -110,37 +118,40 @@ export const INCLUDED_CREDITS = [
   listed("DeepRelay Plus", "https://deeprelay.ai/pricing", [{ kind: "500 web searches/mo", usdPerMonth: null, text: "Web search in Claude Code and Codex: 500 searches a month included" }]),
 
   // Kimi — membership-pricing: Agent / Claw / storage perks "共享一个额度池" with Kimi Code (one quota, not a credit).
-  // Moderato / Allegretto / Allegro: listed as legacy plans that keep their benefits, contents not stated.
+  // Moderato / Allegretto / Allegro (legacy, en help page): "Legacy plans retain both a rolling 5-hour Kimi Code limit and a weekly limit.
+  // … Both use the monthly shared credit pool." / "All membership features share one credit pool."
   none("Kimi Plus", "https://www.kimi.com/help/membership/membership-pricing"),
   none("Kimi Pro", "https://www.kimi.com/help/membership/membership-pricing"),
   none("Kimi Max", "https://www.kimi.com/help/membership/membership-pricing"),
   none("Kimi Ultra", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Moderato", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Allegretto", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Allegro", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Moderato, legacy", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Allegretto, legacy", "https://www.kimi.com/help/membership/membership-pricing"),
-  unknown("Kimi Allegro, legacy", "https://www.kimi.com/help/membership/membership-pricing"),
+  none("Kimi Moderato", KIMI_HELP),
+  none("Kimi Allegretto", KIMI_HELP),
+  none("Kimi Allegro", KIMI_HELP),
+  none("Kimi Moderato, legacy", KIMI_HELP),
+  none("Kimi Allegretto, legacy", KIMI_HELP),
+  none("Kimi Allegro, legacy", KIMI_HELP),
 
   // Zhipu — coding-plan/overview: web search / reader / zread / vision draw from the same 5h + weekly pool. Existing-subscriber
-  // terms (an older separate monthly MCP call count) are not on the live page; bigmodel.cn/glm-coding renders title only.
+  // terms (an older separate monthly MCP call count) are not on the signed-out bigmodel.cn/glm-coding page (headless Chrome, "登录 / 注册").
   none("GLM Coding Lite ¥118", "https://docs.bigmodel.cn/cn/coding-plan/overview"),
   none("GLM Coding Pro ¥538", "https://docs.bigmodel.cn/cn/coding-plan/overview"),
   none("GLM Coding Max ¥1078", "https://docs.bigmodel.cn/cn/coding-plan/overview"),
-  unknown("GLM Coding Lite ¥49, existing subscribers", "https://bigmodel.cn/glm-coding"),
-  unknown("GLM Coding Pro ¥149, existing subscribers", "https://bigmodel.cn/glm-coding"),
-  unknown("GLM Coding Max ¥469, existing subscribers", "https://bigmodel.cn/glm-coding"),
+  unknown("GLM Coding Lite ¥49, existing subscribers", "https://bigmodel.cn/glm-coding", "login"),
+  unknown("GLM Coding Pro ¥149, existing subscribers", "https://bigmodel.cn/glm-coding", "login"),
+  unknown("GLM Coding Max ¥469, existing subscribers", "https://bigmodel.cn/glm-coding", "login"),
 
-  // MiniMax — M Plan: "M Plan 包含的所有模型共用同一份周额度" (image / speech / video share the quota). Legacy Token Plan pages not readable.
+  // MiniMax — M Plan: "M Plan 包含的所有模型共用同一份周额度" (image / speech / video share the quota). Token Plan (legacy): subscribe/token-plan
+  // now shows M Plan only; m-plan/token-plan-notice lists text M3.1 Flash + image H3 Image and "当前的套餐与权益保持不变", with no statement
+  // whether image use draws from the text quota. App Store Token Plan buyers get one-off 积分 (valid 1 year) when renewal ends.
   none("MiniMax M Plan Go (CN)", "https://platform.minimaxi.com/docs/m-plan/faq"),
   none("MiniMax M Plan Explore (CN)", "https://platform.minimaxi.com/docs/m-plan/faq"),
   none("MiniMax M Plan Build (CN)", "https://platform.minimaxi.com/docs/m-plan/faq"),
-  unknown("MiniMax Token Plan Plus", "https://platform.minimaxi.com/subscribe/token-plan"),
-  unknown("MiniMax Token Plan Max", "https://platform.minimaxi.com/subscribe/token-plan"),
-  unknown("MiniMax Token Plan Ultra", "https://platform.minimaxi.com/subscribe/token-plan"),
-  unknown("MiniMax Token Plan Plus (Global)", "https://platform.minimax.io/subscribe/token-plan"),
-  unknown("MiniMax Token Plan Max (Global)", "https://platform.minimax.io/subscribe/token-plan"),
-  unknown("MiniMax Token Plan Ultra (Global)", "https://platform.minimax.io/subscribe/token-plan"),
+  unknown("MiniMax Token Plan Plus", "https://platform.minimaxi.com/docs/m-plan/token-plan-notice", "not-stated"),
+  unknown("MiniMax Token Plan Max", "https://platform.minimaxi.com/docs/m-plan/token-plan-notice", "not-stated"),
+  unknown("MiniMax Token Plan Ultra", "https://platform.minimaxi.com/docs/m-plan/token-plan-notice", "not-stated"),
+  unknown("MiniMax Token Plan Plus (Global)", "https://platform.minimax.io/docs/m-plan/token-plan-notice", "not-stated"),
+  unknown("MiniMax Token Plan Max (Global)", "https://platform.minimax.io/docs/m-plan/token-plan-notice", "not-stated"),
+  unknown("MiniMax Token Plan Ultra (Global)", "https://platform.minimax.io/docs/m-plan/token-plan-notice", "not-stated"),
 
   // Alibaba — token-plan-harness-benefits: "Harness 权益消耗独立计量，不从套餐 Credits 或用量包抵扣" (metered apart from the plan); Standard and Pro only.
   none("阿里云百炼 Token Plan Lite (¥39)", "https://help.aliyun.com/zh/model-studio/token-plan-harness-benefits"),
@@ -160,11 +171,13 @@ export const INCLUDED_CREDITS = [
     listed(`MiMo Token Plan ${t}`, "https://mimo.mi.com/docs/en-US/price/token-plan", [{ kind: "free TTS (limited time)", usdPerMonth: null, text: "The TTS series models are available for free for a limited time and will not consume your plan credits." }])
   ),
 
-  // StepFun — platform.stepfun.com unreachable (DNS); search snippets mention a Studio creation quota of 40% of the plan, unverified.
-  unknown("Step Plan Mini (¥49)", "https://platform.stepfun.com/step-plan"),
-  unknown("Step Plan Plus (¥99)", "https://platform.stepfun.com/step-plan"),
-  unknown("Step Plan Pro (¥199)", "https://platform.stepfun.com/step-plan"),
-  unknown("Step Plan Max (¥699)", "https://platform.stepfun.com/step-plan"),
+  // StepFun — platform.stepfun.com/step-plan (headless Chrome; local DNS fails, public DNS resolves): "Studio 可额外使用相当于套餐 40% 的专属创作额度".
+  // Mini ¥49 and Max ¥699 are no longer listed (Max is now ¥399).
+  unknown("Step Plan Mini (¥49)", "https://platform.stepfun.com/step-plan", "not-stated"),
+  ...["Plus (¥99)", "Pro (¥199)"].map((t) =>
+    listed(`Step Plan ${t}`, "https://platform.stepfun.com/step-plan", [{ kind: "Studio creation quota (40% of plan)", usdPerMonth: null, text: "Studio 可额外使用相当于套餐 40% 的专属创作额度。地址：studio.stepfun.com" }])
+  ),
+  unknown("Step Plan Max (¥699)", "https://platform.stepfun.com/step-plan", "not-stated"),
 ];
 
 const SNAP_KEYS = ["subsidyMultiple", "priceUsd", "priceUsdMonthly", "priceUsdYearly", "realUsdPerMtok", "aaCostPerTaskUsd"];

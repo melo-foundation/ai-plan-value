@@ -53,5 +53,8 @@ Spec: `docs/design/quota-weight-methodology.md`.
 - [x] Self-host DejaVu Sans as the Verdana fallback for Android (about 40 KB).
 - [x] Hours/mo column in T3 mode.
 - [x] Provenance list in the plan drawer.
-- [ ] Included credits still `unknown` (`scripts/included-credits.mjs`): SuperGrok tiers (x.ai/pricing 403), Kimi Moderato / Allegretto / Allegro, GLM existing-subscriber tiers, MiniMax Token Plan CN + Global, Step Plan (platform.stepfun.com unreachable; Studio 40% quota unverified). Recheck and set `listed` or `none`.
+- [x] Render the blocked pricing pages with headless Chrome (2026-11-26): Kimi Moderato / Allegretto / Allegro `none`; Step Plan Plus / Pro `listed` (Studio 40%); X Premium $300/yr, X Super $1000/yr; Google AI Pro $199.99/yr.
+- [x] `reason` + `tried` on every `unknown` record; page watch `scripts/check-pricing-pages.mjs` with a scheduled "Pricing pages changed" issue.
+- [ ] Still `unknown`: SuperGrok tiers (`not-stated`), GLM existing-subscriber tiers (`login`), MiniMax Token Plan CN + Global credits (`not-stated`), Step Plan Mini ¥49 / Max ¥699 (`not-stated`), Kimi legacy annual, Cursor legacy annual, Google AI Ultra annual, Bailian Pro annual. Act on the page-watch issue.
+- [ ] Regenerate `data/pricing-pages/baseline.json` from the first scheduled CI report.
 - [ ] Combined real-world cost metric with Raw / Harness / Custom mixes (`docs/design/combined-metric-design.md`). It depends on steps 1–3.

@@ -7,13 +7,23 @@
  *   "none"     — official page/help center states there is no annual option
  *   "unknown"  — annual option exists or may exist but no official figure could be confirmed
  * Unknown and none rows keep their monthly price in Yearly mode. Never fill an unknown with a guess.
+ * Every "unknown" record carries reason (one of UNKNOWN_REASONS) and tried (date the page was last rendered):
+ *   blocked    — the page refuses automated fetches and headless Chrome (403 / bot wall)
+ *   login      — the figure is only shown to signed-in or existing subscribers
+ *   dns        — the host does not resolve
+ *   not-stated — the page renders and does not state the figure
+ *   js-only    — the figure needs client interaction the page watch cannot reproduce
  *
  * priceUsdYearly = priceUsd × (annual / 12) / monthly, so CNY rows inherit the build's
  * USD/CNY handling of priceUsd (live ECB rate or Fei2411's dated rate) unchanged.
  */
 
 export const BILLING_CHECKED = "2026-11-26";
+export const UNKNOWN_REASONS = ["blocked", "login", "dns", "not-stated", "js-only"];
 const C = BILLING_CHECKED;
+const T = { tried: C };
+const GOOGLE_ONE = "https://one.google.com/intl/en_us/about/google-ai-plans/";
+const X_PRICING = "https://docs.x.ai/x-subscription/pricing";
 
 // prettier-ignore
 export const BILLING_PERIODS = [
@@ -29,22 +39,28 @@ export const BILLING_PERIODS = [
   { plan: "ChatGPT Pro 20x", currency: "USD", monthly: 200, annual: null, status: "none", url: "https://help.openai.com/en/articles/9793128", checked: C },
   { plan: "ChatGPT Pro 500", currency: "USD", monthly: 500, annual: null, status: "none", url: "https://help.openai.com/en/articles/9793128", checked: C },
 
-  // Google — support.google.com/googleone/answer/16476811: "monthly or annual subscriptions for the Google AI Pro plan", no figure on an official page (JS-rendered plans page).
-  { plan: "Google AI Pro", currency: "USD", monthly: 19.99, annual: undefined, status: "unknown", url: "https://support.google.com/googleone/answer/16476811", checked: C },
-  { plan: "Google AI Ultra 5x", currency: "USD", monthly: 99.99, annual: undefined, status: "unknown", url: "https://blog.google/products-and-platforms/products/google-one/google-ai-subscriptions/", checked: C },
-  { plan: "Google AI Ultra 20x", currency: "USD", monthly: 199.99, annual: undefined, status: "unknown", url: "https://blog.google/products-and-platforms/products/google-one/google-ai-subscriptions/", checked: C },
+  // Google — one.google.com plans page (headless Chrome), AI Pro savings calculator: "Monthly ($19.99)" / "Annual ($199.99)".
+  // Ultra tiers: "From $99.99/mo", no annual figure on that page or the launch blog.
+  { plan: "Google AI Pro", currency: "USD", monthly: 19.99, annual: 199.99, status: "official", url: GOOGLE_ONE, checked: C },
+  { plan: "Google AI Ultra 5x", currency: "USD", monthly: 99.99, annual: undefined, status: "unknown", url: GOOGLE_ONE, checked: C, reason: "not-stated", ...T },
+  { plan: "Google AI Ultra 20x", currency: "USD", monthly: 199.99, annual: undefined, status: "unknown", url: GOOGLE_ONE, checked: C, reason: "not-stated", ...T },
 
-  // xAI — docs.x.ai/x-subscription/pricing: Plus "$80/yr ($7/mo)", Ultra "$2000/yr ($167/mo)". Legacy SuperGrok tiers: no official figure (x.ai/pricing blocks fetches).
-  { plan: "X Plus", currency: "USD", monthly: 8, annual: 80, status: "official", url: "https://docs.x.ai/x-subscription/pricing", checked: C },
-  { plan: "X Ultra", currency: "USD", monthly: 200, annual: 2000, status: "official", url: "https://docs.x.ai/x-subscription/pricing", checked: C },
-  { plan: "SuperGrok Lite", currency: "USD", monthly: 10, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok", currency: "USD", monthly: 30, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok Plus", currency: "USD", monthly: 100, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok Heavy", currency: "USD", monthly: 300, annual: undefined, status: "unknown", url: "https://docs.x.ai/grok/faq", checked: C },
-  { plan: "SuperGrok Lite, legacy", currency: "USD", monthly: 10, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok, legacy", currency: "USD", monthly: 30, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok Plus, legacy", currency: "USD", monthly: 100, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C },
-  { plan: "SuperGrok Heavy, legacy", currency: "USD", monthly: 300, annual: undefined, status: "unknown", url: "https://docs.x.ai/grok/faq", checked: C },
+  // xAI — docs.x.ai/x-subscription/pricing: Plus "$80/yr ($7/mo)", Premium "$300/yr ($25/mo)", Super "$1000/yr ($84/mo)", Ultra "$2000/yr ($167/mo)".
+  // x.ai/pricing (headless Chrome) lists the same four tiers monthly only; grok.com/plans shows local currency (CA$ here: ×10 annual on every tier).
+  // SuperGrok tiers: neither page lists them ("Existing Cursor, SuperGrok, and X Premium plans continue"); docs.x.ai/grok/faq mentions
+  // "a SuperGrok Heavy yearly subscription" with no figure.
+  { plan: "X Plus", currency: "USD", monthly: 8, annual: 80, status: "official", url: X_PRICING, checked: C },
+  { plan: "X Premium", currency: "USD", monthly: 30, annual: 300, status: "official", url: X_PRICING, checked: C },
+  { plan: "X Super", currency: "USD", monthly: 100, annual: 1000, status: "official", url: X_PRICING, checked: C },
+  { plan: "X Ultra", currency: "USD", monthly: 200, annual: 2000, status: "official", url: X_PRICING, checked: C },
+  { plan: "SuperGrok Lite", currency: "USD", monthly: 10, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok", currency: "USD", monthly: 30, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok Plus", currency: "USD", monthly: 100, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok Heavy", currency: "USD", monthly: 300, annual: undefined, status: "unknown", url: "https://docs.x.ai/grok/faq", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok Lite, legacy", currency: "USD", monthly: 10, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok, legacy", currency: "USD", monthly: 30, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok Plus, legacy", currency: "USD", monthly: 100, annual: undefined, status: "unknown", url: "https://x.ai/pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "SuperGrok Heavy, legacy", currency: "USD", monthly: 300, annual: undefined, status: "unknown", url: "https://docs.x.ai/grok/faq", checked: C, reason: "not-stated", ...T },
 
   // GitHub — usage-based billing since 2026-06-01; current plan/billing pages list monthly prices only; annual plans are legacy
   // ("When your annual plan ends, you'll be automatically downgraded to Copilot Free").
@@ -54,9 +70,9 @@ export const BILLING_PERIODS = [
 
   // Cursor — help center: "Annual billing is … $2,000/yr for Ultra". Pro / Pro+ are legacy plans; the legacy doc gives no annual figure.
   { plan: "Cursor Ultra", currency: "USD", monthly: 200, annual: 2000, status: "official", url: "https://cursor.com/help/account-and-billing/pricing.md", checked: C },
-  { plan: "Cursor Pro", currency: "USD", monthly: 20, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C, legacy: true },
-  { plan: "Cursor Pro+", currency: "USD", monthly: 60, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C, legacy: true },
-  { plan: "Cursor Ultra, legacy", currency: "USD", monthly: 200, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C },
+  { plan: "Cursor Pro", currency: "USD", monthly: 20, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C, reason: "not-stated", ...T, legacy: true },
+  { plan: "Cursor Pro+", currency: "USD", monthly: 60, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C, reason: "not-stated", ...T, legacy: true },
+  { plan: "Cursor Ultra, legacy", currency: "USD", monthly: 200, annual: undefined, status: "unknown", url: "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md", checked: C, reason: "not-stated", ...T },
 
   // Cognition / Factory — monthly only.
   { plan: "Devin Pro", currency: "USD", monthly: 20, annual: null, status: "none", url: "https://docs.devin.ai/admin/billing/self-serve.md", checked: C },
@@ -92,7 +108,8 @@ export const BILLING_PERIODS = [
   { plan: "DeepRelay Base", currency: "USD", monthly: 0.99, annual: null, status: "none", url: "https://deeprelay.ai/pricing", checked: C },
   { plan: "DeepRelay Plus", currency: "USD", monthly: 4.99, annual: null, status: "none", url: "https://deeprelay.ai/pricing", checked: C },
   // Kimi — kimi.com/membership/pricing: "Billed annually $180" (Plus) / $372 / $948 / $1,908. Moderato / Allegretto / Allegro are the old
-  // names of Plus / Pro / Max (kimi.ai/help/membership/membership-pricing); their ", legacy" rows have no listed price.
+  // names of Plus / Pro / Max. kimi.com/en/help/membership/membership-pricing: "Andante, Moderato, Allegretto, and Allegro are legacy plans.
+  // Existing subscribers keep their plan names, benefit rules, and auto-renewal arrangements." No legacy price is listed.
   { plan: "Kimi Plus", currency: "USD", monthly: 19, annual: 180, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
   { plan: "Kimi Moderato", currency: "USD", monthly: 19, annual: 180, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
   { plan: "Kimi Pro", currency: "USD", monthly: 39, annual: 372, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
@@ -100,17 +117,18 @@ export const BILLING_PERIODS = [
   { plan: "Kimi Max", currency: "USD", monthly: 99, annual: 948, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
   { plan: "Kimi Allegro", currency: "USD", monthly: 99, annual: 948, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
   { plan: "Kimi Ultra", currency: "USD", monthly: 199, annual: 1908, status: "official", url: "https://www.kimi.com/membership/pricing", checked: C },
-  { plan: "Kimi Moderato, legacy", currency: "USD", monthly: 19, annual: undefined, status: "unknown", url: "https://www.kimi.com/help/membership/membership-pricing", checked: C },
-  { plan: "Kimi Allegretto, legacy", currency: "USD", monthly: 39, annual: undefined, status: "unknown", url: "https://www.kimi.com/help/membership/membership-pricing", checked: C },
-  { plan: "Kimi Allegro, legacy", currency: "USD", monthly: 99, annual: undefined, status: "unknown", url: "https://www.kimi.com/help/membership/membership-pricing", checked: C },
+  { plan: "Kimi Moderato, legacy", currency: "USD", monthly: 19, annual: undefined, status: "unknown", url: "https://www.kimi.com/en/help/membership/membership-pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "Kimi Allegretto, legacy", currency: "USD", monthly: 39, annual: undefined, status: "unknown", url: "https://www.kimi.com/en/help/membership/membership-pricing", checked: C, reason: "not-stated", ...T },
+  { plan: "Kimi Allegro, legacy", currency: "USD", monthly: 99, annual: undefined, status: "unknown", url: "https://www.kimi.com/en/help/membership/membership-pricing", checked: C, reason: "not-stated", ...T },
 
-  // Zhipu GLM Coding (CN) — bigmodel.cn/glm-coding: 连续包年 7折 = ¥82.6 / ¥376.6 / ¥754.6 per month. Existing-subscriber prices are behind login.
+  // Zhipu GLM Coding (CN) — bigmodel.cn/glm-coding (headless Chrome, 连续包年 tab): 7折 = ¥82.6 / ¥376.6 / ¥754.6 per month.
+  // Existing-subscriber prices (¥49 / ¥149 / ¥469) are not on the signed-out page ("登录 / 注册").
   { plan: "GLM Coding Lite ¥118", currency: "CNY", monthly: 118, annual: 991.2, status: "official", url: "https://bigmodel.cn/glm-coding", checked: C },
   { plan: "GLM Coding Pro ¥538", currency: "CNY", monthly: 538, annual: 4519.2, status: "official", url: "https://bigmodel.cn/glm-coding", checked: C },
   { plan: "GLM Coding Max ¥1078", currency: "CNY", monthly: 1078, annual: 9055.2, status: "official", url: "https://bigmodel.cn/glm-coding", checked: C },
-  { plan: "GLM Coding Lite ¥49, existing subscribers", currency: "CNY", monthly: 49, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C },
-  { plan: "GLM Coding Pro ¥149, existing subscribers", currency: "CNY", monthly: 149, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C },
-  { plan: "GLM Coding Max ¥469, existing subscribers", currency: "CNY", monthly: 469, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C },
+  { plan: "GLM Coding Lite ¥49, existing subscribers", currency: "CNY", monthly: 49, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C, reason: "login", ...T },
+  { plan: "GLM Coding Pro ¥149, existing subscribers", currency: "CNY", monthly: 149, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C, reason: "login", ...T },
+  { plan: "GLM Coding Max ¥469, existing subscribers", currency: "CNY", monthly: 469, annual: undefined, status: "unknown", url: "https://bigmodel.cn/glm-coding", checked: C, reason: "login", ...T },
 
   // MiniMax CN — platform.minimaxi.com/subscribe/token-plan: 连续包年 "立省2月" ¥490 / ¥1,190 / ¥4,690. Token Plan Plus / Max / Ultra (CN) are
   // the same ¥49 / ¥119 / ¥469 tiers under their earlier names.
@@ -126,11 +144,11 @@ export const BILLING_PERIODS = [
   { plan: "MiniMax Token Plan Ultra (Global)", currency: "USD", monthly: 132, annual: 1320, status: "official", url: "https://platform.minimax.io/subscribe/token-plan", checked: C },
 
   // Alibaba Bailian (CN) — aliyun.com/benefit/scene/tokenplan: 年付 list = 12 × monthly (¥468 / ¥948 / ¥1,668); lower "起" prices are promos.
-  // Pro is not on that page and its price is being lowered (help.aliyun.com token-plan-personal-overview).
+  // Pro: token-plan-personal-overview lists "312 元/月" and "包月、包季、包年订阅" with no annual figure; its price drops next cycle.
   { plan: "阿里云百炼 Token Plan Lite (¥39)", currency: "CNY", monthly: 39, annual: 468, status: "official", url: "https://www.aliyun.com/benefit/scene/tokenplan", checked: C },
   { plan: "阿里云百炼 Token Plan Essential (¥79)", currency: "CNY", monthly: 79, annual: 948, status: "official", url: "https://www.aliyun.com/benefit/scene/tokenplan", checked: C },
   { plan: "阿里云百炼 Token Plan Standard (¥139)", currency: "CNY", monthly: 139, annual: 1668, status: "official", url: "https://www.aliyun.com/benefit/scene/tokenplan", checked: C },
-  { plan: "阿里云百炼 Token Plan Pro (¥312)", currency: "CNY", monthly: 312, annual: undefined, status: "unknown", url: "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview", checked: C },
+  { plan: "阿里云百炼 Token Plan Pro (¥312)", currency: "CNY", monthly: 312, annual: undefined, status: "unknown", url: "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview", checked: C, reason: "not-stated", ...T },
   // Alibaba Cloud international — Standard $18/mo, $195/yr.
   { plan: "Qwen Token Plan Standard", currency: "USD", monthly: 18, annual: 195, status: "official", url: "https://www.alibabacloud.com/campaign/ai-landing-page-token", checked: C },
 
@@ -146,11 +164,13 @@ export const BILLING_PERIODS = [
   { plan: "MiMo Token Plan Pro", currency: "USD", monthly: 50, annual: 528, status: "official", url: "https://platform.xiaomimimo.com/token-plan", checked: C },
   { plan: "MiMo Token Plan Max", currency: "USD", monthly: 100, annual: 1056, status: "official", url: "https://platform.xiaomimimo.com/token-plan", checked: C },
 
-  // StepFun (CN) — platform.stepfun.com/step-plan: 年付 ¥936 / ¥1,860 (Plus / Pro). Mini ¥49 is no longer listed; Max is now ¥399, not the stored ¥699.
+  // StepFun (CN) — platform.stepfun.com/step-plan (headless Chrome, 年付 tab): Plus ¥936, Pro ¥1860, Max ¥4266 (Max is now ¥399/月).
+  // Mini ¥49 and Max ¥699 are no longer listed. The local resolver fails platform.stepfun.com; public DNS resolves it
+  // (CHROME_ARGS='--host-resolver-rules=MAP platform.stepfun.com 14.103.2.83'). Global: platform.stepfun.ai/step-plan, Yearly $95.99 / $289 / $589.
   { plan: "Step Plan Plus (¥99)", currency: "CNY", monthly: 99, annual: 936, status: "official", url: "https://platform.stepfun.com/step-plan", checked: C },
   { plan: "Step Plan Pro (¥199)", currency: "CNY", monthly: 199, annual: 1860, status: "official", url: "https://platform.stepfun.com/step-plan", checked: C },
-  { plan: "Step Plan Mini (¥49)", currency: "CNY", monthly: 49, annual: undefined, status: "unknown", url: "https://platform.stepfun.com/step-plan", checked: C },
-  { plan: "Step Plan Max (¥699)", currency: "CNY", monthly: 699, annual: undefined, status: "unknown", url: "https://platform.stepfun.com/step-plan", checked: C },
+  { plan: "Step Plan Mini (¥49)", currency: "CNY", monthly: 49, annual: undefined, status: "unknown", url: "https://platform.stepfun.com/step-plan", checked: C, reason: "not-stated", ...T },
+  { plan: "Step Plan Max (¥699)", currency: "CNY", monthly: 699, annual: undefined, status: "unknown", url: "https://platform.stepfun.com/step-plan", checked: C, reason: "not-stated", ...T },
 ];
 
 // Quota sub-pool / time-of-day suffixes that share one subscription price.

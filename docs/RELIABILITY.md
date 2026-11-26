@@ -197,6 +197,7 @@ Yearly subsidy = subsidy × monthly price ÷ yearly price per month
 
 - Prices, sources and check dates: `BILLING_PERIODS` in `scripts/billing-periods.mjs`.
 - To add a plan: add a record with `status` `official` (and `annual`), `none` or `unknown`, plus `url` and `checked`. `legacy: true` applies the record to the `, legacy` row.
+- `unknown` records also need `reason` and `tried` (see Unknown reasons).
 - `stats.billing.unmatched` non-empty: add records for the listed plans.
 - `stats.billing.mismatches` non-empty: recheck the official monthly price.
 
@@ -211,8 +212,42 @@ Credits and products a plan bundles outside its quota (API credits, cloud credit
 
 - Records, sources and check dates: `INCLUDED_CREDITS` in `scripts/included-credits.mjs`.
 - To add a plan: add a record with `status` `listed` (and `credits`), `none` or `unknown`, plus `url` and `checked`. Set `usdPerMonth` only when the official page states a $ amount per month.
+- `unknown` records: `unknown(plan, url, reason)` sets `reason` and `tried`.
 - `stats.includedCredits.unmatched` non-empty: add records for the listed plans.
 - The build throws if applying the records changes `subsidyMultiple`, a price or a cost.
+
+## Sources
+
+- Read every pricing page with headless Chrome: `node scripts/check-pricing-pages.mjs --url URL --text`. Add `--click 年付` (or `Yearly`, `连续包年`) to read an annual tab.
+- One-off: `chromium-browser --headless=new --disable-gpu --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36" --virtual-time-budget=15000 --dump-dom URL`. Pages that never go idle (kimi.com/en/help, bigmodel.cn) hang with `--virtual-time-budget`; use the script.
+- Host fails to resolve locally: look it up with `curl "https://dns.google/resolve?name=HOST&type=A"`, then `CHROME_ARGS='--host-resolver-rules=MAP HOST IP'`.
+- grok.com/plans shows local currency; read USD prices from docs.x.ai/x-subscription/pricing.
+- StepFun: platform.stepfun.com/step-plan (CN, ¥), platform.stepfun.ai/step-plan (global, $).
+
+## Unknown reasons
+
+Every `unknown` record in `BILLING_PERIODS` and `INCLUDED_CREDITS` has `reason` and `tried` (date of the last render).
+
+| `reason` | Page state | Action |
+|---|---|---|
+| `blocked` | 403 / bot wall in headless Chrome | find another official page |
+| `login` | figure shown only when signed in (GLM existing-subscriber tiers) | read it from a subscriber account or an official doc |
+| `dns` | host does not resolve | retry with public DNS (Sources) |
+| `not-stated` | page renders and does not state it | wait for the page watch to report a change |
+| `js-only` | figure needs interaction `--click` cannot reproduce | read it in a browser |
+
+## Page watch
+
+`scripts/check-pricing-pages.mjs` renders every URL cited in both tables (deduplicated) and compares each page with `data/pricing-pages/baseline.json`.
+
+- Chrome: `CHROME_BIN`, else `google-chrome`, `chromium-browser`, `chromium`. Extra flags: `CHROME_ARGS`. Node ≥ 22.
+- Page state: `ok`, `blocked` (401 / 403 / 429 or bot wall), `login`, `dns`, `error`, `empty` (< 200 characters).
+- Hash: sha256 (16 hex) of the unique, sorted lines carrying a digit and a currency, period or credit word (`$`, `¥`, `/mo`, `annual`, `年付`, `credits`, `额度` …); of the unique, sorted lines carrying a digit when none.
+- A page reported `changed` or `stopped` is rendered again; it is reported only when both renders differ from the baseline (`flaky` otherwise).
+- Report (stdout, `--out FILE`): `pages`, `readable` (was not `ok`, now `ok`), `changed` (hash differs), `stopped` (was `ok`, now not). Entries list the `unknown` plans citing that URL.
+- Deploy workflow, scheduled runs only, after the tests, `continue-on-error`: `--issue` comments on the open "Pricing pages changed" issue or opens it.
+- After updating the tables: `node scripts/check-pricing-pages.mjs --update-baseline`, then commit `data/pricing-pages/baseline.json`.
+- Baseline generated locally on 2026-11-26 with `CHROME_ARGS='--host-resolver-rules=MAP platform.stepfun.com 14.103.2.83'`. Local-currency pages (grok.com/plans) and geo-dependent pages report `changed` on the first CI run: regenerate the baseline from the CI report (`/tmp/pricing-pages.json`) or locally.
 
 ## Fable cap
 
@@ -263,7 +298,7 @@ The bar chart and the table both show rows at or above the Min confidence settin
 
 ## Tests
 
-`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record; a subscription row lacks `includedCreditsStatus`; a listed credit lacks a URL or check date; Claude Max ≠ $100 or Claude Ultra ≠ $200 API credits; a subsidy changes with `includedCredits`; a plan has no included-credits record.
+`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record; a subscription row lacks `includedCreditsStatus`; a listed credit lacks a URL or check date; Claude Max ≠ $100 or Claude Ultra ≠ $200 API credits; a subsidy changes with `includedCredits`; a plan has no included-credits record; an `unknown` record lacks a valid `reason` or `tried` date; a `listed` or `official` record lacks a URL or check date; the page-watch baseline is malformed or misses a table URL; the watch step is missing, not scheduled-only, before the tests or without `continue-on-error`; the page diff misreports readable / changed / stopped.
 
 Tests that need history print `SKIP` until the ledger has the data:
 

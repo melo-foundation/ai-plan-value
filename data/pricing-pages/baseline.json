@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "generated": "2026-11-26",
+  "pages": {
+    "https://bigmodel.cn/glm-coding": {
+      "state": "ok",
+      "hash": "44e7960de068c71c",
+      "priceLines": 5
+    },
+    "https://claude.com/pricing": {
+      "state": "ok",
+      "hash": "cc5f3942937702df",
+      "priceLines": 13
+    },
+    "https://commandcode.ai/pricing": {
+      "state": "ok",
+      "hash": "9443c248f3367622",
+      "priceLines": 47
+    },
+    "https://cursor.com/docs/account/pricing/legacy-cursor-plans": {
+      "state": "ok",
+      "hash": "b699035b751b6910",
+      "priceLines": 9
+    },
+    "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md": {
+      "state": "ok",
+      "hash": "5c9cede5c4b733a5",
+      "priceLines": 9
+    },
+    "https://cursor.com/help/account-and-billing/pricing.md": {
+      "state": "ok",
+      "hash": "81a306ae8be9feb1",
+      "priceLines": 15
+    },
+    "https://deeprelay.ai/pricing": {
+      "state": "ok",
+      "hash": "3b3d0c82331d5dd9",
+      "priceLines": 63
+    },
+    "https://developers.google.com/profile/help/benefits": {
+      "state": "ok",
+      "hash": "29a7c37b10fed49f",
+      "priceLines": 27
+    },
+    "https://developers.openai.com/api/docs/guides/chatgpt-api-credits": {
+      "state": "ok",
+      "hash": "77967e34772ecfc4",
+      "priceLines": 10
+    },
+    "https://devin.ai/pricing": {
+      "state": "ok",
+      "hash": "d77479eb4c2f02d7",
+      "priceLines": 7
+    },
+    "https://docs.bigmodel.cn/cn/coding-plan/overview": {
+      "state": "ok",
+      "hash": "9cc165109b691793",
+      "priceLines": 10
+    },
+    "https://docs.devin.ai/admin/billing/self-serve.md": {
+      "state": "ok",
+      "hash": "299b33e33a96ed1f",
+      "priceLines": 6
+    },
+    "https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing": {
+      "state": "ok",
+      "hash": "c979208502afc754",
+      "priceLines": 9
+    },
+    "https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/what-changed-with-billing": {
+      "state": "ok",
+      "hash": "a78a3afdfef0c949",
+      "priceLines": 2
+    },
+    "https://docs.mistral.ai/admin/billing-usage/subscriptions": {
+      "state": "ok",
+      "hash": "8b1ab5d47c8a24cb",
+      "priceLines": 0
+    },
+    "https://docs.x.ai/grok/faq": {
+      "state": "ok",
+      "hash": "15cda497f3206ebc",
+      "priceLines": 1
+    },
+    "https://docs.x.ai/x-subscription/pricing": {
+      "state": "ok",
+      "hash": "8c949211e66d7da2",
+      "priceLines": 6
+    },
+    "https://docs.x.ai/x-subscription/x-premium": {
+      "state": "ok",
+      "hash": "c151697206bcea71",
+      "priceLines": 0
+    },
+    "https://factory.com/pricing": {
+      "state": "ok",
+      "hash": "bc2ddd9261198b58",
+      "priceLines": 1
+    },
+    "https://github.com/features/copilot/plans": {
+      "state": "ok",
+      "hash": "dc881d041fb079e7",
+      "priceLines": 14
+    },
+    "https://help.aliyun.com/zh/model-studio/token-plan-harness-benefits": {
+      "state": "ok",
+      "hash": "b744457d46050fe8",
+      "priceLines": 15
+    },
+    "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview": {
+      "state": "ok",
+      "hash": "c6b7706a5b569f36",
+      "priceLines": 21
+    },
+    "https://help.mistral.ai/en/articles/455205-how-can-i-upgrade-or-cancel-my-le-chat-subscription": {
+      "state": "ok",
+      "hash": "2ee430e4c7bde9c3",
+      "priceLines": 1
+    },
+    "https://help.openai.com/en/articles/20001626": {
+      "state": "ok",
+      "hash": "96094a1a72515981",
+      "priceLines": 13
+    },
+    "https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus": {
+      "state": "ok",
+      "hash": "d26a4d7342481fd0",
+      "priceLines": 2
+    },
+    "https://help.openai.com/en/articles/9793128": {
+      "state": "ok",
+      "hash": "fa1e82d77ddcb7e6",
+      "priceLines": 10
+    },
+    "https://kilo.ai/pricing/kilo-pass": {
+      "state": "ok",
+      "hash": "c70d0174b893b383",
+      "priceLines": 22
+    },
+    "https://mimo.mi.com/docs/en-US/price/token-plan": {
+      "state": "ok",
+      "hash": "8108aa8cc0df214d",
+      "priceLines": 16
+    },
+    "https://ollama.com/pricing": {
+      "state": "ok",
+      "hash": "dcfdd040ef9cb1e5",
+      "priceLines": 33
+    },
+    "https://one.google.com/intl/en_us/about/google-ai-plans/": {
+      "state": "ok",
+      "hash": "52569a02c9daa1d4",
+      "priceLines": 35
+    },
+    "https://opencode.ai/docs/go": {
+      "state": "ok",
+      "hash": "7d76facacf328c0f",
+      "priceLines": 14
+    },
+    "https://opencode.ai/go": {
+      "state": "ok",
+      "hash": "c643595b1e24a2f9",
+      "priceLines": 19
+    },
+    "https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers": {
+      "state": "ok",
+      "hash": "cb2ca09eae4c9012",
+      "priceLines": 12
+    },
+    "https://platform.minimax.io/docs/m-plan/token-plan-notice": {
+      "state": "ok",
+      "hash": "7bdebf63e5953bc8",
+      "priceLines": 0
+    },
+    "https://platform.minimax.io/subscribe/token-plan": {
+      "state": "ok",
+      "hash": "dfd9506b01698b3a",
+      "priceLines": 9
+    },
+    "https://platform.minimaxi.com/docs/m-plan/faq": {
+      "state": "ok",
+      "hash": "6c2c3fd7ca0e6cb3",
+      "priceLines": 10
+    },
+    "https://platform.minimaxi.com/docs/m-plan/token-plan-notice": {
+      "state": "ok",
+      "hash": "20a62b03133dc5eb",
+      "priceLines": 4
+    },
+    "https://platform.minimaxi.com/subscribe/token-plan": {
+      "state": "ok",
+      "hash": "aaacfee0e85719d5",
+      "priceLines": 9
+    },
+    "https://platform.stepfun.com/step-plan": {
+      "state": "ok",
+      "hash": "1c2e235edf677aa4",
+      "priceLines": 4
+    },
+    "https://platform.xiaomimimo.com/token-plan": {
+      "state": "ok",
+      "hash": "95b434ccc038d8b0",
+      "priceLines": 15
+    },
+    "https://www.alibabacloud.com/campaign/ai-landing-page-token": {
+      "state": "ok",
+      "hash": "12e05e7b39ad6b01",
+      "priceLines": 41
+    },
+    "https://www.aliyun.com/benefit/scene/tokenplan": {
+      "state": "ok",
+      "hash": "0183ba9c901cd5ae",
+      "priceLines": 39
+    },
+    "https://www.kimi.com/en/help/membership/membership-pricing": {
+      "state": "ok",
+      "hash": "c6a17b05431ad9e7",
+      "priceLines": 14
+    },
+    "https://www.kimi.com/help/membership/membership-pricing": {
+      "state": "ok",
+      "hash": "625e8b11ec9589bf",
+      "priceLines": 14
+    },
+    "https://www.kimi.com/membership/pricing": {
+      "state": "ok",
+      "hash": "22edab06b78817b7",
+      "priceLines": 17
+    },
+    "https://www.tencentcloud.com/document/product/1300/81315": {
+      "state": "ok",
+      "hash": "d0914a70e3223ed2",
+      "priceLines": 13
+    },
+    "https://x.ai/pricing": {
+      "state": "ok",
+      "hash": "c3911e85903491a8",
+      "priceLines": 11
+    }
+  }
+}
