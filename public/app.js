@@ -701,7 +701,7 @@ function renderBarChart(allRows, allResolved) {
             <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}</div>
           </div>
           <div class="bar-track-wrap">
-            <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
+            <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; --bar-ratio:${(r.effectiveCost / maxCost).toFixed(4)}; background-color:${barColor}"></span>
             <span class="bar-val">${realCostText(r)}</span>
             <span class="bar-note">${r.scoreDerived ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
