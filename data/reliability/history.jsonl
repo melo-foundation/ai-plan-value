@@ -130,3 +130,4 @@
 {"t":"deploy","d":"2026-11-26T15:21:28.164Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T15:47:40.920Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T15:56:45.154Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
+{"t":"deploy","d":"2026-11-26T16:25:29.190Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.2264,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
