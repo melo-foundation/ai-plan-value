@@ -87,6 +87,7 @@ const SOURCES = {
   arcPrizeEvals: "https://arcprize.org/media/data/evaluations.json",
   arcPrizeModels: "https://arcprize.org/media/data/models.json",
   aaCodingAgents: "https://artificialanalysis.ai/agents/coding-agents",
+  cursorBench: "https://cursor.com/cursorbench",
 };
 
 const USER_AGENT =
@@ -1193,6 +1194,39 @@ function parseCursorBench(snapshot, aaByNorm) {
       costPerTaskUsd: Number(cost.toFixed(4)),
       steps: toNum(obs.steps),
       tokensPerTask: toNum(obs.details?.tokensPerTask),
+    });
+  }
+  return index;
+}
+
+const CURSORBENCH_EFFORTS = { minimal: "minimal", low: "low", medium: "medium", high: "high", "extra high": "xhigh", max: "max" };
+
+/**
+ * CursorBench from cursor.com/cursorbench, the first-party leaderboard: a server-rendered table of
+ * rank | "<model> <effort>" | score % | $ / task | tokens / task | steps / task. Keys match parseCursorBench
+ * (the Priors copy, now only a fallback). Cursor drops the "Claude" prefix, so Fable/Opus/Sonnet/Haiku get it back.
+ */
+function parseCursorBenchHtml(html, aaByNorm) {
+  const index = new Map();
+  const text = (cell) =>
+    cell.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, " ").trim();
+  const num = (cell) => toNum(String(cell || "").replace(/[%$,\s]/g, ""));
+  for (const row of html.match(/<tr\b[\s\S]*?<\/tr>/g) || []) {
+    const cells = (row.match(/<td\b[\s\S]*?<\/td>/g) || []).map(text);
+    if (cells.length < 4) continue;
+    const m = /^(.+?) (Minimal|Low|Medium|High|Extra High|Max)$/i.exec(cells[1]);
+    const score = num(cells[2]);
+    const cost = num(cells[3]);
+    if (!m || score == null || cost == null || cost <= 0) continue;
+    const name = /^(Fable|Opus|Sonnet|Haiku) /.test(m[1]) ? `Claude ${m[1]}` : m[1];
+    const rawModel = name.toLowerCase().replace(/\s+/g, "-");
+    const key = `${normSlug(canonicalBaseSlug(rawModel, aaByNorm))}|${cleanEffort(CURSORBENCH_EFFORTS[m[2].toLowerCase()])}`;
+    if (index.has(key)) continue; // the page renders the table more than once
+    index.set(key, {
+      score: round1(score),
+      costPerTaskUsd: Number(cost.toFixed(4)),
+      steps: num(cells[5]),
+      tokensPerTask: num(cells[4]),
     });
   }
   return index;
@@ -2783,6 +2817,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       tierCount: 0,
       error: null,
     },
+    cursorBench: {
+      name: "CursorBench (Cursor)",
+      url: SOURCES.cursorBench,
+      ok: false,
+      fetchedAt: null,
+      rowCount: 0,
+      usedFallback: false,
+      error: null,
+    },
     arcPrize: {
       name: "ARC Prize (ARC-AGI-2)",
       url: "https://arcprize.org/leaderboard",
@@ -2826,6 +2869,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let arcEvalsJson = null;
   let arcModelsJson = null;
   let aaAgentsHtml = null;
+  let cursorBenchHtml = null;
 
   if (fromLocal) {
     log("Reading local fixture snapshots from /tmp ...");
@@ -2840,6 +2884,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (fs.existsSync("/tmp/ollama_pricing.html")) ollamaHtml = fs.readFileSync("/tmp/ollama_pricing.html", "utf8");
     if (fs.existsSync("/tmp/kilo_pricing.html")) kiloHtml = fs.readFileSync("/tmp/kilo_pricing.html", "utf8");
     if (fs.existsSync("/tmp/aa_coding_agents.html")) aaAgentsHtml = fs.readFileSync("/tmp/aa_coding_agents.html", "utf8");
+    if (fs.existsSync("/tmp/cursorbench.html")) cursorBenchHtml = fs.readFileSync("/tmp/cursorbench.html", "utf8");
   } else {
     const tasks = [
       fetchText(SOURCES.feiPointsCsv)
@@ -2881,6 +2926,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       fetchText(SOURCES.aaCodingAgents)
         .then((t) => { aaAgentsHtml = t; })
         .catch((err) => { sourceStatus.aaCodingAgents.error = err.message; }),
+      fetchText(SOURCES.cursorBench)
+        .then((t) => { cursorBenchHtml = t; })
+        .catch((err) => { sourceStatus.cursorBench.error = err.message; }),
     ];
 
     if (process.env.AA_API_KEY) {
@@ -3036,6 +3084,27 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceStatus.priorsRepo.error = err.message;
       log("Priors snapshot parse error:", err.message);
     }
+  }
+
+  // 3b. CursorBench from cursor.com (first party). The Priors copy is used only if the page fails or parses short.
+  let cursorBenchIndex = priorsParsed.cursorBenchIndex;
+  if (cursorBenchHtml) {
+    try {
+      const idx = parseCursorBenchHtml(cursorBenchHtml, aaByNorm);
+      if (idx.size < 10) throw new Error(`only ${idx.size} rows parsed from the leaderboard table`);
+      cursorBenchIndex = idx;
+      sourceStatus.cursorBench.ok = true;
+      sourceStatus.cursorBench.fetchedAt = nowIso;
+      sourceStatus.cursorBench.rowCount = idx.size;
+      log(`Parsed ${idx.size} CursorBench model+effort rows from cursor.com`);
+    } catch (err) {
+      sourceStatus.cursorBench.error = err.message;
+      log("CursorBench parse error:", err.message);
+    }
+  }
+  if (!sourceStatus.cursorBench.ok && cursorBenchIndex.size) {
+    sourceStatus.cursorBench.usedFallback = true;
+    log(`CursorBench: using the Priors copy (${cursorBenchIndex.size} rows)`);
   }
 
   // Merge multi-effort AA variants: upstream Fei2411 + live AA first, backfilled with Priors per-effort sub-tests
@@ -4240,7 +4309,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     entry.codingAgent = resolveCodingAgent(entry, agentIndex);
     const variantKey = `${normSlug(entry.baseModelId)}|${entry.effort || "default"}`;
     entry.t3Turn = priorsParsed.t3Index?.get(variantKey) || null;
-    entry.cursorBench = priorsParsed.cursorBenchIndex?.get(variantKey) || null;
+    entry.cursorBench = cursorBenchIndex?.get(variantKey) || null;
 
     if (!openRouterIndex) return entry;
     const orModel = resolveOpenRouterModel(entry.baseModelId, openRouterIndex, aaByNorm);
@@ -4832,7 +4901,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       estimateTiers: buildEstimateTiers(effortAccuracy, codingAgentEstimates?.accuracy),
       aaIndexFreshness: { keptNewerPriors: keptNewerScores.length, variants: keptNewerScores },
       t3CodeTurns: { variants: priorsParsed.t3Index.size, entries: expandedEntries.filter((e) => e.t3Turn).length },
-      cursorBench: { variants: priorsParsed.cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
+      cursorBench: { variants: cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
       billing: billingStats,
       includedCredits: creditStats,

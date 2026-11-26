@@ -195,7 +195,8 @@ async function main() {
         (key === "ollamaCloud" && !src.tierCount) ||
         (key === "kiloPass" && !src.tierCount) ||
         (key === "arcPrize" && !src.multiEffortModelCount) ||
-        (key === "aaCodingAgents" && !src.configCount);
+        (key === "aaCodingAgents" && !src.configCount) ||
+        (key === "cursorBench" && !src.rowCount);
       if (!src.ok || empty) {
         failedSources.push({
           name: src.name || key,

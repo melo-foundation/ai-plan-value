@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Automated verification suite for AI Plan Value.
- * Tests dataset integrity, all 8 upstream sources (including OpenRouter, Kilo Pass,
+ * Tests dataset integrity, all upstream sources (including OpenRouter, Kilo Pass, CursorBench,
  * and ARC Prize), harness/quota-window classification, HTML/JS DOM wiring,
  * reasoning effort bounds & monotonicity, shareable URL params, and cache-busting.
  *
@@ -58,7 +58,7 @@ const workflowYml = fs.readFileSync(WORKFLOW_PATH, "utf8");
 const entries = dataset.entries || [];
 
 // 1. Upstream sources health
-test("All 9 upstream sources succeeded with non-zero records", () => {
+test("All 10 upstream sources succeeded with non-zero records", () => {
   const expected = [
     ["fei2411", "rowCount"],
     ["priorsRepo", "itemCount"],
@@ -69,12 +69,27 @@ test("All 9 upstream sources succeeded with non-zero records", () => {
     ["kiloPass", "tierCount"],
     ["arcPrize", "multiEffortModelCount"],
     ["aaCodingAgents", "configCount"],
+    ["cursorBench", "rowCount"],
   ];
   for (const [key, countField] of expected) {
     const src = dataset.sources?.[key];
     assert.ok(src, `Missing source entry: ${key}`);
     assert.equal(src.ok, true, `Source ${key} failed: ${src.error}`);
     assert.ok((src[countField] || 0) > 0, `Source ${key}.${countField} must be > 0`);
+  }
+});
+
+// 1a. CursorBench comes from cursor.com, not the Priors copy
+test("CursorBench is read from cursor.com and attached to entries", () => {
+  const src = dataset.sources?.cursorBench;
+  assert.equal(src?.url, "https://cursor.com/cursorbench");
+  assert.equal(src?.usedFallback, false, "CursorBench fell back to the Priors copy");
+  assert.ok(src.rowCount >= 20, `CursorBench rowCount ${src.rowCount} < 20`);
+  const withCb = entries.filter((e) => e.cursorBench);
+  assert.ok(withCb.length > 0, "No entry has CursorBench data");
+  for (const e of withCb) {
+    assert.ok(e.cursorBench.score > 0 && e.cursorBench.score <= 100, `${e.id}: CursorBench score ${e.cursorBench.score}`);
+    assert.ok(e.cursorBench.costPerTaskUsd > 0, `${e.id}: CursorBench cost ${e.cursorBench.costPerTaskUsd}`);
   }
 });
 
@@ -1832,7 +1847,7 @@ test("Methodology: sections, collapsed trust-level details, glyph table, plain l
   const headings = [...dlg.matchAll(/class="settings-heading"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
   for (const h of ["Real cost", "Cost metrics", "Reliability"]) assert.ok(headings.includes(h), `Methodology section "${h}" missing (have ${headings})`);
   const sources = dlg.match(/<div class="method-sources"><b>Sources:<\/b>([\s\S]*?)<\/div>/)?.[1] || "";
-  for (const name of ["Real API Pricing", "Priors", "GitHub Copilot", "Ollama Cloud", "Kilo Pass", "OpenRouter", "ARC Prize"]) assert.ok(sources.includes(`>${name}</a>`), `Sources line must link ${name}`);
+  for (const name of ["Real API Pricing", "Priors", "GitHub Copilot", "Ollama Cloud", "Kilo Pass", "OpenRouter", "ARC Prize", "CursorBench"]) assert.ok(sources.includes(`>${name}</a>`), `Sources line must link ${name}`);
   const details = dlg.match(/<details class="method-details"([^>]*)>\s*<summary>How the trust levels are calculated<\/summary>[\s\S]*?<\/details>/);
   assert.ok(details, "Collapsed 'How the trust levels are calculated' section missing");
   assert.ok(!/\bopen\b/.test(details[1]), "Trust-level details must start collapsed");
