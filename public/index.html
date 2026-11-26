@@ -423,9 +423,9 @@
               <div><code>σ</code> = sd of ln(real cost); <code>σ² = Σ step σ²</code> over subsidy chain, token mix and cost metric</div>
               <div><code>Range</code> = real cost × e<sup>±1.28σ</sup></div>
               <div><code>Level</code> = worst of cost σ, score error (±1.5 / 3 / 5 pts) and the upstream grade</div>
-              <div><code>Claude token mix</code> = subsidy × φ(sample) ÷ φ(benchmark), φ = quota cost ÷ list cost; applied for <code>validated</code> quota-weight cells only, <span id="quotaCellCounts">—</span></div>
             </div>
             <p>The step values below are starting estimates, refined as measurements arrive. Steps are treated as independent of each other.</p>
+            <p>Claude's usage limit may count cached tokens differently from API prices. No correction is applied until our own quota measurements confirm it; that uncertainty is already in Claude rows' ranges.</p>
             <table class="method-table">
               <thead><tr><th>Step</th><th>σ</th></tr></thead>
               <tbody>

@@ -2006,6 +2006,15 @@ test("Marks: † exactly on derived subsidies, no ~ on any cost, Fable wording, 
   assert.equal((legend.match(/Hover a model name/g) || []).length, 1, "hover hint appears once, not per mark");
 });
 
+test("Methodology states the Claude cache correction plainly, and only while it matches the data", () => {
+  const dlg = html.match(/<dialog id="methodDialog"[\s\S]*?<\/dialog>/)?.[0] || "";
+  for (const jargon of ["φ", "quota-weight cells", "quotaCellCounts", "Claude token mix"]) assert.ok(!dlg.includes(jargon), `Methodology jargon "${jargon}"`);
+  const sentence = "No correction is applied until our own quota measurements confirm it";
+  const applied = dataset.stats?.reliability?.claudeMixCorrection?.rows?.applied ?? 0;
+  if (applied === 0) assert.ok(dlg.includes(sentence), "Methodology must say the Claude cache correction is not applied");
+  else assert.ok(!dlg.includes(sentence), `The correction now applies to ${applied} rows: update the Methodology sentence`);
+});
+
 test("Chart model names are never cut off with an ellipsis", () => {
   for (const r of cssRules) {
     if (!r.selectors.some((x) => /^\.bar-model$/.test(x))) continue;

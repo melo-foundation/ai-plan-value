@@ -1471,12 +1471,6 @@ function renderMeta() {
     const el = $(`relCount-${l}`);
     if (el) el.textContent = counts[l] != null ? counts[l].toLocaleString() : "—";
   }
-  const qc = ds.stats?.reliability?.claudeMixCorrection;
-  const qEl = $("quotaCellCounts");
-  if (qEl && qc?.cellCounts) {
-    const c = qc.cellCounts;
-    qEl.textContent = qc.forcedOff ? "off" : `cells ${c.validated || 0} validated · ${c.provisional || 0} provisional · ${c.unmeasured || 0} unmeasured`;
-  }
 }
 
 function applyTheme(theme) {
