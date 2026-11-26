@@ -204,6 +204,18 @@ function feeText(r) {
   return `$${fmtFee(r.priceUsd)}/mo${r.feeMark ? ` (${r.feeMark})` : ""}`;
 }
 
+// Bundled credits outside the quota (scripts/included-credits.mjs): shown, never counted in the subsidy.
+const creditItemText = (c) => (c.usdPerMonth > 0 ? `+$${fmtFee(c.usdPerMonth)}/mo ${c.kind}` : `+${c.kind}`);
+function creditsText(r) {
+  const list = r.isApi ? [] : r.includedCredits || [];
+  if (!list.length) return "";
+  return `${creditItemText(list[0])}${list.length > 1 ? `, +${list.length - 1} more` : ""} (not counted)`;
+}
+const creditsDiv = (r) => {
+  const t = creditsText(r);
+  return t ? `<div class="plan credits-note">${esc(t)}</div>` : "";
+};
+
 function getPlanAccessMeta(r) {
   if (r.billing === "metered" || r.isApi) {
     return { openEndpoint: true, harness: r.harness || "Any API / CLI", quotaWindows: ["payg"], quotaWindowLabel: "Pay-as-you-go" };
@@ -294,6 +306,8 @@ function relTooltip(r) {
   for (const l of sub.slice(1)) lines.push(`${pad("")}${l}`);
   lines.push(`${pad("Cost")}${fmtUsd(r.apiMetric)}  ${rl.cl?.[state.costMode] || ""}`);
   if (r.scorePts > 0) lines.push(`${pad("Score")}~${fmtScore(r.score, state.benchKey)}  ±${r.scorePts.toFixed(1)} pts`);
+  const credits = creditsText(r);
+  if (credits) lines.push(`${pad("Bundled")}${credits}`);
   return lines.join("\n");
 }
 
@@ -618,6 +632,16 @@ function renderProvenance(planEntries, models) {
     g.rank = Math.min(g.rank, order.get(baseName) ?? Infinity);
   }
   if (!groups.size) return "";
+  const creditSrc = (c) => {
+    const s = esc(`${c.text} · ${c.checked}`).replace(/\d{4}-\d{2}-\d{2}/g, '<span class="nowrap">$&</span>');
+    return c.url ? `<a class="row-link" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">${s}</a>` : s;
+  };
+  const creditLines = (planEntries[0].includedCredits || [])
+    .map(
+      (c, i) =>
+        `<div class="prov-line prov-credit"><span class="prov-label">${i ? "" : "Bundled (not counted)"}</span><span class="prov-val num">${esc(creditItemText(c))}</span><span class="prov-src">${creditSrc(c)}</span></div>`
+    )
+    .join("");
   const lines = [...groups.values()]
     .sort((a, b) => a.rank - b.rank)
     .flatMap((g) => {
@@ -628,7 +652,7 @@ function renderProvenance(planEntries, models) {
       );
     })
     .join("");
-  return `<div class="prov-list" aria-label="Subsidy sources">${lines}</div>`;
+  return `<div class="prov-list" aria-label="Subsidy sources">${lines}${creditLines}</div>`;
 }
 
 function renderBarChart(allRows, allResolved) {
@@ -682,7 +706,8 @@ function renderBarChart(allRows, allResolved) {
           : r.color || "#3a6ea5";
 
       const planName = cleanPlan(r);
-      const planText = `${planName}${r.isApi ? "" : ` · ${feeText(r)}`} · ${r.harness} · ${r.quotaWindowLabel}`;
+      const credits = creditsText(r);
+      const planText = [planName, r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel, credits].filter(Boolean).join(" · ");
       const planHtml = renderLink(planName, r.planUrl);
       const note = `${benchMeta.label} ${fmtScore(r.score, scoreKey)}`;
       const expKey = `${r.id}`;
@@ -698,7 +723,7 @@ function renderBarChart(allRows, allResolved) {
           <div class="bar-label">
             <div class="bar-model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
-            <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}</div>
+            <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}${credits ? ` · <span class="credits-note">${esc(credits)}</span>` : ""}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; --bar-ratio:${(r.effectiveCost / maxCost).toFixed(4)}; background-color:${barColor}"></span>
@@ -858,7 +883,7 @@ function renderTable(rows) {
 
     const nameCell = grouped
       ? `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>`
-      : `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
+      : `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>${creditsDiv(r)}`;
 
     const accessCell = grouped
       ? `<td class="meta-cell col-hide-sm col-hide-md card-empty"${dl("access")}></td>`
@@ -923,7 +948,7 @@ function renderTable(rows) {
 
       html.push(`
         <tr class="group-row" data-group="${esc(pName)}">
-          <td class="name-cell"${dl("model")}><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}</td>
+          <td class="name-cell"${dl("model")}><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}${creditsDiv(g.sample)}</td>
           <td class="num-col score-cell"${dl("score")}>${groupScore}</td>
           ${extraSummary}
           <td class="meta-cell col-hide-sm col-hide-md"${dl("access")}>${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>

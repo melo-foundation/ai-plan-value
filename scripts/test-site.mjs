@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 import { BILLING_PERIODS, isAnnualVariant } from "./billing-periods.mjs";
+import { INCLUDED_CREDITS, applyIncludedCredits } from "./included-credits.mjs";
 import * as QW from "./fit-quota-weights.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1051,6 +1052,84 @@ test("Billing: Settings row, URL param and fee text are wired", () => {
   assert.ok(html.includes("<code>Yearly</code>: subsidy × monthly price ÷ yearly price per month"), "Methodology Yearly formula missing");
   // Budget, Tasks/mo and sort read the resolved fee
   assert.ok(appJs.includes("priceUsd: isApi ? e.priceUsd : bill.fee") && appJs.includes("(bill.fee / effectiveCost) * capShare"), "Fee / Tasks/mo must follow the billing setting");
+});
+
+// Bundled credits (scripts/included-credits.mjs): recorded and shown, never counted in the subsidy.
+const CREDIT_STATUSES = ["listed", "none", "unknown"];
+const creditsSrc = [
+  extractFn(/function fmtFee\(n\) \{[\s\S]*?\n\}\n/, "fmtFee"),
+  extractFn(/const creditItemText = [^\n]+\n/, "creditItemText"),
+  extractFn(/function creditsText\(r\) \{[\s\S]*?\n\}\n/, "creditsText"),
+].join("\n");
+const { creditsText } = new Function(`${creditsSrc}; return { creditsText };`)();
+
+test("Included credits: every subscription row has a status; listed records cite a URL and a check date", () => {
+  for (const e of subsEntries) {
+    assert.ok(CREDIT_STATUSES.includes(e.includedCreditsStatus), `${e.id} includedCreditsStatus ${e.includedCreditsStatus}`);
+    assert.ok(Array.isArray(e.includedCredits), `${e.id} lacks includedCredits`);
+    assert.equal(e.includedCredits.length > 0, e.includedCreditsStatus === "listed", `${e.id} credits vs status`);
+    for (const c of e.includedCredits) {
+      assert.ok(/^https:\/\//.test(c.url) && /^\d{4}-\d{2}-\d{2}$/.test(c.checked), `${e.id} credit needs url + checked`);
+      assert.ok(c.kind && c.text && (c.usdPerMonth === null || c.usdPerMonth > 0), `${e.id} credit record incomplete`);
+    }
+  }
+  for (const e of entries.filter((x) => x.billing !== "subscription")) assert.ok(!("includedCredits" in e), `${e.id} metered row has includedCredits`);
+  for (const r of INCLUDED_CREDITS) {
+    assert.ok(CREDIT_STATUSES.includes(r.status), `${r.plan} status ${r.status}`);
+    assert.equal(r.credits.length > 0, r.status === "listed", `${r.plan} credits vs status`);
+    assert.ok(/^https:\/\//.test(r.url || r.credits[0]?.url || "") && /^\d{4}-\d{2}-\d{2}$/.test(r.checked), `${r.plan} needs a source URL and a checked date`);
+  }
+  const unmatched = dataset.stats?.includedCredits?.unmatched || [];
+  assert.deepEqual(unmatched, [], `Plans without an included-credits record: ${unmatched.join("; ")}`);
+});
+
+test("Included credits: Claude Max $100 and Claude Ultra $200 API credits per month", () => {
+  for (const [plan, usd] of [["Claude Max", 100], ["Claude Ultra", 200]]) {
+    const rows = subsEntries.filter((e) => e.plan === plan);
+    assert.ok(rows.length > 0, `No ${plan} rows`);
+    for (const e of rows) {
+      assert.equal(e.includedCreditsStatus, "listed", `${e.id} status`);
+      const api = e.includedCredits.find((c) => c.kind === "API credits");
+      assert.ok(api && api.usdPerMonth === usd && api.url === "https://claude.com/pricing", `${e.id} API credits ${JSON.stringify(api)}`);
+    }
+    assert.equal(creditsText(rows[0]), `+$${usd}/mo API credits (not counted)`);
+  }
+});
+
+test("Included credits: subsidyMultiple is independent of includedCredits", () => {
+  // 1. Applying the table changes only the two credit fields.
+  const sample = subsEntries.filter((e, i) => i % 7 === 0 || e.includedCreditsStatus === "listed").map((e) => structuredClone(e));
+  const before = sample.map((e) => JSON.stringify({ ...e, includedCredits: undefined, includedCreditsStatus: undefined }));
+  for (const e of sample) e.includedCredits = [{ kind: "API credits", usdPerMonth: 1e6, text: "x", url: "https://x", checked: "2026-01-01" }];
+  applyIncludedCredits(sample);
+  sample.forEach((e, i) => assert.equal(JSON.stringify({ ...e, includedCredits: undefined, includedCreditsStatus: undefined }), before[i], `${e.id} fields changed`));
+  // 2. Recompute: Fei rows' subsidy = list ÷ real $/Mtok, with no credit term.
+  const fei = subsEntries.filter((e) => /^Claude (Max|Ultra)$/.test(e.plan) && e.origin === "fei2411" && !e.subsidyReadings && !e.pooled && e.realUsdPerMtok > 0);
+  assert.ok(fei.length > 0, "No Fei Claude Max/Ultra rows to recompute");
+  for (const e of fei) {
+    const s = e.listBlendedUsdPerMtok / e.realUsdPerMtok;
+    // Credits would add usdPerMonth ÷ fee (1× on Max and Ultra, about 2% of the subsidy); later steps move Fei rows < 0.5%.
+    const withCredits = s + e.includedCredits.reduce((a, c) => a + (c.usdPerMonth || 0), 0) / e.priceUsd;
+    assert.ok(Math.abs(s - e.subsidyMultiple) < 0.005 * s, `${e.id} subsidy ${e.subsidyMultiple} ≠ list/real ${s}`);
+    assert.ok(Math.abs(withCredits - e.subsidyMultiple) > 0.01 * s, `${e.id} subsidy includes credits`);
+  }
+  // 3. The page's subsidy and cost path never reads the credits.
+  const resolve = fnBody("getAllEntriesResolved");
+  assert.ok(!/includedCredits|creditsText/.test(resolve), "getAllEntriesResolved must not read includedCredits");
+  assert.ok(dataset.stats?.includedCredits?.subsidyUnchanged === true, "Build invariant subsidyUnchanged missing");
+});
+
+test("Included credits: meta line, tooltips, drawer, table row and Methodology show the note", () => {
+  assert.ok(/credits-note">\$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits");
+  assert.ok(/credits\]\.filter\(Boolean\)/.test(fnBody("renderBarChart")), "Bar plan tooltip must include credits");
+  assert.ok(/creditsText\(r\)/.test(fnBody("relTooltip")), "Reliability tooltip must include credits");
+  assert.ok(/includedCredits/.test(fnBody("renderProvenance")) && /Bundled \(not counted\)/.test(fnBody("renderProvenance")), "Drawer provenance must list credits");
+  assert.ok((fnBody("renderTable").match(/creditsDiv\(/g) || []).length >= 2, "Table row and group row must show credits");
+  assert.ok(html.includes("Bundled credits (API, cloud) are listed per plan and not counted in the subsidy."), "Methodology credits line missing");
+  assert.equal(creditsText({ includedCredits: [] }), "");
+  assert.equal(creditsText({ isApi: true, includedCredits: [{ kind: "API credits", usdPerMonth: 5 }] }), "");
+  assert.equal(creditsText({ includedCredits: [{ kind: "API credits", usdPerMonth: 10 }, { kind: "2 TB storage", usdPerMonth: null }] }), "+$10/mo API credits, +1 more (not counted)");
+  assert.equal(creditsText({ includedCredits: [{ kind: "web search", usdPerMonth: null }] }), "+web search (not counted)");
 });
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);

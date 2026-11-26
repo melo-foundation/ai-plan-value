@@ -19,6 +19,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 import { applyBillingPeriods } from "./billing-periods.mjs";
+import { applyIncludedCredits } from "./included-credits.mjs";
 
 // Claude quota token weighting (docs/QUOTA-WEIGHTS.md): a Claude first-party subsidy is rescaled from
 // the sample's token mix to each cost metric's mix only when every quota-weight cell the row uses
@@ -4765,6 +4766,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   // Monthly / yearly billing prices (scripts/billing-periods.mjs); the page picks one per the Billing setting.
   const billingStats = applyBillingPeriods(expandedEntries, { yearlySigma: REL.BILLING_STEP_SIGMA, log });
   log(`Billing: ${billingStats.official} rows with an official annual price, ${billingStats.none} monthly-only, ${billingStats.unknown} unknown, ${billingStats.variant} annual-variant rows (${billingStats.linkedTwins} linked to a monthly twin)`);
+  // Bundled credits outside the quota (scripts/included-credits.mjs): recorded per plan, never counted in the subsidy.
+  const creditStats = applyIncludedCredits(expandedEntries, { log });
+  log(`Included credits: ${creditStats.listed} rows listed, ${creditStats.none} none, ${creditStats.unknown} unknown`);
   for (const e of expandedEntries) for (const k of Object.keys(e)) if (k.startsWith("_")) delete e[k];
 
   expandedEntries.sort((a, b) => {
@@ -4803,6 +4807,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       cursorBench: { variants: priorsParsed.cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
       billing: billingStats,
+      includedCredits: creditStats,
       reliability: reliabilityStats,
       chains,
     },
