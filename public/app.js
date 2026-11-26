@@ -1736,11 +1736,14 @@ initTheme();
 loadData();
 loadStarCount();
 
-// Easter egg: Shift pressed 5 times in a row loads Slopstrap (public/vendor/slopstrap) and slopifies the page.
+// Easter egg: Shift pressed 5 times in a row shows a fake "Modernizing your UI with AI…" progress card, then
+// slopifies the page with Slopstrap (public/vendor/slopstrap), plays a party blower, fires canvas-confetti and
+// shows a congratulations toast.
 // Pressing it again reloads, since unslopify restores innerHTML and would drop app.js's event listeners.
 (() => {
   let run = 0;
   let last = 0;
+  let active = false;
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Shift") {
       run = 0;
@@ -1752,9 +1755,31 @@ loadStarCount();
     last = now;
     if (run < 5) return;
     run = 0;
-    if (document.documentElement.dataset.slop) location.reload();
-    else slopMode();
+    if (active) undoSlop();
+    else {
+      active = true;
+      slopMode();
+    }
   });
+
+  // Undo: fade a cover in the normal page's background colour over the slop page, reload, then fade it back out.
+  async function undoSlop() {
+    const color = document.documentElement.getAttribute("data-theme") === "dark" ? "#161b22" : "#dce3ec";
+    const cover = document.createElement("div");
+    cover.style.cssText = `position:fixed;inset:0;z-index:10000;background:${color};opacity:0;transition:opacity 0.6s ease`;
+    document.body.appendChild(cover);
+    requestAnimationFrame(() => requestAnimationFrame(() => (cover.style.opacity = "1")));
+    await sleep(650);
+    try {
+      sessionStorage.setItem("egg-undo", color);
+    } catch {}
+    location.reload();
+  }
+
+  if (document.documentElement.classList.contains("egg-undo")) {
+    requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.add("egg-reveal")));
+    setTimeout(() => document.documentElement.classList.remove("egg-undo", "egg-reveal"), 900);
+  }
 
   const load = (tag, attrs) =>
     new Promise((resolve, reject) => {
@@ -1762,22 +1787,126 @@ loadStarCount();
       document.head.appendChild(el);
     });
 
+  // Party blower recording (public/vendor/sfx). Safari only plays audio started inside a user gesture, so the
+  // keydown handler primes it muted and it is replayed later, after the fake progress bar.
+  function primeBlower() {
+    const audio = new Audio("./vendor/sfx/party-blower.mp3");
+    audio.volume = 0.8;
+    audio.muted = true;
+    audio
+      .play()
+      .then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      })
+      .catch(() => {});
+    return audio;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function fakeModernize() {
+    // [status line, bar %, ms to hold]: fast start, a stall near the end, then done.
+    const steps = [
+      ["Analyzing design debt…", 18, 700],
+      ["Adding gradients…", 41, 750],
+      ["Removing human taste…", 63, 800],
+      ["Hallucinating testimonials…", 87, 1100],
+      ["Almost there…", 94, 650],
+      ["Done ✨", 100, 700],
+    ];
+    const overlay = document.createElement("div");
+    overlay.className = "egg-overlay";
+    overlay.innerHTML =
+      '<div class="egg-card"><div class="egg-title slop-text-gradient">✨ Modernizing your UI with AI…</div>' +
+      '<div class="slop-progress"><div class="slop-progress-bar"></div></div><div class="egg-step"></div></div>';
+    document.body.appendChild(overlay);
+    const bar = overlay.querySelector(".slop-progress-bar");
+    const step = overlay.querySelector(".egg-step");
+    await sleep(250);
+    for (const [text, pct, hold] of steps) {
+      step.textContent = text;
+      bar.style.width = `${pct}%`;
+      await sleep(hold);
+    }
+    return overlay;
+  }
+
+  // Cross-fades the old page (with the progress card) into the slopified one. View Transitions where supported,
+  // otherwise a plain fade out and in.
+  async function crossfade(change) {
+    if (document.startViewTransition) {
+      let applied = false;
+      const once = () => {
+        if (!applied) {
+          applied = true;
+          change();
+        }
+      };
+      // A transition can stall (e.g. a backgrounded tab never paints), so cap the wait and apply directly.
+      await Promise.race([document.startViewTransition(once).finished.catch(() => {}), sleep(2000)]);
+      once();
+      return;
+    }
+    const body = document.body.style;
+    body.transition = "opacity 0.5s ease";
+    body.opacity = "0";
+    await sleep(500);
+    change();
+    body.opacity = "1";
+    await sleep(500);
+    body.transition = "";
+  }
+
+  function congratsToast() {
+    const toast = document.createElement("div");
+    toast.className = "egg-toast";
+    toast.setAttribute("role", "status");
+    toast.innerHTML =
+      '<div class="egg-toast-emoji">🎉</div><div class="egg-toast-body">' +
+      '<div class="egg-toast-title slop-text-gradient">Congratulations!</div>' +
+      '<div class="egg-toast-text">Your UI has been modernized ✨</div>' +
+      '<div class="egg-toast-hint"><kbd>Shift</kbd> ×5 to undo</div></div>' +
+      '<button class="egg-toast-close" type="button" aria-label="Close">✕</button>';
+    toast.querySelector("button").addEventListener("click", () => toast.remove());
+    document.body.appendChild(toast);
+  }
+
+  function confettiParty() {
+    const fire = window.confetti;
+    if (!fire) return;
+    const colors = ["#a855f7", "#6366f1", "#06b6d4", "#ec4899", "#facc15"];
+    fire({ particleCount: 160, spread: 100, startVelocity: 48, origin: { y: 0.6 }, colors });
+    fire({ particleCount: 80, angle: 60, spread: 60, origin: { x: 0, y: 0.75 }, colors });
+    fire({ particleCount: 80, angle: 120, spread: 60, origin: { x: 1, y: 0.75 }, colors });
+  }
+
   async function slopMode() {
-    document.documentElement.dataset.slop = "1";
+    const blower = primeBlower();
     await Promise.all([
       load("link", { rel: "stylesheet", href: "./vendor/slopstrap/slopstrap.css" }),
       load("link", { rel: "stylesheet", href: "./vendor/slopstrap/site-slop.css" }),
       load("script", { src: "./vendor/slopstrap/slopstrap.js" }),
+      load("script", { src: "./vendor/canvas-confetti/confetti.browser.js" }),
     ]);
+    const overlay = await fakeModernize();
     const S = window.Slopstrap;
-    document.documentElement.setAttribute("data-slop-level", "3");
-    document.body.classList.add("slop-body", "slop-grid-bg");
-    document.body.insertAdjacentHTML(
-      "afterbegin",
-      '<div class="slop-orb-layer" aria-hidden="true"><div class="slop-orb slop-orb-purple"></div><div class="slop-orb slop-orb-cyan"></div></div>'
-    );
-    S.slopify(document.querySelector(".workspace"));
-    S.setLevel(3);
+    await crossfade(() => {
+      overlay.remove();
+      document.documentElement.dataset.slop = "1";
+      document.documentElement.setAttribute("data-slop-level", "3");
+      document.body.classList.add("slop-body", "slop-grid-bg");
+      document.body.insertAdjacentHTML(
+        "afterbegin",
+        '<div class="slop-orb-layer" aria-hidden="true"><div class="slop-orb slop-orb-purple"></div><div class="slop-orb slop-orb-cyan"></div></div>'
+      );
+      S.slopify(document.querySelector(".workspace"));
+      S.setLevel(3);
+    });
+    blower.play().catch(() => {});
     S.sparkleBurst(window.innerWidth / 2, window.innerHeight / 3, 24);
+    confettiParty();
+    congratsToast();
   }
 })();
