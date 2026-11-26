@@ -177,6 +177,27 @@ test("Intelligence Index uses the newest AA observation per model+effort", () =>
   }
 });
 
+// 1f. Cost metric menu matches the app's cost modes, each mode has data
+test("Cost metric options match COST_MODES and every mode has priced entries", () => {
+  const sel = html.match(/<select id="costMode"[\s\S]*?<\/select>/)?.[0] || "";
+  const opts = [...sel.matchAll(/<option value="(\w+)"/g)].map((m) => m[1]).sort();
+  const block = appJs.match(/const COST_MODES = \{([\s\S]*?)\n\};/)?.[1] || "";
+  const modes = [...block.matchAll(/^\s+(\w+): \{/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(opts, modes, `costMode options ${opts} != COST_MODES ${modes}`);
+  const has = {
+    task: (e) => e.aaCostPerTaskUsd > 0,
+    agent: (e) => e.codingAgent?.costPerTaskUsd > 0,
+    cursor: (e) => e.cursorBench?.costPerTaskUsd > 0,
+    turn: (e) => e.t3Turn?.costPerTurnUsd > 0,
+    tokens: (e) => (e.aaPricing?.blended3to1Per1M ?? e.listBlendedUsdPerMtok) > 0,
+  };
+  for (const m of modes) {
+    assert.ok(has[m], `No data check for cost mode ${m}`);
+    const n = entries.filter(has[m]).length;
+    assert.ok(n >= 100, `Cost mode ${m} has only ${n} priced entries`);
+  }
+});
+
 // 2. Dataset size & uniqueness
 test("Dataset has expected scale and zero duplicate entry IDs", () => {
   assert.ok(entries.length >= 500, `Expected >= 500 entries, got ${entries.length}`);

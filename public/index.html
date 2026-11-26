@@ -199,9 +199,11 @@
           <div class="settings-head-row">
             <label class="settings-heading" for="costMode">Cost metric</label>
             <select id="costMode" class="select" aria-label="Cost metric">
-              <option value="task" selected>Per task</option>
-              <option value="tokens">Per 1M tokens</option>
+              <option value="task" selected>Per AA Intelligence task</option>
+              <option value="agent">Per AA Coding Agent task</option>
+              <option value="cursor">Per CursorBench task</option>
               <option value="turn">Per T3 Code turn</option>
+              <option value="tokens">Per 1M tokens</option>
             </select>
           </div>
           <div class="settings-head-row">
@@ -343,11 +345,12 @@
         <div class="settings-section">
           <div class="settings-heading">Calculations</div>
           <div class="method-formulas">
-            <div><code>Real $/task</code> = API $/task ÷ plan subsidy</div>
+            <div><code>Real $/task</code> = API $/task of the selected cost metric ÷ plan subsidy</div>
             <div><code>Coding Agent</code> = AA agent run for the plan's agent; open endpoints and APIs use the model's default agent</div>
             <div><code>Real $/1M tokens</code> = API 3:1 blended $/1M ÷ plan subsidy</div>
             <div><code>Real $/turn</code> = mean API-list cost of a real T3 Code turn (30 days of user telemetry) ÷ plan subsidy</div>
             <div><code>CursorBench</code> = CursorBench score and $/task for the model and reasoning level</div>
+            <div><code>Min</code> benchmark and <code>Cost metric</code> are independent: any score filter pairs with any cost</div>
             <div><code>Tasks/mo (or Mtok/mo)</code> = monthly fee ÷ real cost</div>
           </div>
           <p class="dialog-note">
