@@ -1249,7 +1249,7 @@ test("Included credits: subsidyMultiple is independent of includedCredits", () =
 });
 
 test("Included credits: meta line, tooltips, drawer, table row and Methodology show the note", () => {
-  assert.ok(/credits-note" title="\$\{esc\(creditsFullText\(r\)\)\}">\$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits with the full list on hover");
+  assert.ok(/credits-note" title="\$\{esc\(creditsFullText\(r\)\)\}"> · \$\{esc\(credits\)\}/.test(fnBody("renderBarChart")), "Bar meta line must show credits with the full list on hover");
   // Popups can't be hovered further: the plan popup must list every bundled item, not a summary
   assert.ok(/planText = [^;]*creditsFullText|creditItems = creditsFullText\(r\)[\s\S]{0,300}Bundled \(not counted in the subsidy\)/.test(fnBody("renderBarChart")), "Bar plan popup must list every bundled item");
   assert.ok(/includedCredits/.test(fnBody("relTooltip")) && /not counted in the subsidy/.test(fnBody("relTooltip")), "Reliability tooltip must list every bundled item");
@@ -1969,6 +1969,9 @@ test("Plan drawer sources: a table with plain-language sources and a date column
   const visible = html.replace(/ title="[^"]*"/g, ""); // the page's own wording stays on hover only
   assert.ok(!/Priors medium|\bpp\b|\| \$/.test(visible), "shorthand or raw source cells leaked into the drawer");
   assert.ok(/Bundled extras, not counted in the subsidy/.test(html) && /developers\.openai\.com/.test(html), "bundled credits row with its source host");
+  // Phone: the Checked column hides, but the bundled-extras sub-header (a <th colspan> in tbody) must not
+  assert.equal(cssDecl("(max-width: 600px)", ".prov-table thead th:last-child", "display"), "none");
+  assert.ok(!cssRules.some((r) => r.media === "(max-width: 600px)" && r.selectors.includes(".prov-table th:last-child")), "phone rule must not hide every last <th> (it hid the bundled sub-header)");
 });
 
 test("Phone table: every cell carries its column's data-label; Sort select and Show 50 more page the rows", () => {

@@ -781,7 +781,7 @@ function renderBarChart(allRows, allResolved) {
           <div class="bar-label">
             <div class="bar-model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
-            <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}${credits ? ` · <span class="credits-note" title="${esc(creditsFullText(r))}">${esc(credits)}</span>` : ""}</div>
+            <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}${credits ? `<span class="credits-note" title="${esc(creditsFullText(r))}"> · ${esc(credits)}</span>` : ""}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; --bar-ratio:${(r.effectiveCost / maxCost).toFixed(4)}; background-color:${barColor}"></span>

@@ -971,8 +971,7 @@ details[open] > summary.panel-toggle h2::before {
 }
 
 .prov-table .prov-model {
-  font-weight: bold;
-  color: var(--fg);
+  color: var(--panel-head-fg);
   white-space: nowrap;
 }
 
@@ -1009,8 +1008,12 @@ details[open] > summary.panel-toggle h2::before {
 }
 
 @media (max-width: 600px) {
+  /* Bundled credits stay in the drawer, table and popups; the bar row keeps fee · harness · limits */
+  .bar-meta .credits-note {
+    display: none;
+  }
   .prov-table .prov-date,
-  .prov-table th:last-child {
+  .prov-table thead th:last-child {
     display: none;
   }
   .prov-table .prov-date-inline {
