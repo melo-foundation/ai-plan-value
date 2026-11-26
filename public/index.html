@@ -216,8 +216,8 @@
             <label class="settings-heading" for="minConf">Min confidence</label>
             <select id="minConf" class="select" aria-label="Min confidence">
               <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low" selected>Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="low">Low</option>
               <option value="speculative">Speculative</option>
             </select>
           </div>
@@ -327,48 +327,27 @@
       </div>
       <div class="dialog-body method-body">
         <div class="settings-section">
-          <div class="settings-heading">Data sources</div>
-          <ul class="method-list">
-            <li>
-              <strong>Benchmarks &amp; specs:</strong>
-              <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>
-              (Intelligence Index, domains, tests, API $/task),
-              <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>
-              (context windows, open weights, supported efforts, domain backfill),
-              <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a>
-              (ARC-AGI-2 fallback for unmeasured effort ratios),
-              <a href="https://artificialanalysis.ai/agents/coding-agents" target="_blank" rel="noopener noreferrer">Artificial Analysis Coding Agents</a>
-              (Coding Agent Index, agent $/task),
-              <a href="https://cursor.com/cursorbench" target="_blank" rel="noopener noreferrer">CursorBench</a>
-              ($/task), and
-              <a href="https://t3.codes" target="_blank" rel="noopener noreferrer">T3 Code</a>
-              ($/turn from user telemetry), both via Priors.
-            </li>
-            <li>
-              <strong>Plan subsidies:</strong>
-              <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a>,
-              published credit pools (<a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a>,
-              <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a>,
-              <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a>),
-              and <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a> backfill.
-            </li>
-          </ul>
+          <div class="settings-heading">Real cost</div>
+          <p>What a piece of work actually costs you on a plan, if you use the plan's whole quota.</p>
+          <div class="method-formulas">
+            <div><code>Real cost</code> = API price of the work ÷ plan subsidy</div>
+            <div><code>Subsidy</code> = dollars of API usage the plan's quota covers per $1 you pay. 50× means a $20 plan covers $1,000 of API usage.</div>
+            <div><code>Tasks/mo</code> = monthly fee ÷ real cost</div>
+          </div>
         </div>
 
         <div class="settings-section">
-          <div class="settings-heading">Calculations</div>
-          <div class="method-formulas">
-            <div><code>Real $/task</code> = API $/task of the selected cost metric ÷ plan subsidy</div>
-            <div><code>Coding Agent</code> = AA agent run for the plan's agent; open endpoints and APIs use the model's default agent</div>
-            <div><code>Real $/1M tokens</code> = API 3:1 blended $/1M ÷ plan subsidy</div>
-            <div><code>Real $/turn</code> = mean API-list cost of a real T3 Code turn (30 days of user telemetry) ÷ plan subsidy</div>
-            <div><code>CursorBench</code> = CursorBench score and $/task for the model and reasoning level</div>
-            <div><code>Min</code> benchmark and <code>Cost metric</code> are independent: any score filter pairs with any cost</div>
-            <div><code>Tasks/mo (or Mtok/mo)</code> = monthly fee ÷ real cost</div>
-          </div>
-          <p class="dialog-note">
-            Subsidy = API dollars included per $1 of monthly fee at full usage.
-          </p>
+          <div class="settings-heading">Cost metrics</div>
+          <table class="method-table method-metrics">
+            <thead><tr><th>Metric</th><th>The unit of work being priced</th></tr></thead>
+            <tbody>
+              <tr><td>AA Intelligence task</td><td>One task from <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>'s general benchmark (reasoning, knowledge, coding), run on the bare model</td></tr>
+              <tr><td>AA Coding Agent task</td><td>One coding task run inside the plan's own agent, such as Claude Code or Codex (<a href="https://artificialanalysis.ai/agents/coding-agents" target="_blank" rel="noopener noreferrer">AA Coding Agents</a>)</td></tr>
+              <tr><td>CursorBench task</td><td>One task from <a href="https://cursor.com/cursorbench" target="_blank" rel="noopener noreferrer">Cursor's coding benchmark</a></td></tr>
+              <tr><td>T3 Code turn</td><td>One real back-and-forth turn, averaged over 30 days of <a href="https://t3.codes" target="_blank" rel="noopener noreferrer">T3 Code</a> users. Turn length differs between agents, so compare models within one agent.</td></tr>
+              <tr><td>1M tokens</td><td>A million tokens at list price, 3 parts input to 1 part output</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="settings-section">
@@ -376,49 +355,69 @@
             <span class="settings-heading">Reliability</span>
             <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/RELIABILITY.md" target="_blank" rel="noopener noreferrer">RELIABILITY.md</a>
           </div>
-          <table class="method-table">
-            <thead><tr><th>Level</th><th></th><th>σ</th><th>80% within</th><th>Rows</th></tr></thead>
+          <p>Each row's mark shows how much to trust its real cost. Values built from other estimates lose trust at every step.</p>
+          <table class="method-table method-levels">
+            <thead><tr><th></th><th>Level</th><th>What it means</th><th>Rows</th></tr></thead>
             <tbody>
-              <tr><td>High</td><td class="tier-glyph">●</td><td>≤ 0.18</td><td>×1.25</td><td id="relCount-high">—</td></tr>
-              <tr><td>Medium</td><td class="tier-glyph">◐</td><td>≤ 0.40</td><td>×1.7</td><td id="relCount-medium">—</td></tr>
-              <tr><td>Low</td><td class="tier-glyph">○</td><td>≤ 0.70</td><td>×2.5</td><td id="relCount-low">—</td></tr>
-              <tr><td>Speculative</td><td class="tier-glyph">◌</td><td>&gt; 0.70</td><td>&gt; ×2.5</td><td id="relCount-speculative">—</td></tr>
+              <tr><td class="tier-glyph">●</td><td>High</td><td>Published by the vendor or measured on several accounts. The true cost is usually within 25% of the number shown.</td><td id="relCount-high">—</td></tr>
+              <tr><td class="tier-glyph">◐</td><td>Medium</td><td>One good measurement, or a close estimate. Usually within −40% to +70%.</td><td id="relCount-medium">—</td></tr>
+              <tr><td class="tier-glyph">○</td><td>Low</td><td>Estimated from other plans or models, or from a tweet or screenshot. Could be up to 2.5× higher or lower. Hidden by default.</td><td id="relCount-low">—</td></tr>
+              <tr><td class="tier-glyph">◌</td><td>Speculative</td><td>A rough guess, such as assuming a new model behaves like the old one. Hidden by default.</td><td id="relCount-speculative">—</td></tr>
             </tbody>
           </table>
-          <div class="method-formulas">
-            <div><code>σ</code> = sd of ln(real cost); <code>σ² = Σ step σ²</code> over subsidy chain, token mix and cost metric</div>
-            <div><code>Range</code> = real cost × e<sup>±1.28σ</sup></div>
-            <div><code>Level</code> = worst of cost σ, score error (±1.5 / 3 / 5 pts) and the upstream grade</div>
-            <div><code>~</code> = derived cell (transfer step or estimate)</div>
+          <p><code>~</code> before a number means it was estimated from other data rather than measured. Hover a mark to see where its numbers come from.</p>
+          <details class="method-details">
+            <summary>How the trust levels are calculated</summary>
+            <div class="method-formulas">
+              <div><code>σ</code> = sd of ln(real cost); <code>σ² = Σ step σ²</code> over subsidy chain, token mix and cost metric</div>
+              <div><code>Range</code> = real cost × e<sup>±1.28σ</sup></div>
+              <div><code>Level</code> = worst of cost σ, score error (±1.5 / 3 / 5 pts) and the upstream grade</div>
+            </div>
+            <table class="method-table">
+              <thead><tr><th>Step</th><th>σ</th></tr></thead>
+              <tbody>
+                <tr><td>Official credits, rate table, list price</td><td>0.03</td></tr>
+                <tr><td>Official quota table via workload mix</td><td>0.12</td></tr>
+                <tr><td>Several accounts, ≥100 pp</td><td>0.10</td></tr>
+                <tr><td>One account, own logs + meter</td><td>0.20</td></tr>
+                <tr><td>Screenshot: first-party panel, token breakdown, ≥15 pp</td><td>0.35</td></tr>
+                <tr><td>Tweet, gateway panel, other screenshot</td><td>0.45</td></tr>
+                <tr><td>Promo period / attribution inferred / raw tokens</td><td>+0.20 / 0.15 / 0.10</td></tr>
+                <tr><td>Data older than 45 / 90 days</td><td>+0.15 / 0.30</td></tr>
+                <tr><td>Sibling plan, official / ruled ratio</td><td>0.25 / 0.35</td></tr>
+                <tr><td>Sibling plan via measured model ratio</td><td>0.15 + cells</td></tr>
+                <tr><td>Other model, same pool, price-proportional</td><td>0.15</td></tr>
+                <tr><td>Other model, rate card / price ratio</td><td>0.30 / 0.25–0.45</td></tr>
+                <tr><td>Successor assumed equal (Speculative)</td><td>0.70</td></tr>
+                <tr><td>Token mix: Claude / Google, xAI, Kimi, MiniMax / OpenAI, Cursor, Copilot, GLM</td><td>0.05–0.27 / 0.15 / 0.05</td></tr>
+                <tr><td>AA measured / interpolated / 1–4+ effort steps</td><td>0.05 / 0.17 / 0.21–0.70</td></tr>
+                <tr><td>Agent: same agent / other agent / Terminal-Bench fit</td><td>0.16 / 0.40 / 0.25–0.60</td></tr>
+                <tr><td>T3 turn (+ cross-harness 0.35) / CursorBench</td><td>0.10–0.40 / 0.10</td></tr>
+                <tr><td>Cross-plan inconsistency &gt; ×1.6</td><td>+ |ln D| / 2</td></tr>
+              </tbody>
+            </table>
+            <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/EFFORT-ESTIMATES.md" target="_blank" rel="noopener noreferrer">Effort estimate accuracy</a>
+          </details>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-heading">Subsidy sources</div>
+          <div class="method-sources">
+            <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a> ·
+            <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a> ·
+            <a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a> ·
+            <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a> ·
+            <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a>
           </div>
-          <table class="method-table">
-            <thead><tr><th>Step</th><th>σ</th></tr></thead>
-            <tbody>
-              <tr><td>Official credits, rate table, list price</td><td>0.03</td></tr>
-              <tr><td>Official quota table via workload mix</td><td>0.12</td></tr>
-              <tr><td>Several accounts, ≥100 pp</td><td>0.10</td></tr>
-              <tr><td>One account, own logs + meter</td><td>0.20</td></tr>
-              <tr><td>Screenshot: first-party panel, token breakdown, ≥15 pp</td><td>0.35</td></tr>
-              <tr><td>Tweet, gateway panel, other screenshot</td><td>0.45</td></tr>
-              <tr><td>Promo period / attribution inferred / raw tokens</td><td>+0.20 / 0.15 / 0.10</td></tr>
-              <tr><td>Data older than 45 / 90 days</td><td>+0.15 / 0.30</td></tr>
-              <tr><td>Sibling plan, official / ruled ratio</td><td>0.25 / 0.35</td></tr>
-              <tr><td>Sibling plan via measured model ratio</td><td>0.15 + cells</td></tr>
-              <tr><td>Other model, same pool, price-proportional</td><td>0.15</td></tr>
-              <tr><td>Other model, rate card / price ratio</td><td>0.30 / 0.25–0.45</td></tr>
-              <tr><td>Successor assumed equal (Speculative)</td><td>0.70</td></tr>
-              <tr><td>Token mix: Claude / Google, xAI, Kimi, MiniMax / OpenAI, Cursor, Copilot, GLM</td><td>0.05–0.27 / 0.15 / 0.05</td></tr>
-              <tr><td>AA measured / interpolated / 1–4+ effort steps</td><td>0.05 / 0.17 / 0.21–0.70</td></tr>
-              <tr><td>Agent: same agent / other agent / Terminal-Bench fit</td><td>0.16 / 0.40 / 0.25–0.60</td></tr>
-              <tr><td>T3 turn (+ cross-harness 0.35) / CursorBench</td><td>0.10–0.40 / 0.10</td></tr>
-              <tr><td>Cross-plan inconsistency &gt; ×1.6</td><td>+ |ln D| / 2</td></tr>
-            </tbody>
-          </table>
-          <a class="row-link dialog-note" href="https://github.com/melo-foundation/ai-plan-value/blob/main/docs/EFFORT-ESTIMATES.md" target="_blank" rel="noopener noreferrer">Effort estimate accuracy</a>
+          <div class="settings-heading">Model data</div>
+          <div class="method-sources">
+            <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a> ·
+            <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a>
+          </div>
         </div>
 
         <p class="dialog-note method-foot">
-          Per-task cost reflects actual reasoning, output length, and caching; Per 1M tokens uses Artificial Analysis's 3:1 input:output blended rate. Legacy and off-peak plans are hidden by default. Refreshes automatically every 6 hours.
+          Hidden by default: legacy and off-peak plans, Low and Speculative rows. Refreshed every 6 hours.
         </p>
       </div>
     </dialog>

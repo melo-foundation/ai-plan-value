@@ -1449,3 +1449,52 @@ tbody tr:hover {
     flex: 1;
   }
 }
+
+.method-details {
+  margin-top: 8px;
+}
+.method-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--panel-head-fg);
+  padding: 4px 0;
+}
+.method-details[open] > summary {
+  margin-bottom: 6px;
+}
+.method-sources {
+  font-size: 13px;
+  margin: 2px 0 8px;
+}
+
+#methodDialog .method-body > * {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  #methodDialog .method-table td,
+  #methodDialog .method-table th {
+    white-space: normal;
+  }
+}
+
+#methodDialog .method-levels td:nth-child(3) {
+  white-space: normal;
+}
+#methodDialog .settings-section > p {
+  margin: 4px 0 6px;
+  font-size: 13px;
+}
+
+#methodDialog .method-metrics td:first-child {
+  white-space: nowrap;
+}
+#methodDialog .method-metrics td:nth-child(2) {
+  white-space: normal;
+}
+@media (max-width: 600px) {
+  #methodDialog .method-metrics td:first-child {
+    white-space: normal;
+  }
+}

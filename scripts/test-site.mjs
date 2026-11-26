@@ -718,10 +718,11 @@ test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () 
   assert.deepEqual(opts("minConf"), ["high", "medium", "low", "speculative"]);
   assert.deepEqual(opts("costView"), ["point", "range"]);
   assert.deepEqual(opts("fableCap"), ["shared", "own"]);
-  assert.ok(/<option value="low" selected>/.test(html.match(/<select id="minConf"[\s\S]*?<\/select>/)[0]), "Min confidence default must be Low");
+  assert.ok(/<option value="medium" selected>/.test(html.match(/<select id="minConf"[\s\S]*?<\/select>/)[0]), "Min confidence default must be Medium");
   assert.ok(appJs.includes('speculative: "◌"') && appJs.includes('high: "●"'), "Level glyphs missing");
   assert.ok(!/est-star|estMark|interpMark/.test(appJs), "Old * / tier markers still rendered");
-  assert.ok(appJs.includes("CHART_MIN_CONF") && appJs.includes('"medium"'), "Bar chart must be fixed at Medium or better");
+  // Bar chart follows Min confidence like the table (a fixed Medium floor hid every Claude first-party plan).
+  assert.ok(!appJs.includes("CHART_MIN_CONF") && /renderBarChart[\s\S]{0,200}passesConf\(r, state\.minConf\)/.test(appJs), "Bar chart must follow the Min confidence setting");
   // Legacy est= mapping
   for (const [k, v] of [["0", "high"], ["h", "medium"], ["hm", "low"], ["hml", "speculative"]]) {
     assert.ok(appJs.includes(`${k === "0" ? "0" : k}: "${v}"`), `Legacy est=${k} → ${v} mapping missing`);

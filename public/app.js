@@ -74,7 +74,7 @@ const state = {
   maxCostIdx: 4,
   hideLegacy: true,
   hideOffPeak: true,
-  minConf: "low", // lowest reliability level shown: high | medium | low | speculative
+  minConf: "medium", // lowest reliability level shown: high | medium | low | speculative
   costView: "point", // "point" | "range" (80% band in Real cost cells)
   fableCap: "shared", // "shared" | "own" (Fable only) reading for Fable on Claude plans
   hideCnPortal: false,
@@ -116,7 +116,6 @@ const levelFromScore = (p) =>
   !(p > 0) || p <= LEVEL_SCORE_PTS.high ? "high" : p <= LEVEL_SCORE_PTS.medium ? "medium" : p <= LEVEL_SCORE_PTS.low ? "low" : "speculative";
 const worseLevel = (...ls) => ls.filter(Boolean).reduce((a, b) => (LEVEL_RANK[b] > LEVEL_RANK[a] ? b : a), "high");
 // "Best" picks in the bar chart never rest on a Low or Speculative row.
-const CHART_MIN_CONF = "medium";
 
 function currentCostStops() {
   return state.costMode === "tokens" ? COST_STOPS_TOKENS : COST_STOPS_TASK;
@@ -553,8 +552,7 @@ function renderPlanDrawer(planName, allResolved) {
 
 function renderBarChart(allRows, allResolved) {
   const host = $("barChart");
-  const chartMin = stricterLevel(state.minConf, CHART_MIN_CONF);
-  const rows = allRows.filter((r) => passesConf(r, chartMin));
+  const rows = allRows.filter((r) => passesConf(r, state.minConf));
 
   // Deduplicate bar chart according to cheapestPlanOnly & cheapestEffortOnly toggles:
   // - both checked (default): 1 bar per base model (cheapest plan + cheapest qualifying effort)
@@ -1182,7 +1180,7 @@ function syncUrlFromState() {
     if (!state.cheapestEffortOnly) params.set("efforts", "all");
     if (!state.hideLegacy) params.set("legacy", "1");
     if (!state.hideOffPeak) params.set("offpeak", "1");
-    if (state.minConf !== "low") params.set("conf", LEVEL_PARAM[state.minConf]);
+    if (state.minConf !== "medium") params.set("conf", LEVEL_PARAM[state.minConf]);
     if (state.fableCap === "own") params.set("fable", "own");
     if (state.hideCnPortal) params.set("nocn", "1");
     if (state.showApi) params.set("api", "1");
@@ -1388,7 +1386,7 @@ $("hideOffPeak").addEventListener("change", (e) => {
 });
 
 $("minConf").addEventListener("change", (e) => {
-  state.minConf = LEVELS.includes(e.target.value) ? e.target.value : "low";
+  state.minConf = LEVELS.includes(e.target.value) ? e.target.value : "medium";
   render();
 });
 
@@ -1407,7 +1405,7 @@ function setMinConf(level) {
   $("minConf").value = level;
   render();
 }
-$("disableExtrapBtn").addEventListener("click", () => setMinConf("low"));
+$("disableExtrapBtn").addEventListener("click", () => setMinConf("medium"));
 $("enableExtrapBtn").addEventListener("click", () => setMinConf("speculative"));
 
 $("hideCnPortal").addEventListener("change", (e) => {
@@ -1438,7 +1436,7 @@ $("resetSettingsBtn").addEventListener("click", () => {
   state.maxCostIdx = 4;
   state.hideLegacy = true;
   state.hideOffPeak = true;
-  state.minConf = "low";
+  state.minConf = "medium";
   state.costView = "point";
   state.fableCap = "shared";
   state.hideCnPortal = false;
