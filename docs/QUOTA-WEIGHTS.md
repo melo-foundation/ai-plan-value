@@ -15,6 +15,13 @@ Unmeasured, no data: `anthropic/claude-fable-5-2/5h/interactive`, `anthropic/cla
 
 Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 20; tmux (for `--drive tmux`); the account idle on every other device and surface (web, desktop, phone, scheduled and cloud agents).
 
+0. Update Claude Code, then open a new terminal outside Claude Code:
+
+       unset CLAUDE_CODE_ENTRYPOINT
+       export DISABLE_AUTOUPDATER=1
+
+   `DISABLE_AUTOUPDATER=1` applies to this terminal only; it keeps `claude -p` runs on one version. Every file records the client version.
+
 1. Check the setup (`--oauth` also prints both bars from `api.anthropic.com/api/oauth/usage`):
 
        node scripts/quota-probe.mjs probe --oauth
