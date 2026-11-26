@@ -1808,6 +1808,9 @@ loadStarCount();
     setTimeout(() => document.documentElement.classList.remove("egg-undo", "egg-reveal"), 900);
   }
 
+  // Reuse app.js's deploy stamp (?v=<sha>) so the egg's files are refetched after each deploy.
+  const ver = new URL(import.meta.url).search;
+
   const load = (tag, attrs) =>
     new Promise((resolve, reject) => {
       const el = Object.assign(document.createElement(tag), attrs, { onload: resolve, onerror: reject });
@@ -1817,7 +1820,7 @@ loadStarCount();
   // Party blower recording (public/vendor/sfx). Safari only plays audio started inside a user gesture, so the
   // keydown handler primes it muted and it is replayed later, after the fake progress bar.
   function primeBlower() {
-    const audio = new Audio("./vendor/sfx/party-blower.mp3");
+    const audio = new Audio(`./vendor/sfx/party-blower.mp3${ver}`);
     audio.volume = 0.8;
     audio.muted = true;
     audio
@@ -1912,10 +1915,10 @@ loadStarCount();
   async function slopMode() {
     const blower = primeBlower();
     await Promise.all([
-      load("link", { rel: "stylesheet", href: "./vendor/slopstrap/slopstrap.css" }),
-      load("link", { rel: "stylesheet", href: "./vendor/slopstrap/site-slop.css" }),
-      load("script", { src: "./vendor/slopstrap/slopstrap.js" }),
-      load("script", { src: "./vendor/canvas-confetti/confetti.browser.js" }),
+      load("link", { rel: "stylesheet", href: `./vendor/slopstrap/slopstrap.css${ver}` }),
+      load("link", { rel: "stylesheet", href: `./vendor/slopstrap/site-slop.css${ver}` }),
+      load("script", { src: `./vendor/slopstrap/slopstrap.js${ver}` }),
+      load("script", { src: `./vendor/canvas-confetti/confetti.browser.js${ver}` }),
     ]);
     const overlay = await fakeModernize();
     const S = window.Slopstrap;
