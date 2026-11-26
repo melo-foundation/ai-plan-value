@@ -1792,8 +1792,8 @@ html.egg-undo.egg-reveal::after {
   opacity: 0;
 }
 
-/* Phone bar rows: price beside the name, thin full-width bar, plan + score, then meta */
-@media (max-width: 600px) {
+/* Phone and tablet bar rows: price beside the name, thin full-width bar, plan + score, then meta */
+@media (max-width: 780px) {
   .bar-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
