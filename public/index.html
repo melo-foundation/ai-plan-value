@@ -6,6 +6,17 @@
     <title>AI Plan Value</title>
     <meta name="description" content="AI coding subscriptions, ranked by real cost per task." />
     <meta name="theme-color" content="#2b5d93" />
+    <script>
+      // Easter-egg undo: cover the page in the background colour before first paint; app.js fades the cover out.
+      try {
+        const c = sessionStorage.getItem("egg-undo");
+        if (c) {
+          sessionStorage.removeItem("egg-undo");
+          document.documentElement.classList.add("egg-undo");
+          document.documentElement.style.setProperty("--egg-cover", c);
+        }
+      } catch {}
+    </script>
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="AI Plan Value" />
     <meta property="og:title" content="AI Plan Value" />

@@ -1498,3 +1498,17 @@ tbody tr:hover {
     white-space: normal;
   }
 }
+
+/* Easter-egg undo cover (see the inline script in index.html and the egg code in app.js) */
+html.egg-undo::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--egg-cover, var(--outer-bg));
+  pointer-events: none;
+  transition: opacity 0.7s ease;
+}
+html.egg-undo.egg-reveal::after {
+  opacity: 0;
+}
