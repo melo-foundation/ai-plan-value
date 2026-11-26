@@ -1844,7 +1844,7 @@ test("Methodology: sections, collapsed trust-level details, glyph table, plain l
   }
   const legend = html.match(/<p id="relLegend"[\s\S]*?<\/p>/)?.[0] || "";
   // The legend explains each mark in a full sentence (terse "◐ medium" labels were flagged as a regression twice)
-  for (const phrase of ["Estimated from other data rather than measured directly", "High confidence:", "usually within 25%", "Medium confidence:", "−40% to +70%", "Low confidence:", "2.5× higher or lower", "Speculative:", "Hidden by default"])
+  for (const phrase of ["Not measured for this exact model, reasoning level and plan", "Worked out from related measurements", "High confidence:", "usually within 25%", "Medium confidence:", "−40% to +70%", "Low confidence:", "2.5× higher or lower", "Speculative:", "Hidden by default"])
     assert.ok(legend.includes(phrase), `Legend lost its description: "${phrase}"`);
   assert.deepEqual([...legend.matchAll(/<span class="tier-glyph">([^<]+)<\/span>/g)].map((m) => m[1]), [...app.LEVELS].map((l) => app.LEVEL_GLYPH[l]), "Legend glyph order");
   for (const l of ["low", "speculative"]) assert.match(rows.find((r) => r[4] === l)[3], /Hidden by default/, `${l} row must say Hidden by default`);
