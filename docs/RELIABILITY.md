@@ -267,7 +267,7 @@ Fable on Claude Pro / Max / Ultra: `capShare` 0.5, `subsidyReadings { shared, ow
 |---|---|---|
 | Min confidence | High, Medium, Low, Speculative | Medium |
 | Cost | Point, Range | Point |
-| Fable cap | Shared, Fable only | Shared |
+| Fable cap | Whole week (`shared`), Fable only (its half) (`own`) | Whole week |
 | Billing | Monthly, Yearly | Monthly |
 
 The bar chart and the table both show rows at or above the Min confidence setting. Range shows `$lo–hi` for Medium, Low and Speculative rows.

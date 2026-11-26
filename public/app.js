@@ -285,7 +285,7 @@ function subsidySources(r) {
   const chain = state.dataset?.stats?.chains?.[r.rel?.chain];
   const sub = [];
   const mix = r.quotaMix?.[state.costMode];
-  if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Halved: Fable alone can use only half the weekly limit`);
+  if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable-only use: counts Fable's half of the weekly limit; the other half is for other Claude models`);
   // Shown only when applied; when not applied its uncertainty is already in the range.
   if (mix) sub.push(`Adjusted ×${mix.f.toFixed(2)} for how Claude's limit counts cached tokens (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   const client = r.clientFactor?.[state.costMode];
@@ -636,7 +636,7 @@ function plainSource(line) {
     .replace(/^(.+?) × ([\d.]+) \(shared \$ pool\)$/, "estimated from $1 (×$2, shared dollar pool)")
     .replace(/^(.+?) × ([\d.]+) \(token pool\)$/, "estimated from $1 (×$2, same token pool)")
     .replace(/^(.+?) ÷ ([\d.]+) \(Fable\/Opus, Pro \+ Ultra\)$/, "estimated from $1 (÷$2: Fable uses the limit about 2.5× faster)")
-    .replace(/^Fable only ÷ 0\.5 \(50% cap\)$/, "halved: Fable alone can use only half the weekly limit")
+    .replace(/^Fable only ÷ 0\.5 \(50% cap\)$/, "Fable-only use: counts Fable's half of the weekly limit; the other half is for other Claude models")
     .replace(/^pooled ([\d.]+)× Fei \+ ([\d.]+)× Priors$/, "average of Fei ($1×) and Priors ($2×)")
     .replace(/^inconsistent ×([\d.]+) \((.+?) vs (.+?), same pool\)$/, "disagrees ×$1 with other plans ($2 vs $3)")
     .replace(/^derived \(official plan ratio\)$/, "estimated from a sibling plan (official plan ratio)")
