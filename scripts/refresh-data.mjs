@@ -3415,7 +3415,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         : { shared: REL.r4(S / FABLE_CAP_SHARE), own: S };
       e.subsidyMultiple = e.subsidyReadings.shared;
       e.capShare = FABLE_CAP_SHARE;
-      if (!shared) e._chain.lines.unshift(`Fable only ÷ ${FABLE_CAP_SHARE} (50% cap)`);
+      if (!shared) e._chain.lines.unshift(`Fable-only reading ÷ ${FABLE_CAP_SHARE} (converted to whole week)`);
     }
   }
 
@@ -4225,7 +4225,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const backfilledContextSlugs = new Set();
   const unclassifiedPlans = new Set();
   function applyOpenRouterBackfill(entry, allowDomainBackfill) {
-    if (/^(?:Opus|Sonnet|Haiku)\s+\d/i.test(String(entry.modelDisplay || ""))) {
+    if (/^(?:Opus|Sonnet|Haiku|Fable)\s+\d/i.test(String(entry.modelDisplay || ""))) {
       entry.modelDisplay = `Claude ${entry.modelDisplay}`;
     }
     const accessMeta = detectPlanAccessAndWindow(entry.plan, entry.billing);

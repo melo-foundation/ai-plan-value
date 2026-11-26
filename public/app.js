@@ -633,7 +633,7 @@ function plainSource(line) {
   const pre = /^([^:]{2,60}): (.+)$/.exec(String(line));
   if (pre && !/^(Fei|Priors)$/.test(pre[1])) return `${pre[1]}: ${plainSource(pre[2])}`;
   let t = String(line);
-  const pp = (x) => x.replace(/(\d+(?:\.\d+)?) pp\b/g, "$1% of the limit");
+  const pp = (x) => x.replace(/(\d+(?:\.\d+)?) pp\b/g, (_, n) => `${Math.round(Number(n))}% of the limit`);
   t = t.replace(/^= (.+?) \(same pool, rate card\)$/, "estimated from $1 (same quota, priced by rate card)")
     .replace(/^= (.+?) \(same pool\)$/, "estimated from $1 (same quota)")
     .replace(/^= (.+?) \(assumed equal\)$/, "assumed the same as $1")
@@ -643,6 +643,7 @@ function plainSource(line) {
     .replace(/^(.+?) × ([\d.]+) \(token pool\)$/, "estimated from $1 (×$2, same token pool)")
     .replace(/^(.+?) ÷ ([\d.]+) \(Fable\/Opus, Pro \+ Ultra\)$/, "estimated from $1 (÷$2: Fable uses the limit about 2.5× faster)")
     .replace(/^Fable only ÷ 0\.5 \(50% cap\)$/, "Fable-only use: counts Fable's half of the weekly limit; the other half is for other Claude models")
+    .replace(/^Fable-only reading ÷ 0\.5 \(converted to whole week\)$/, "source assumed Fable alone (half the week); doubled to count the whole week")
     .replace(/^pooled ([\d.]+)× Fei \+ ([\d.]+)× Priors$/, "average of Fei ($1×) and Priors ($2×)")
     .replace(/^inconsistent ×([\d.]+) \((.+?) vs (.+?), same pool\)$/, "disagrees ×$1 with other plans ($2 vs $3)")
     .replace(/^derived \(official plan ratio\)$/, "estimated from a sibling plan (official plan ratio)")
@@ -655,7 +656,7 @@ function plainSource(line) {
     })
     .replace(/^(.+?) × ([\d.]+)$/, "estimated from $1 (×$2)");
   t = t.replace(/Priors: Priors, /g, "Priors dataset, ").replace(/\bPriors (high|medium|low)\b/g, "Priors dataset ($1)").replace(/\bPriors, /g, "Priors dataset, ")
-    .replace(/\b1 screenshot\b/g, "one user's screenshot").replace(/\bscreenshot\b(?!s)/g, "screenshot").replace(/\btweet\b/g, "a tweet")
+    .replace(/\b1 screenshot\b/g, "one user's screenshot").replace(/\bscreenshot\b(?!s)/g, "screenshot").replace(/(?<!\ba )\btweet\b/g, "a tweet")
     .replace(/\bgateway panel\b/g, "third-party gateway's usage panel").replace(/^official credits$/, "official credit amount")
     .replace(/^list price$/, "API list price").replace(/^official, /, "official figure, ");
   return pp(t);

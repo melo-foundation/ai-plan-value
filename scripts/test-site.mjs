@@ -2015,6 +2015,14 @@ test("Methodology states the Claude cache correction plainly, and only while it 
   else assert.ok(!dlg.includes(sentence), `The correction now applies to ${applied} rows: update the Methodology sentence`);
 });
 
+test("Claude models are named 'Claude …'; Fable whole-week conversion is worded as a conversion", () => {
+  const bare = [...new Set(entries.map((e) => e.modelDisplay).filter((n) => /^(?:Opus|Sonnet|Haiku|Fable)\s+\d/i.test(n || "")))];
+  assert.deepEqual(bare, [], "Claude model names without 'Claude'");
+  for (const c of Object.values(chains)) for (const l of c.lines || []) assert.ok(!/^Fable only ÷/.test(l), `chain line reads like the Fable-only setting: ${l}`);
+  const f51 = entries.filter((e) => e.baseModelId === "claude-fable-5-1" && e.plan === "Claude Max" && e.subsidyReadings);
+  for (const e of f51) assert.ok(Math.abs(e.subsidyMultiple - e.subsidyReadings.shared) < 1e-6 && Math.abs(e.subsidyReadings.own * 2 - e.subsidyReadings.shared) < 0.01, `${e.id}: default subsidy must be the whole-week reading`);
+});
+
 test("Chart model names are never cut off with an ellipsis", () => {
   for (const r of cssRules) {
     if (!r.selectors.some((x) => /^\.bar-model$/.test(x))) continue;
@@ -2032,6 +2040,9 @@ test("Plan drawer sources: a table with plain-language sources and a date column
     ["= GPT-6.1 Sol (same pool, rate card)", "estimated from GPT-6.1 Sol (same quota, priced by rate card)"],
     ["GPT 5.6 Luna Plus × 2 (ruled plan ratio)", "estimated from GPT 5.6 Luna Plus (×2, Fei's plan ratio)"],
     ["gateway panel, 2026-10-06", "third-party gateway's usage panel, 2026-10-06"],
+    ["Priors, tweet, large sample, 2026-11-11", "Priors dataset, a tweet, large sample, 2026-11-11"],
+    ["1 account, 19.633 pp, 2026-09-27", "1 account, 20% of the limit, 2026-09-27"],
+    ["Fable-only reading ÷ 0.5 (converted to whole week)", "source assumed Fable alone (half the week); doubled to count the whole week"],
     ["pooled 17.1× Fei + 20.8× Priors", "average of Fei (17.1×) and Priors (20.8×)"],
     ["Opus 5.5 tokens × 2 (price ratio)", "same quota as Opus 5.5: 2× the tokens, since each costs 1/2 as much"],
     ["GPT-6 Astra Pro 10x: GPT 5.6 Sol tokens × 0.295 (price ratio)", "GPT-6 Astra Pro 10x: same quota as GPT 5.6 Sol: 0.295× the tokens, since each costs 3.39× as much"],
