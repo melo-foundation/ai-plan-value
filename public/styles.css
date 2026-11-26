@@ -211,7 +211,8 @@ a {
 /* Filter toolbar */
 .filter-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* The first filter holds two selects plus its value, so it gets more room. */
+  grid-template-columns: minmax(0, 1.45fr) repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 14px 22px;
   padding: 11px 14px;
@@ -1025,12 +1026,19 @@ details[open] > summary.panel-toggle h2::before {
 
 .bar-track-wrap {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
 }
 
+.bar-track-wrap .bar-note {
+  flex-basis: 100%;
+}
+
 .bar-fill {
+  /* Scale against the track minus room for the price beside it; the score sits on the line below. */
+  width: calc(var(--bar-ratio, 0.68) * (100% - 100px)) !important;
   height: 19px;
   min-width: 5px;
   flex-shrink: 0;
