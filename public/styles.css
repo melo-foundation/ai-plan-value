@@ -1510,6 +1510,13 @@ tbody tr:hover {
     background: var(--shell-bg);
     box-shadow: 1px 0 0 var(--cell-border);
   }
+  .plan-matrix thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: linear-gradient(var(--th-top), var(--th-bot));
+    box-shadow: 1px 0 0 var(--cell-border);
+  }
   .plan-matrix-wrap {
     background:
       linear-gradient(to left, var(--shell-bg), var(--shell-bg)) right / 14px 100% no-repeat local,
