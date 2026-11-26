@@ -3,7 +3,8 @@
  * Fetches and merges live data from 7 upstream sources:
  *   1. Fei2411/real-api-pricing (derived/points.csv + benchmark-configurations.csv) — empirical subscription quotas & workloads
  *   2. adamholter/priors (data/snapshots/latest.json.gz) — clean raw-GitHub snapshot for secondary backfill
- *   3. artificialanalysis.ai/models (#price-cost SSR payload + optional AA_API_KEY v2 API)
+ *   3. Artificial Analysis free API (/api/v2/language/models/free, AA_API_KEY) — per-level Intelligence Index,
+ *      cost per task, capability indices, token prices, speed; artificialanalysis.ai/models (#price-cost SSR) as fallback
  *   4. OpenRouter Models API (https://openrouter.ai/api/v1/models) — context window, open-weights, domain scores & gateway catalog
  *   5. GitHub Copilot Plans (https://github.com/features/copilot/plans) — live-verified AI Credit pools
  *   6. Ollama Pricing (https://ollama.com/pricing) — live-verified Ollama Cloud Team credit pool
@@ -79,7 +80,7 @@ const SOURCES = {
   priorsSnapshotGz:
     "https://raw.githubusercontent.com/adamholter/priors/main/data/snapshots/latest.json.gz",
   aaModelsPage: "https://artificialanalysis.ai/models",
-  aaApiV2: "https://artificialanalysis.ai/api/v2/data/llms/models",
+  aaApi: "https://artificialanalysis.ai/api/v2/language/models/free",
   openRouterModels: "https://openrouter.ai/api/v1/models",
   githubCopilotPlans: "https://github.com/features/copilot/plans",
   ollamaPricing: "https://ollama.com/pricing",
@@ -113,6 +114,13 @@ const MODEL_ALIASES = {
   "minimax-m3-1": "minimax-m3-1-flash",
   "minimax-m3-1-flash-preview": "minimax-m3-1-flash",
   "gemini-4": "gemini-4-argon",
+  // Artificial Analysis API slugs whose site keys differ (same model: identical score and cost per task)
+  "step-5": "step-5-preview",
+  "qwen3-8-flash-next": "qwen-3-8-flash",
+  "nvidia-nemotron-3-ultra-550b-a55b": "nemotron-3-ultra",
+  "claude-4-5-haiku": "claude-haiku-4-5",
+  "gemini-3-1-flash-lite-preview": "gemini-3-1-flash-lite",
+  "inkling-2-mini": "inkling-2",
 };
 
 function compareVersions(a, b) {
@@ -689,39 +697,275 @@ function normalizeAaModel(m) {
   };
 }
 
-function parseAaApiV2(json) {
+// Artificial Analysis free API: one item per model × reasoning level.
+// "Claude Opus 5.5 (High, Default Fallback)" / slug claude-opus-5-5-high → base claude-opus-5-5, effort high.
+// The unsuffixed slug is the model's headline level ("claude-opus-5-5" = Max). "Default Fallback" is AA's
+// label for the level used when a request names none; it is dropped from display.
+const AA_API_LEVEL_WORDS = {
+  max: "max",
+  xhigh: "xhigh",
+  high: "high",
+  medium: "medium",
+  low: "low",
+  minimal: "minimal",
+  "non-reasoning": "none",
+  reasoning: "default",
+};
+const AA_API_SLUG_LEVEL_RE = /-(max|xhigh|high|medium|low|minimal|non-reasoning|reasoning)$/;
+
+function parseAaApiLevel(name, slug) {
+  const rawName = String(name || "").trim();
+  const paren = rawName.match(/\s*\(([^()]*)\)\s*$/);
+  const tokens = paren ? paren[1].split(",").map((t) => t.trim().toLowerCase()) : [];
+  let nameEffort = null;
+  if (tokens.includes("non-reasoning")) nameEffort = "none";
+  else {
+    const lvl = tokens.find((t) => AA_API_LEVEL_WORDS[t] && t !== "reasoning");
+    if (lvl) nameEffort = AA_API_LEVEL_WORDS[lvl];
+    else if (tokens.includes("reasoning")) nameEffort = "default";
+  }
+  const isLevelParen = nameEffort != null || tokens.includes("default fallback");
+  const baseName = isLevelParen ? rawName.slice(0, paren.index).trim() : rawName;
+  const s = normSlug(slug);
+  // A slug suffix is a level only when the name names one too: "qwen4-max" is "Qwen4 Max", not Qwen4 at max.
+  const sm = nameEffort != null ? s.match(AA_API_SLUG_LEVEL_RE) : null;
+  return {
+    baseSlug: sm ? s.slice(0, sm.index) : s,
+    effort: nameEffort ?? "default",
+    baseName,
+    isHeadline: !sm,
+    isDefaultFallback: tokens.includes("default fallback"),
+  };
+}
+
+const nonNull = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v != null));
+
+function parseAaApiModels(json) {
   const list = Array.isArray(json?.data) ? json.data : [];
-  return list.map((m) => ({
-    slug: m.slug,
-    name: m.name || m.slug,
-    shortName: m.name || m.slug,
-    creatorName: m.model_creator?.name || null,
-    creatorSlug: m.model_creator?.slug || null,
-    creatorColor: null,
-    releaseDate: m.release_date || null,
-    isOpenWeights: false,
-    contextWindowTokens: null,
-    intelligenceIndex: toNum(m.evaluations?.artificial_analysis_intelligence_index),
-    benchmarks: {
-      intelligenceIndex: round1(m.evaluations?.artificial_analysis_intelligence_index),
-    },
-    costPerTaskUsd: null,
-    costPerTaskBreakdown: null,
-    totalIndexCostUsd: null,
-    pricing: {
-      inputPer1M: toNum(m.pricing?.price_1m_input_tokens),
-      outputPer1M: toNum(m.pricing?.price_1m_output_tokens),
-      cacheHitPer1M: null,
-      blended3to1Per1M: toNum(m.pricing?.price_1m_blended_3_to_1),
-      blended7to2to1Per1M: null,
-    },
-    speed: {
-      outputTokPerSec: toNum(m.median_output_tokens_per_second),
-      ttftSec: toNum(m.median_time_to_first_token_seconds),
-      timePerTaskSec: null,
-    },
-    sourceUrl: `https://artificialanalysis.ai/models/${m.slug}`,
-  }));
+  return list.map((m) => {
+    const lvl = parseAaApiLevel(m.name, m.slug);
+    const ev = m.evaluations || {};
+    const cost = m.artificial_analysis_intelligence_index_cost || {};
+    const pr = m.pricing || {};
+    const p3 = m.performance_v3 || {};
+    const legacyPerf = m.performance || {};
+    const input = toNum(pr.price_1m_input_tokens);
+    const output = toNum(pr.price_1m_output_tokens);
+    const cacheHit = toNum(pr.price_1m_cache_hit_tokens);
+    return {
+      id: m.id || null,
+      slug: m.slug,
+      name: m.name || m.slug,
+      ...lvl,
+      creatorId: m.model_creator?.id || null,
+      creatorName: m.model_creator?.name || null,
+      releaseDate: m.release_date || null,
+      intelligenceIndex: toNum(ev.artificial_analysis_intelligence_index),
+      benchmarks: {
+        intelligenceIndex: round1(ev.artificial_analysis_intelligence_index),
+        engineering: round1(ev.artificial_analysis_engineering_index),
+        financeAndAccounting: round1(ev.artificial_analysis_finance_and_accounting_index),
+        strategyAndOps: round1(ev.artificial_analysis_strategy_and_ops_index),
+        legal: round1(ev.artificial_analysis_legal_index),
+        healthcareAndMedical: round1(ev.artificial_analysis_healthcare_and_medical_index),
+        economics: round1(ev.artificial_analysis_economics_index),
+      },
+      costPerTaskUsd: toNum(cost.cost_per_task?.total_cost),
+      totalIndexCostUsd: toNum(cost.total_cost),
+      pricing: {
+        inputPer1M: input,
+        outputPer1M: output,
+        cacheHitPer1M: cacheHit,
+        cacheWritePer1M: toNum(pr.price_1m_cache_write_tokens),
+        // AA's blends: 3 input : 1 output, and 7 cache hit : 2 input : 1 output
+        blended3to1Per1M: input != null && output != null ? (3 * input + output) / 4 : null,
+        blended7to2to1Per1M:
+          input != null && output != null && cacheHit != null ? 0.7 * cacheHit + 0.2 * input + 0.1 * output : null,
+      },
+      // `performance` (medians) is null from 2026-12-10; performance_v3 (means) replaces it.
+      speed: {
+        outputTokPerSec: toNum(p3.mean_output_tokens_per_second) ?? toNum(legacyPerf.median_output_tokens_per_second),
+        ttftSec: toNum(p3.mean_time_to_first_token_seconds) ?? toNum(legacyPerf.median_time_to_first_token_seconds),
+        ttfaSec: toNum(p3.mean_time_to_first_answer_token_seconds) ?? toNum(legacyPerf.median_time_to_first_answer_token_seconds),
+      },
+      sourceUrl: `https://artificialanalysis.ai/models/${lvl.baseSlug}`,
+    };
+  });
+}
+
+// Site key for an API base slug: alias / scrape slug first, then an existing key, then Priors' `aa-` prefixed id.
+function resolveAaApiBase(baseSlug, aaByNorm, aaVariantsByBase) {
+  const c = canonicalBaseSlug(baseSlug, aaByNorm);
+  if (aaVariantsByBase.has(c)) return c;
+  if (aaVariantsByBase.has(`aa-${c}`)) return `aa-${c}`;
+  return c;
+}
+
+const sameScore = (v, rec) =>
+  v.intelligenceIndex != null &&
+  v.costPerTaskUsd != null &&
+  Math.abs(v.intelligenceIndex - rec.intelligenceIndex) < 0.35 &&
+  Math.abs(v.costPerTaskUsd - rec.costPerTaskUsd) <= Math.max(0.02, 0.02 * rec.costPerTaskUsd);
+
+/**
+ * Overlay AA API values onto the merged Fei2411 / Priors / scrape variants (API wins per model × level).
+ * Keeps Priors' per-test sub-benchmarks. Mutates aaVariantsByBase; returns counts and the replaced values.
+ */
+function mergeAaApiVariants(aaVariantsByBase, apiModels, aaByNorm, fetchedDate = null) {
+  const stats = {
+    items: apiModels.length,
+    itemsScored: 0,
+    variantsFromApi: 0,
+    matchedExisting: 0,
+    newVariants: 0,
+    newBases: 0,
+    levelRemapped: 0,
+    skipped: { noScore: 0, noCostPerTask: 0, unsupportedLevel: 0, duplicate: 0 },
+  };
+  const replaced = []; // { key, kept, dropped, keptCost, droppedCost, keptDate, droppedDate, droppedSource }
+  const scored = [];
+  for (const rec of apiModels) {
+    if (rec.intelligenceIndex == null) { stats.skipped.noScore++; continue; }
+    if (rec.costPerTaskUsd == null || rec.costPerTaskUsd <= 0) { stats.skipped.noCostPerTask++; continue; }
+    if (EFFORT_LABELS[rec.effort] === undefined) { stats.skipped.unsupportedLevel++; continue; }
+    scored.push(rec);
+  }
+  stats.itemsScored = scored.length;
+  const keyOf = new Map();
+  const levelsPerBase = new Map();
+  for (const rec of scored) {
+    const key = resolveAaApiBase(rec.baseSlug, aaByNorm, aaVariantsByBase);
+    keyOf.set(rec, key);
+    levelsPerBase.set(key, (levelsPerBase.get(key) || 0) + 1);
+  }
+  const done = new Set();
+  // Suffixed level items first, so an unsuffixed headline item only fills the level it names.
+  const ordered = [...scored].sort((a, b) => Number(a.isHeadline) - Number(b.isHeadline));
+  for (const rec of ordered) {
+    const key = keyOf.get(rec);
+    let target = aaVariantsByBase.get(key);
+    if (!target) {
+      target = new Map();
+      aaVariantsByBase.set(key, target);
+      stats.newBases++;
+    }
+    let eff = rec.effort;
+    let pv = target.get(eff) || null;
+    // A level-less API item ("Qwen4 Max") or a level the older sources filed under "default":
+    // reuse the existing level whose score and cost match, or the only one when both sides have one.
+    if (!pv && target.size > 0) {
+      const open = [...target.entries()].filter(([e]) => !done.has(`${key}|${e}`));
+      const match =
+        open.find(([e, v]) => (eff === "default" || e === "default") && sameScore(v, rec)) ||
+        (eff === "default" && target.size === 1 && levelsPerBase.get(key) === 1 ? open[0] : null);
+      if (match) {
+        pv = match[1];
+        if (eff !== "default" && match[0] === "default") target.delete("default");
+        else eff = match[0];
+        stats.levelRemapped++;
+      }
+    }
+    const dk = `${key}|${eff}`;
+    if (done.has(dk)) { stats.skipped.duplicate++; continue; }
+    done.add(dk);
+    if (pv) stats.matchedExisting++;
+    else stats.newVariants++;
+    const effSuffix = EFFORT_LABELS[eff];
+    const anyPv = pv || target.values().next().value || null;
+    const baseDisplay = anyPv?.baseDisplay || normalizeBaseDisplay(rec.baseName);
+    const breakdown = pv?.costPerTaskBreakdown;
+    if (pv && pv.intelligenceIndex != null) {
+      replaced.push({
+        key: dk,
+        kept: Number(rec.intelligenceIndex.toFixed(2)),
+        dropped: Number(pv.intelligenceIndex.toFixed(2)),
+        keptCost: rec.costPerTaskUsd,
+        droppedCost: pv.costPerTaskUsd ?? null,
+        keptDate: fetchedDate,
+        droppedDate: pv.iiDate || null,
+        droppedSource: pv.aaSource || null,
+      });
+    }
+    target.set(eff, {
+      ...(pv || {}),
+      variantKey: effSuffix ? `${key}--${eff}` : key,
+      baseSlug: key,
+      effort: eff,
+      effortLabel: effSuffix,
+      displayName: effSuffix ? `${baseDisplay} (${effSuffix})` : baseDisplay,
+      baseDisplay,
+      creatorName: pv?.creatorName || anyPv?.creatorName || rec.creatorName,
+      creatorColor: pv?.creatorColor || anyPv?.creatorColor || null,
+      aaModelId: rec.id,
+      aaCreatorId: rec.creatorId,
+      aaApiSlug: rec.slug,
+      intelligenceIndex: rec.intelligenceIndex,
+      iiDate: fetchedDate,
+      costPerTaskUsd: rec.costPerTaskUsd,
+      totalIndexCostUsd: rec.totalIndexCostUsd ?? pv?.totalIndexCostUsd ?? null,
+      costPerTaskBreakdown:
+        breakdown?.total != null && Math.abs(breakdown.total - rec.costPerTaskUsd) <= 0.01 * rec.costPerTaskUsd ? breakdown : null,
+      benchmarks: { ...(pv?.benchmarks || {}), ...nonNull(rec.benchmarks) },
+      pricing: { ...(pv?.pricing || {}), ...nonNull(rec.pricing) },
+      speed: { ...(pv?.speed || {}), ...nonNull(rec.speed) },
+      aaUrl: pv?.aaUrl || anyPv?.aaUrl || rec.sourceUrl,
+      aaLive: true,
+      isHeadline: Boolean(pv?.isHeadline || rec.isHeadline),
+      isOpenWeights: Boolean(pv?.isOpenWeights),
+      contextWindowTokens: pv?.contextWindowTokens ?? null,
+      aaSource: "api",
+    });
+    stats.variantsFromApi++;
+  }
+  return { stats, replaced };
+}
+
+/**
+ * Fetch every page of the AA free models endpoint. Retries 429 / 5xx / network errors with backoff
+ * (Retry-After when given). The key goes only into the request header.
+ */
+async function fetchAaApiModels(
+  apiKey,
+  { fetchImpl = fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), maxRetries = 4, maxPages = 50, baseUrl = SOURCES.aaApi } = {}
+) {
+  if (!apiKey) throw new Error("AA_API_KEY not set");
+  const data = [];
+  let first = null;
+  let pages = 0;
+  for (let page = 1; page <= maxPages; page++) {
+    const url = `${baseUrl}?page=${page}`;
+    let json = null;
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      let res = null;
+      let netErr = null;
+      try {
+        res = await fetchImpl(url, {
+          headers: { "x-api-key": apiKey, accept: "application/json", "user-agent": USER_AGENT },
+          signal: controller.signal,
+        });
+        if (res.ok) json = await res.json();
+      } catch (err) {
+        netErr = err;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (json) break;
+      const retryable = Boolean(netErr) || res.status === 429 || res.status >= 500;
+      if (!retryable || attempt >= maxRetries) {
+        throw new Error(netErr ? `${netErr.message} for ${url}` : `HTTP ${res.status} for ${url}`);
+      }
+      const retryAfter = Number(res?.headers?.get?.("retry-after"));
+      await sleep(retryAfter > 0 ? Math.min(retryAfter * 1000, 60000) : 1000 * 2 ** attempt);
+    }
+    if (!Array.isArray(json?.data)) throw new Error(`No data array on page ${page}`);
+    first = first || json;
+    pages++;
+    data.push(...json.data);
+    if (!json.pagination?.has_more) break;
+  }
+  return { tier: first?.tier ?? null, intelligence_index_version: first?.intelligence_index_version ?? null, pages, data };
 }
 
 /**
@@ -875,6 +1119,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
       speed: isHeadlineEffort ? aaHeadline.speed : null,
       isOpenWeights: Boolean(aaHeadline?.isOpenWeights),
       contextWindowTokens: aaHeadline?.contextWindowTokens ?? null,
+      aaSource: "priors",
     });
   }
 
@@ -915,6 +1160,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
         speed: aaModel.speed,
         isOpenWeights: aaModel.isOpenWeights,
         contextWindowTokens: aaModel.contextWindowTokens,
+        aaSource: "scrape",
       });
     }
   }
@@ -1547,6 +1793,7 @@ function parseFeiBenchConfigs(csvText, aaByNorm) {
       speed: isHeadlineEffort ? aaHeadline.speed : null,
       isOpenWeights: Boolean(aaHeadline?.isOpenWeights),
       contextWindowTokens: aaHeadline?.contextWindowTokens ?? null,
+      aaSource: "fei",
     });
     count++;
   }
@@ -2781,7 +3028,17 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       ok: false,
       fetchedAt: null,
       modelCount: 0,
-      usedApiV2: false,
+      error: null,
+    },
+    aaApi: {
+      name: "Artificial Analysis API (free tier)",
+      url: SOURCES.aaApi,
+      ok: false,
+      fetchedAt: null,
+      modelCount: 0,
+      pages: 0,
+      tier: null,
+      intelligenceIndexVersion: null,
       error: null,
     },
     openRouter: {
@@ -2861,7 +3118,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   let feiBenchCsvText = null;
   let priorsGzBuf = null;
   let aaHtml = null;
-  let aaV2Json = null;
+  let aaApiJson = null;
   let openRouterJson = null;
   let copilotHtml = null;
   let ollamaHtml = null;
@@ -2885,6 +3142,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     if (fs.existsSync("/tmp/kilo_pricing.html")) kiloHtml = fs.readFileSync("/tmp/kilo_pricing.html", "utf8");
     if (fs.existsSync("/tmp/aa_coding_agents.html")) aaAgentsHtml = fs.readFileSync("/tmp/aa_coding_agents.html", "utf8");
     if (fs.existsSync("/tmp/cursorbench.html")) cursorBenchHtml = fs.readFileSync("/tmp/cursorbench.html", "utf8");
+    if (fs.existsSync("/tmp/aa_api_models.json")) aaApiJson = JSON.parse(fs.readFileSync("/tmp/aa_api_models.json", "utf8"));
+    else sourceStatus.aaApi.error = "No /tmp/aa_api_models.json";
   } else {
     const tasks = [
       fetchText(SOURCES.feiPointsCsv)
@@ -2933,10 +3192,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
     if (process.env.AA_API_KEY) {
       tasks.push(
-        fetchText(SOURCES.aaApiV2, { "x-api-key": process.env.AA_API_KEY })
-          .then((t) => { aaV2Json = JSON.parse(t); })
-          .catch((err) => { log("Optional AA_API_KEY fetch failed:", err.message); })
+        fetchAaApiModels(process.env.AA_API_KEY)
+          .then((j) => { aaApiJson = j; })
+          .catch((err) => { sourceStatus.aaApi.error = err.message; })
       );
+    } else {
+      sourceStatus.aaApi.error = "AA_API_KEY not set";
     }
 
     await Promise.all(tasks);
@@ -2958,18 +3219,29 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
-  if (aaV2Json) {
+  // 1a. Artificial Analysis free API: one record per model × reasoning level (merged after Fei2411 / Priors below)
+  let aaApiModels = [];
+  if (aaApiJson) {
     try {
-      const v2Models = parseAaApiV2(aaV2Json);
-      for (const m of v2Models) {
-        const key = normSlug(m.slug);
-        if (!aaByNorm.has(key)) aaByNorm.set(key, m);
-      }
-      sourceStatus.artificialAnalysis.usedApiV2 = true;
-      sourceStatus.artificialAnalysis.modelCount = aaByNorm.size;
+      aaApiModels = parseAaApiModels(aaApiJson);
+      if (!aaApiModels.length) throw new Error("API returned 0 models");
+      Object.assign(sourceStatus.aaApi, {
+        ok: true,
+        fetchedAt: nowIso,
+        modelCount: aaApiModels.length,
+        pages: aaApiJson.pages ?? null,
+        tier: aaApiJson.tier ?? null,
+        intelligenceIndexVersion: aaApiJson.intelligence_index_version ?? null,
+        error: null,
+      });
+      log(`Fetched ${aaApiModels.length} model×level records from the Artificial Analysis API (${aaApiJson.pages} page(s), tier ${aaApiJson.tier})`);
     } catch (err) {
-      log("AA API v2 parse error:", err.message);
+      aaApiModels = [];
+      sourceStatus.aaApi.error = err.message;
+      log("AA API parse error:", err.message);
     }
+  } else if (sourceStatus.aaApi.error) {
+    log(`AA API not used (${sourceStatus.aaApi.error}); Intelligence Index and cost per task come from Fei2411 / Priors / the AA page`);
   }
 
   // 1b. Parse OpenRouter public model catalog (context window, open-weights, AA domain backfill & gateway catalog)
@@ -3158,6 +3430,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         benchmarks: { ...(pv?.benchmarks || {}), ...(fv.benchmarks || {}) },
         ...(priorsNewer
           ? {
+              aaSource: pv.aaSource || "priors",
               intelligenceIndex: pv.intelligenceIndex,
               costPerTaskUsd: pv.costPerTaskUsd ?? fv.costPerTaskUsd,
               iiDate: pv.iiDate,
@@ -3169,6 +3442,20 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   }
 
   if (newerPriorsScores) log(`Kept ${newerPriorsScores} newer Priors Intelligence Index score(s) over Fei2411`);
+
+  // AA API wins per model × level for Intelligence Index, cost per task, capability indices, prices and speed.
+  let aaApiMerge = { stats: null, replaced: [] };
+  if (aaApiModels.length) {
+    aaApiMerge = mergeAaApiVariants(aaVariantsByBase, aaApiModels, aaByNorm, nowIso.slice(0, 10));
+    const s = aaApiMerge.stats;
+    log(
+      `AA API: ${s.variantsFromApi} model×level variant(s) (${s.matchedExisting} replace Fei2411/Priors values, ` +
+        `${s.newVariants} new, ${s.levelRemapped} level-matched); skipped ${s.skipped.noScore} unscored, ` +
+        `${s.skipped.noCostPerTask} without cost per task, ${s.skipped.unsupportedLevel} unsupported level`
+    );
+  }
+  const apiKeys = new Set(aaApiMerge.replaced.map((r) => r.key));
+  const priorsOverFei = keptNewerScores.filter((v) => !apiKeys.has(v.key));
 
   // Fill strictly bracketed missing intermediate efforts (Option A: interpolated between lower & higher measured efforts)
   const interpolatedEffortVariants = interpolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm);
@@ -3589,8 +3876,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       aaPricing: best.pricing,
       aaSpeed: best.speed,
       confidence: "high",
-      dataDate: priorsParsed.date || nowIso.slice(0, 10),
-      sourceNote: "Artificial Analysis (via Priors snapshot)",
+      dataDate: best.aaSource === "api" ? nowIso.slice(0, 10) : priorsParsed.date || nowIso.slice(0, 10),
+      sourceNote: best.aaSource === "api" ? "Artificial Analysis API" : "Artificial Analysis (via Priors snapshot)",
       decisionNote: "Direct first-party API list pricing (1.0× baseline).",
       preliminary: null,
     };
@@ -4361,6 +4648,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
           ...baseEntry,
           baseModelId: baseEntry.modelId,
           effort: "default",
+          aaSource:
+            baseEntry.intelligenceIndex == null
+              ? null
+              : baseEntry.origin === "artificial-analysis" || resolveAaModel(baseEntry.modelId, aaByNorm)
+                ? "scrape"
+                : baseEntry.origin === "fei2411"
+                  ? "fei"
+                  : "priors",
+          aaModelId: null,
         },
         true
       );
@@ -4406,9 +4702,15 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
             aaCostPerTaskBreakdown: v.costPerTaskBreakdown || null,
             aaTotalIndexCostUsd: v.totalIndexCostUsd ?? null,
             aaPricing:
-              baseEntry.aaPricing?.blended3to1Per1M != null
-                ? baseEntry.aaPricing
-                : v.pricing || baseEntry.aaPricing || null,
+              v.aaSource === "api" && v.pricing
+                ? v.pricing
+                : baseEntry.aaPricing?.blended3to1Per1M != null
+                  ? baseEntry.aaPricing
+                  : v.pricing || baseEntry.aaPricing || null,
+            aaSpeed: v.aaSource === "api" && v.speed ? v.speed : baseEntry.aaSpeed ?? null,
+            aaVariant: v.displayName,
+            aaSource: v.effortEstimate ? "estimate" : v.aaSource || null,
+            aaModelId: v.effortEstimate ? null : v.aaModelId || null,
           },
           Boolean(v.isHeadline || allowSingleVariantDomain)
         )
@@ -4874,6 +5176,26 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     return effA - effB;
   });
 
+  // Provenance of each measured model × level's AA values (estimated levels excluded)
+  const sourceByVariant = new Map();
+  for (const e of expandedEntries) {
+    if (e.intelligenceIndex == null || e.aaSource === "estimate" || e.effortEstimate) continue;
+    if (!sourceByVariant.has(e.modelId)) sourceByVariant.set(e.modelId, e.aaSource || "unknown");
+  }
+  const variantsBySource = {};
+  for (const src of sourceByVariant.values()) variantsBySource[src] = (variantsBySource[src] || 0) + 1;
+  const aaApiStats = {
+    ok: sourceStatus.aaApi.ok,
+    variantsFromApi: variantsBySource.api || 0,
+    variantsFromPriors: variantsBySource.priors || 0,
+    variantsFromFei: variantsBySource.fei || 0,
+    variantsFromScrape: variantsBySource.scrape || 0,
+    variantsUnknown: variantsBySource.unknown || 0,
+    variantsEstimated: new Set(expandedEntries.filter((e) => e.aaSource === "estimate").map((e) => e.modelId)).size,
+    merge: aaApiMerge.stats,
+    notInApi: [...sourceByVariant.entries()].filter(([, s]) => s !== "api").map(([k, s]) => `${k}:${s}`).sort(),
+  };
+
   const payload = {
     schemaVersion: 3,
     generatedAt: nowIso,
@@ -4899,7 +5221,14 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       effortAccuracy,
       codingAgentEstimates,
       estimateTiers: buildEstimateTiers(effortAccuracy, codingAgentEstimates?.accuracy),
-      aaIndexFreshness: { keptNewerPriors: keptNewerScores.length, variants: keptNewerScores },
+      // variants: Priors kept over older Fei2411 (levels the API lacks); apiVariants: API value over older Fei2411 / Priors
+      aaIndexFreshness: {
+        keptNewerPriors: priorsOverFei.length,
+        variants: priorsOverFei,
+        apiOverrides: aaApiMerge.replaced.length,
+        apiVariants: aaApiMerge.replaced,
+      },
+      aaApi: aaApiStats,
       t3CodeTurns: { variants: priorsParsed.t3Index.size, entries: expandedEntries.filter((e) => e.t3Turn).length },
       cursorBench: { variants: cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
@@ -4921,6 +5250,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   );
   return payload;
 }
+
+// For scripts/test-site.mjs parser tests (no network)
+export { parseAaApiLevel, parseAaApiModels, mergeAaApiVariants, fetchAaApiModels, normalizeBaseDisplay, SOURCES };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const fromLocal = process.argv.includes("--from-local");

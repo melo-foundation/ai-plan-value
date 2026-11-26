@@ -218,6 +218,12 @@ Credits and products a plan bundles outside its quota (API credits, cloud credit
 
 ## Sources
 
+- Intelligence Index, cost per task, the six capability indices, token prices and output speed, per model and reasoning level: [Artificial Analysis](https://artificialanalysis.ai/) free API (`/api/v2/language/models/free`). Status in `sources.aaApi`, provenance per row in `entry.aaSource` (`api`, `fei`, `priors`, `scrape`, `estimate`), counts in `stats.aaApi`.
+- Key: repo secret `AA_API_KEY` in CI. Local build: `AA_API_KEY="$(cat ~/.config/ai-plan-value/aa-api-key)" node scripts/refresh-data.mjs`.
+- Levels the API does not list: Fei2411 benchmark configurations or Priors, newest observation first, then the artificialanalysis.ai/models page.
+- Per-test scores (HLE, Terminal-Bench, FrontierCode and the rest) and subscription subsidies: Priors and Fei2411.
+- Coding Agent Index: the artificialanalysis.ai/agents/coding-agents page (the free API tier returns 403).
+- Key missing or API down: `sources.aaApi.error` names the failure, the build uses the fallbacks above, and the data alert lists the source.
 - Read every pricing page with headless Chrome: `node scripts/check-pricing-pages.mjs --url URL --text`. Add `--click 年付` (or `Yearly`, `连续包年`) to read an annual tab.
 - One-off: `chromium-browser --headless=new --disable-gpu --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36" --virtual-time-budget=15000 --dump-dom URL`. Pages that never go idle (kimi.com/en/help, bigmodel.cn) hang with `--virtual-time-budget`; use the script.
 - Host fails to resolve locally: look it up with `curl "https://dns.google/resolve?name=HOST&type=A"`, then `CHROME_ARGS='--host-resolver-rules=MAP HOST IP'`.

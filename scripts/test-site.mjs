@@ -184,12 +184,36 @@ test("CursorBench joins exact model+effort with sane score and $/task", () => {
   }
 });
 
-// 1e. Newer AA Intelligence Index scores win over lagging Fei2411 configs
+// 1e. Newer AA Intelligence Index scores win: the AA API (fetched this run) over Fei2411 / Priors,
+// and for levels the API lacks, Priors over lagging Fei2411 configs
 test("Intelligence Index uses the newest AA observation per model+effort", () => {
   const fresh = dataset.stats?.aaIndexFreshness;
-  assert.ok(fresh && Array.isArray(fresh.variants), "Missing stats.aaIndexFreshness");
+  assert.ok(fresh && Array.isArray(fresh.variants) && Array.isArray(fresh.apiVariants), "Missing stats.aaIndexFreshness");
   assert.equal(fresh.keptNewerPriors, fresh.variants.length);
+  assert.equal(fresh.apiOverrides, fresh.apiVariants.length);
+  const apiKeys = new Set(fresh.apiVariants.map((v) => v.key));
+  for (const v of fresh.variants) assert.ok(!apiKeys.has(v.key), `${v.key} is listed as both Priors-kept and API-sourced`);
+  if (dataset.sources?.aaApi?.ok) {
+    assert.ok(fresh.apiVariants.length > 0, "AA API ok but no API values replaced older ones");
+    const fetched = dataset.sources.aaApi.fetchedAt.slice(0, 10);
+    for (const v of fresh.apiVariants) {
+      assert.equal(v.keptDate, fetched, `${v.key}: API value date ${v.keptDate} is not the fetch date ${fetched}`);
+      if (v.droppedDate) assert.ok(v.keptDate >= v.droppedDate, `${v.key}: API value older than the ${v.droppedSource} one it replaced`);
+    }
+  } else {
+    assert.equal(fresh.apiVariants.length, 0, "AA API failed but API values are listed");
+  }
   let checked = 0;
+  for (const v of fresh.apiVariants) {
+    const [base, eff] = v.key.split("|");
+    for (const e of entries.filter((x) => x.baseModelId === base && (x.effort || "default") === eff && !x.effortEstimate)) {
+      checked++;
+      assert.equal(e.aaSource, "api", `${e.id} should be API-sourced`);
+      assert.ok(Math.abs(e.intelligenceIndex - v.kept) < 0.01, `${e.id} shows ${e.intelligenceIndex}, expected API ${v.kept}`);
+      assert.ok(Math.abs(e.aaCostPerTaskUsd - v.keptCost) < 1e-4, `${e.id} cost/task ${e.aaCostPerTaskUsd}, expected API ${v.keptCost}`);
+    }
+  }
+  if (fresh.apiVariants.length) assert.ok(checked > 0, "No entries matched the API variants");
   for (const v of fresh.variants) {
     assert.ok(v.keptDate > v.droppedDate, `Kept score for ${v.key} is not newer (${v.keptDate} vs ${v.droppedDate})`);
     const [base, eff] = v.key.split("|");
@@ -201,18 +225,215 @@ test("Intelligence Index uses the newest AA observation per model+effort", () =>
   }
   if (fresh.variants.length) assert.ok(checked > 0, "No entries matched the refreshed variants");
   // Meaningful only if some kept score differs from the stale one: those rows must not show the stale value.
-  const moved = fresh.variants.filter((v) => Math.abs(v.kept - v.dropped) >= 0.05);
+  const moved = [...fresh.variants, ...fresh.apiVariants].filter((v) => Math.abs(v.kept - v.dropped) >= 0.05);
   assert.ok(moved.length >= 5, `Only ${moved.length} refreshed variants change the score; the freshness check has nothing to bite on`);
   for (const v of moved) {
     const [base, eff] = v.key.split("|");
     for (const e of entries.filter((x) => x.baseModelId === base && (x.effort || "default") === eff && !x.effortEstimate)) {
-      assert.ok(Math.abs(e.intelligenceIndex - v.dropped) >= 0.04, `${e.id} shows the stale Fei score ${v.dropped}`);
+      assert.ok(Math.abs(e.intelligenceIndex - v.dropped) >= 0.04, `${e.id} shows the stale ${v.droppedSource || "Fei"} score ${v.dropped}`);
     }
   }
   for (const e of entries) {
     if (e.intelligenceIndex == null || e.benchmarks?.intelligenceIndex == null) continue;
     assert.ok(Math.abs(e.intelligenceIndex - e.benchmarks.intelligenceIndex) <= 0.051, `${e.id}: intelligenceIndex ${e.intelligenceIndex} vs benchmarks ${e.benchmarks.intelligenceIndex}`);
   }
+});
+
+// 1e2. Artificial Analysis free API: source status, coverage, parser and merge on a recorded fixture (no network)
+const RD = await import("./refresh-data.mjs");
+const AA_FIXTURE = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "aa-api-free.json"), "utf8"));
+const AA_FREE_URL = "https://artificialanalysis.ai/api/v2/language/models/free";
+const approx = (a, b, tol = 1e-6) => a === b || Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
+const aaFixtureItems = () => structuredClone(AA_FIXTURE.pages.flatMap((p) => p.data));
+
+test("sources.aaApi: shape and status", () => {
+  const s = dataset.sources?.aaApi;
+  assert.ok(s, "Missing sources.aaApi");
+  for (const k of ["name", "url", "ok", "fetchedAt", "modelCount", "pages", "tier", "intelligenceIndexVersion", "error"]) {
+    assert.ok(k in s, `sources.aaApi.${k} missing`);
+  }
+  assert.equal(s.url, AA_FREE_URL);
+  assert.equal(typeof s.ok, "boolean");
+  if (s.ok) {
+    assert.ok(s.modelCount > 0 && s.pages >= 1, `ok but ${s.modelCount} models over ${s.pages} pages`);
+    assert.equal(s.tier, "free");
+    assert.ok(s.intelligenceIndexVersion != null, "intelligenceIndexVersion missing");
+    assert.ok(!Number.isNaN(Date.parse(s.fetchedAt)), "fetchedAt is not a date");
+    assert.equal(s.error, null);
+  } else {
+    assert.ok(s.error, "failed without an error");
+    assert.equal(s.modelCount, 0);
+  }
+});
+
+test("AA API is the source of ≥ 90% of measured AA variants", () => {
+  const src = new Map();
+  for (const e of entries) {
+    if (e.intelligenceIndex == null || e.effortEstimate) continue;
+    assert.ok(["api", "priors", "fei", "scrape"].includes(e.aaSource), `${e.id}: aaSource ${e.aaSource}`);
+    const prev = src.get(e.modelId);
+    if (prev) assert.equal(prev, e.aaSource, `${e.modelId}: aaSource differs across plans`);
+    src.set(e.modelId, e.aaSource);
+  }
+  for (const e of entries) if (e.effortEstimate) assert.equal(e.aaSource, "estimate", `${e.id}: estimated level marked ${e.aaSource}`);
+  const st = dataset.stats?.aaApi;
+  assert.ok(st, "Missing stats.aaApi");
+  const count = (s) => [...src.values()].filter((x) => x === s).length;
+  assert.equal(st.variantsFromApi, count("api"));
+  assert.equal(st.variantsFromPriors, count("priors"));
+  assert.equal(st.variantsFromFei, count("fei"));
+  assert.equal(st.variantsFromScrape, count("scrape"));
+  assert.equal(st.notInApi.length, src.size - count("api"));
+  if (!dataset.sources?.aaApi?.ok) {
+    assert.equal(count("api"), 0, "API failed but variants are marked api");
+    return;
+  }
+  const share = count("api") / src.size;
+  assert.ok(share >= 0.9, `Only ${count("api")}/${src.size} (${(share * 100).toFixed(0)}%) measured variants come from the AA API: ${st.notInApi.join(", ")}`);
+  for (const e of entries.filter((x) => x.aaSource === "api")) {
+    assert.ok(e.aaModelId, `${e.id}: API-sourced without aaModelId`);
+    assert.ok(e.aaPricing?.inputPer1M != null || e.aaPricing?.blended3to1Per1M != null, `${e.id}: API-sourced without prices`);
+  }
+});
+
+test("AA API fixture: name and slug map to base slug + level", () => {
+  const cases = [
+    ["Claude Opus 5.5 (High, Default Fallback)", "claude-opus-5-5-high", "claude-opus-5-5", "high", false, "Claude Opus 5.5"],
+    ["Claude Opus 5.5 (Max, Default Fallback)", "claude-opus-5-5", "claude-opus-5-5", "max", true, "Claude Opus 5.5"],
+    ["GPT-6.2 Sol (Low)", "gpt-6-2-sol-low", "gpt-6-2-sol", "low", false, "GPT-6.2 Sol"],
+    ["GLM-4.5V (Non-reasoning)", "glm-4-5v", "glm-4-5v", "none", true, "GLM-4.5V"],
+    ["MiMo-V2.5-Pro (Reasoning)", "mimo-v2-5-pro", "mimo-v2-5-pro", "default", true, "MiMo-V2.5-Pro"],
+    ["Kimi K3.1 Pro", "kimi-k3-1-pro", "kimi-k3-1-pro", "default", true, "Kimi K3.1 Pro"],
+    ["Qwen4 Max", "qwen4-max", "qwen4-max", "default", true, "Qwen4 Max"],
+    ["Claude 4.5 Haiku (Reasoning)", "claude-4-5-haiku-reasoning", "claude-4-5-haiku", "default", false, "Claude 4.5 Haiku"],
+    ["DeepSeek V4 Pro 0813 (Non-reasoning)", "deepseek-v4-pro-non-reasoning", "deepseek-v4-pro", "none", false, "DeepSeek V4 Pro 0813"],
+    ["Claude Sonnet 4.6 (Non-reasoning, High)", "claude-sonnet-4-6", "claude-sonnet-4-6", "none", true, "Claude Sonnet 4.6"],
+    ["Qwen3.8 Max (0902)", "qwen3-8-max", "qwen3-8-max", "default", true, "Qwen3.8 Max (0902)"],
+    ["Inkling (Xhigh)", "inkling", "inkling", "xhigh", true, "Inkling"],
+  ];
+  for (const [name, slug, base, effort, headline, baseName] of cases) {
+    const r = RD.parseAaApiLevel(name, slug);
+    assert.deepEqual([r.baseSlug, r.effort, r.isHeadline, r.baseName], [base, effort, headline, baseName], `${name} / ${slug}`);
+  }
+  assert.ok(!/fallback/i.test(RD.normalizeBaseDisplay(RD.parseAaApiLevel("Claude Opus 5.5 (Max, Default Fallback)", "claude-opus-5-5").baseName)));
+});
+
+test("AA API fixture: parsed values match the recorded response", () => {
+  const recs = RD.parseAaApiModels({ data: aaFixtureItems() });
+  const by = new Map(recs.map((r) => [r.slug, r]));
+  const opusHigh = by.get("claude-opus-5-5-high");
+  assert.ok(opusHigh, "claude-opus-5-5-high missing from fixture");
+  assert.equal(opusHigh.baseSlug, "claude-opus-5-5");
+  assert.equal(opusHigh.effort, "high");
+  assert.ok(approx(opusHigh.intelligenceIndex, 51.8), `Opus 5.5 high II ${opusHigh.intelligenceIndex}`);
+  assert.ok(approx(opusHigh.costPerTaskUsd, 3.4647), `Opus 5.5 high cost/task ${opusHigh.costPerTaskUsd}`);
+  assert.ok(opusHigh.id && opusHigh.creatorId, "id / creatorId missing");
+  assert.equal(opusHigh.creatorName, "Anthropic");
+  assert.ok(approx(opusHigh.pricing.blended3to1Per1M, (3 * opusHigh.pricing.inputPer1M + opusHigh.pricing.outputPer1M) / 4));
+  assert.ok(approx(opusHigh.pricing.blended7to2to1Per1M, 0.7 * opusHigh.pricing.cacheHitPer1M + 0.2 * opusHigh.pricing.inputPer1M + 0.1 * opusHigh.pricing.outputPer1M));
+  const raw = aaFixtureItems().find((m) => m.slug === "claude-opus-5-5-high");
+  assert.equal(opusHigh.speed.outputTokPerSec, raw.performance_v3.mean_output_tokens_per_second, "speed must come from performance_v3");
+  for (const k of ["engineering", "financeAndAccounting", "strategyAndOps", "legal", "healthcareAndMedical", "economics"]) {
+    assert.ok(opusHigh.benchmarks[k] != null, `Opus 5.5 high ${k} missing`);
+  }
+  // performance goes null on 2026-12-10: speed still comes from performance_v3
+  const noLegacy = RD.parseAaApiModels({ data: [{ ...raw, performance: null }] })[0];
+  assert.equal(noLegacy.speed.outputTokPerSec, raw.performance_v3.mean_output_tokens_per_second);
+  assert.deepEqual(RD.parseAaApiModels({}), []);
+  assert.deepEqual(RD.parseAaApiModels(null), []);
+});
+
+test("AA API fixture: merge — API wins, Priors sub-tests kept, levels matched, fallback untouched", () => {
+  const recs = RD.parseAaApiModels({ data: aaFixtureItems() });
+  const pv = (base, effort, ii, cpt, extra = {}) => ({
+    variantKey: effort === "default" ? base : `${base}--${effort}`, baseSlug: base, effort, baseDisplay: extra.baseDisplay || base,
+    intelligenceIndex: ii, costPerTaskUsd: cpt, iiDate: "2026-11-20", aaSource: "priors",
+    benchmarks: { intelligenceIndex: Math.round(ii * 10) / 10, hle: 55.6, ...(extra.benchmarks || {}) },
+    pricing: { inputPer1M: 1, outputPer1M: 1, blended3to1Per1M: 1 }, speed: null, ...extra,
+  });
+  const map = new Map([
+    ["claude-opus-5-5", new Map([["high", pv("claude-opus-5-5", "high", 51.79, 3.46, { baseDisplay: "Claude Opus 5.5" })], ["medium", pv("claude-opus-5-5", "medium", 48.26, 2.45)]])],
+    ["qwen4-max", new Map([["xhigh", pv("qwen4-max", "xhigh", 42.79, 3.2681)]])],
+    ["claude-haiku-4-5", new Map([["default", pv("claude-haiku-4-5", "default", 7.43, 0.5318)]])],
+  ]);
+  const { stats, replaced } = RD.mergeAaApiVariants(map, recs, new Map(), "2026-11-27");
+  const opus = map.get("claude-opus-5-5");
+  const h = opus.get("high");
+  assert.equal(h.aaSource, "api");
+  assert.ok(approx(h.intelligenceIndex, 51.8) && approx(h.costPerTaskUsd, 3.4647), `Opus high ${h.intelligenceIndex} / ${h.costPerTaskUsd}`);
+  assert.equal(h.benchmarks.hle, 55.6, "Priors per-test score dropped");
+  assert.ok(h.benchmarks.engineering != null, "API capability index missing");
+  assert.equal(h.pricing.inputPer1M, recs.find((r) => r.slug === "claude-opus-5-5-high").pricing.inputPer1M, "API price must win");
+  assert.equal(h.displayName, "Claude Opus 5.5 (high)");
+  assert.equal(h.iiDate, "2026-11-27");
+  assert.equal(opus.get("max").aaSource, "api", "headline Max level missing");
+  assert.equal(opus.get("max").variantKey, "claude-opus-5-5--max");
+  assert.equal(opus.get("low").aaSource, "api");
+  assert.equal(opus.get("medium").aaSource, "priors", "a level the API lacks keeps its Priors value");
+  assert.ok(!opus.has("default"), "Opus must not gain a default level");
+  // "Qwen4 Max" (no level) matches the existing xhigh level by score; "Claude 4.5 Haiku (Reasoning)" aliases to claude-haiku-4-5
+  assert.deepEqual([...map.get("qwen4-max").keys()], ["xhigh"]);
+  assert.equal(map.get("qwen4-max").get("xhigh").aaSource, "api");
+  assert.equal(map.get("claude-haiku-4-5").get("default").aaSource, "api");
+  assert.ok(!map.has("qwen4") && !map.has("claude-4-5-haiku"), "API slug split into a wrong base");
+  // DeepSeek V4 Pro 0813 maps to the existing key via MODEL_ALIASES; Mistral Large 4 Preview is a new base
+  assert.equal(map.get("deepseek-v4-pro-0813")?.get("none")?.aaSource, "api");
+  assert.equal(map.get("mistral-large-4-preview")?.get("default")?.displayName, "Mistral Large 4 Preview");
+  // unscored / no cost per task / minimal are skipped
+  assert.ok(!map.has("gemini-3-5-flash") && !map.has("muse-wonder-full") && !map.has("glm-4-5v"));
+  assert.ok(stats.skipped.noScore + stats.skipped.noCostPerTask >= 3, JSON.stringify(stats.skipped));
+  const r = replaced.find((x) => x.key === "claude-opus-5-5|high");
+  assert.ok(r && r.droppedSource === "priors" && approx(r.dropped, 51.79) && approx(r.kept, 51.8), JSON.stringify(r));
+  // No API data (key missing or request failed): variants keep their Fei2411 / Priors values
+  const fb = new Map([["claude-opus-5-5", new Map([["high", pv("claude-opus-5-5", "high", 51.79, 3.46)]])]]);
+  const before = structuredClone([...fb.get("claude-opus-5-5").entries()]);
+  const none = RD.mergeAaApiVariants(fb, RD.parseAaApiModels({ data: [] }), new Map(), "2026-11-27");
+  assert.equal(none.stats.variantsFromApi, 0);
+  assert.deepEqual([...fb.get("claude-opus-5-5").entries()], before);
+});
+
+// fetchAaApiModels is async and test() is not: run the fake-fetch scripts first, assert below.
+const aaClientRun = async (script) => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, key: opts.headers["x-api-key"] });
+    const step = script.shift();
+    if (step instanceof Error) throw step;
+    if (typeof step === "number") return { ok: false, status: step, headers: { get: () => null } };
+    return { ok: true, status: 200, json: async () => structuredClone(step) };
+  };
+  const out = await RD.fetchAaApiModels("test-key", { fetchImpl, sleep: async () => {} }).catch((e) => e);
+  return { out, calls };
+};
+const [aaP1, aaP2] = AA_FIXTURE.pages;
+const aaClient = {
+  ok: await aaClientRun([429, 503, aaP1, new Error("socket hang up"), aaP2]),
+  denied: await aaClientRun([403]),
+  exhausted: await aaClientRun([500, 500, 500, 500, 500]),
+  noKey: await RD.fetchAaApiModels("").catch((e) => e),
+};
+test("AA API client: all pages, retries 429/5xx, stops on 403, key only in the header", () => {
+  const [p1, p2] = [aaP1, aaP2];
+  const { ok, denied, exhausted, noKey } = aaClient;
+  assert.ok(!(ok.out instanceof Error), ok.out?.message);
+  assert.equal(ok.out.pages, 2);
+  assert.equal(ok.out.data.length, p1.data.length + p2.data.length);
+  assert.equal(ok.out.tier, "free");
+  assert.equal(ok.calls.length, 5);
+  assert.ok(ok.calls.every((c) => c.key === "test-key" && !c.url.includes("test-key")), "key must travel only in the x-api-key header");
+  assert.ok(ok.calls[0].url.startsWith(`${AA_FREE_URL}?page=1`) && ok.calls[4].url.endsWith("page=2"));
+  assert.ok(denied.out instanceof Error && /HTTP 403/.test(denied.out.message) && denied.calls.length === 1, "403 must fail without retry");
+  assert.ok(!/test-key/.test(denied.out.message), "error message leaks the key");
+  assert.ok(exhausted.out instanceof Error && exhausted.calls.length === 5);
+  assert.ok(noKey instanceof Error && /AA_API_KEY not set/.test(noKey.message));
+});
+
+test("Dead AA v2 data URL is gone", () => {
+  const src = fs.readFileSync(path.join(ROOT, "scripts", "refresh-data.mjs"), "utf8");
+  assert.ok(!src.includes("api/v2/data/llms"), "refresh-data.mjs still references /api/v2/data/llms/models (HTTP 410)");
+  assert.ok(!/usedApiV2/.test(src), "usedApiV2 flag still present");
+  assert.equal(RD.SOURCES.aaApi, AA_FREE_URL);
+  assert.ok(!("usedApiV2" in (dataset.sources?.artificialAnalysis || {})), "combined.json still has artificialAnalysis.usedApiV2");
 });
 
 // 1f. Cost metric menu matches the app's cost modes, each mode has data
@@ -1847,7 +2068,7 @@ test("Methodology: sections, collapsed trust-level details, glyph table, plain l
   const headings = [...dlg.matchAll(/class="settings-heading"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
   for (const h of ["Real cost", "Cost metrics", "Reliability"]) assert.ok(headings.includes(h), `Methodology section "${h}" missing (have ${headings})`);
   const sources = dlg.match(/<div class="method-sources"><b>Sources:<\/b>([\s\S]*?)<\/div>/)?.[1] || "";
-  for (const name of ["Real API Pricing", "Priors", "GitHub Copilot", "Ollama Cloud", "Kilo Pass", "OpenRouter", "ARC Prize", "CursorBench"]) assert.ok(sources.includes(`>${name}</a>`), `Sources line must link ${name}`);
+  for (const name of ["Artificial Analysis", "Real API Pricing", "Priors", "GitHub Copilot", "Ollama Cloud", "Kilo Pass", "OpenRouter", "ARC Prize", "CursorBench"]) assert.ok(sources.includes(`>${name}</a>`), `Sources line must link ${name}`);
   const details = dlg.match(/<details class="method-details"([^>]*)>\s*<summary>How the trust levels are calculated<\/summary>[\s\S]*?<\/details>/);
   assert.ok(details, "Collapsed 'How the trust levels are calculated' section missing");
   assert.ok(!/\bopen\b/.test(details[1]), "Trust-level details must start collapsed");
