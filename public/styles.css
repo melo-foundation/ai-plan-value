@@ -1962,3 +1962,106 @@ html.egg-undo.egg-reveal::after {
 .intro-text {
   display: none;
 }
+
+/* Two-option settings: radio pairs over a hidden select */
+.pair-source {
+  display: none;
+}
+
+.radio-pair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.radio-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid var(--btn-border);
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+input[type="radio"]:checked::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--link);
+}
+
+input[type="radio"]:focus-visible {
+  outline: 1px dotted var(--muted);
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] input[type="radio"] {
+  background-color: #181f28;
+  border-color: #536882;
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] input[type="radio"]:checked::before {
+  background: #7cb5f5;
+}
+
+/* Phones: the same radios as bevelled segmented buttons; the chosen side looks pressed */
+@media (max-width: 600px) {
+  .radio-pair {
+    gap: 0;
+    flex-wrap: nowrap;
+  }
+  .radio-opt {
+    position: relative;
+    min-height: 36px;
+    padding: 0 12px;
+    justify-content: center;
+    font: bold 13px Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
+    color: var(--btn-fg);
+    background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
+    border: 1px solid var(--btn-border);
+    box-shadow: inset 0 1px 0 var(--btn-shine);
+  }
+  .radio-opt + .radio-opt {
+    border-left: 0;
+  }
+  .radio-opt:first-child {
+    border-radius: 3px 0 0 3px;
+  }
+  .radio-opt:last-child {
+    border-radius: 0 3px 3px 0;
+  }
+  .radio-opt input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+  .radio-opt:has(input:checked) {
+    background: linear-gradient(to bottom, var(--btn-bot), var(--btn-top));
+    box-shadow: inset 1px 2px 4px rgba(0, 0, 0, 0.35);
+    color: var(--panel-head-fg);
+    filter: brightness(0.88);
+  }
+  .radio-opt:has(input:focus-visible) {
+    outline: 1px dotted var(--muted);
+    outline-offset: -3px;
+  }
+}

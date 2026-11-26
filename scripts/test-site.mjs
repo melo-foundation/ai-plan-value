@@ -1068,7 +1068,7 @@ test("Billing: Settings row, URL param and fee text are wired", () => {
   const sel = html.match(/<select id="billing"[\s\S]*?<\/select>/)?.[0] || "";
   assert.deepEqual([...sel.matchAll(/<option value="(\w+)"/g)].map((m) => m[1]), ["monthly", "yearly"]);
   assert.ok(/<option value="monthly" selected>Monthly<\/option>/.test(sel), "Billing default must be Monthly");
-  assert.ok(/<label class="settings-heading" for="billing">Billing<\/label>/.test(html), "Missing Billing label");
+  assert.ok(/<span class="settings-heading" id="billing-label">Billing<\/span>/.test(html), "Missing Billing label");
   assert.ok(appJs.includes('state.billing = parseBillingParam(params.get("billing"))') && appJs.includes('params.set("billing", "yearly")'), "billing URL param not read/written");
   assert.ok(/\/yr`/.test(appJs) && appJs.includes('"no annual"'), "Yearly fee text missing");
   assert.ok(html.includes("<code>Yearly</code>: subsidy × monthly price ÷ yearly price per month"), "Methodology Yearly formula missing");
@@ -1972,6 +1972,25 @@ test("Plan drawer sources: a table with plain-language sources and a date column
   // Phone: the Checked column hides, but the bundled-extras sub-header (a <th colspan> in tbody) must not
   assert.equal(cssDecl("(max-width: 600px)", ".prov-table thead th:last-child", "display"), "none");
   assert.ok(!cssRules.some((r) => r.media === "(max-width: 600px)" && r.selectors.includes(".prov-table th:last-child")), "phone rule must not hide every last <th> (it hid the bundled sub-header)");
+});
+
+test("Two-option settings are radio pairs over the hidden select; segmented buttons on phones", () => {
+  for (const [id, values] of [["costView", ["point", "range"]], ["fableCap", ["shared", "own"]], ["billing", ["monthly", "yearly"]]]) {
+    const group = html.match(new RegExp(`<span class="radio-pair"[^>]*data-for="${id}">[\\s\\S]*?</span>\\s*\\n\\s*</div>`))?.[0] || "";
+    assert.deepEqual([...group.matchAll(/type="radio" name="([\w-]+)" value="(\w+)"/g)].map((m) => m[2]), values, `${id}: radio values`);
+    assert.ok(new RegExp(`<select id="${id}" class="pair-source"`).test(html), `${id}: hidden select stays for URLs and reset`);
+    assert.ok(new RegExp(`aria-labelledby="${id}-label"`).test(group) && /role="radiogroup"/.test(group), `${id}: labelled radiogroup`);
+  }
+  assert.equal(cssDecl(null, ".pair-source", "display"), "none");
+  const PHONE = "(max-width: 600px)";
+  assert.ok(px(cssDecl(PHONE, ".radio-opt", "min-height")) >= 36, "phone segments ≥ 36px tall");
+  assert.ok(/inset/.test(cssDecl(PHONE, ".radio-opt:has(input:checked)", "box-shadow") || ""), "checked segment looks pressed");
+  assert.equal(cssDecl(PHONE, ".radio-opt input[type=\"radio\"]", "opacity"), "0", "radio dots hidden on phones");
+  // Behaviour: render() checks the radio that matches the select; clicking a radio drives the select's handler
+  const body = fnBody("syncRadioPairs");
+  assert.ok(/input\.checked = input\.value === sel\.value/.test(body), "syncRadioPairs must mirror the select");
+  assert.ok(/syncRadioPairs\(\);\s*\n\s*syncUrlFromState\(\);/.test(appJs), "render() must sync the radio pairs");
+  assert.ok(/sel\.value = e\.target\.value;\s*\n\s*sel\.dispatchEvent\(new Event\("change"\)\)/.test(appJs), "a radio change must drive the select's change handler");
 });
 
 test("Phone table: every cell carries its column's data-label; Sort select and Show 50 more page the rows", () => {

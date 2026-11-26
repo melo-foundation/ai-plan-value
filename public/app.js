@@ -1438,6 +1438,7 @@ function render() {
   $("extrapFooterText").textContent = next
     ? `${hidden} ${{ medium: "medium-confidence", low: "low-confidence", speculative: "speculative" }[next]} ${hidden === 1 ? "row" : "rows"} hidden`
     : "";
+  syncRadioPairs();
   syncUrlFromState();
 }
 
@@ -1645,6 +1646,27 @@ $("billing").addEventListener("change", (e) => {
   state.billing = parseBillingParam(e.target.value);
   render();
 });
+
+// Two-option settings are radio pairs (segmented buttons on phones) over a hidden <select>,
+// so URLs, reset and the existing change handlers keep working on the select.
+function syncRadioPairs() {
+  if (!document.querySelectorAll) return;
+  for (const group of document.querySelectorAll(".radio-pair[data-for]")) {
+    const sel = $(group.dataset.for);
+    if (!sel) continue;
+    for (const input of group.querySelectorAll('input[type="radio"]')) input.checked = input.value === sel.value;
+  }
+}
+if (document.querySelectorAll) {
+  for (const group of document.querySelectorAll(".radio-pair[data-for]")) {
+    group.addEventListener("change", (e) => {
+      const sel = $(group.dataset.for);
+      if (!sel || !e.target.matches?.('input[type="radio"]')) return;
+      sel.value = e.target.value;
+      sel.dispatchEvent(new Event("change"));
+    });
+  }
+}
 
 function setMinConf(level) {
   state.minConf = level;

@@ -252,25 +252,37 @@
             </select>
           </div>
           <div class="settings-head-row">
-            <label class="settings-heading" for="costView">Cost</label>
-            <select id="costView" class="select" aria-label="Cost">
+            <span class="settings-heading" id="costView-label">Cost</span>
+            <select id="costView" class="pair-source" aria-hidden="true" tabindex="-1">
               <option value="point" selected>Point</option>
               <option value="range">Range</option>
             </select>
+            <span class="radio-pair" role="radiogroup" aria-labelledby="costView-label" data-for="costView">
+              <label class="radio-opt"><input type="radio" name="costView-pair" value="point" checked /><span>Point</span></label>
+              <label class="radio-opt"><input type="radio" name="costView-pair" value="range" /><span>Range</span></label>
+            </span>
           </div>
           <div class="settings-head-row">
-            <label class="settings-heading" for="fableCap">Fable cap</label>
-            <select id="fableCap" class="select" aria-label="Fable cap">
+            <span class="settings-heading" id="fableCap-label">Fable cap</span>
+            <select id="fableCap" class="pair-source" aria-hidden="true" tabindex="-1">
               <option value="shared" selected>Whole week</option>
               <option value="own">Fable only (its half)</option>
             </select>
+            <span class="radio-pair" role="radiogroup" aria-labelledby="fableCap-label" data-for="fableCap">
+              <label class="radio-opt"><input type="radio" name="fableCap-pair" value="shared" checked /><span>Whole week</span></label>
+              <label class="radio-opt"><input type="radio" name="fableCap-pair" value="own" /><span>Fable only (its half)</span></label>
+            </span>
           </div>
           <div class="settings-head-row">
-            <label class="settings-heading" for="billing">Billing</label>
-            <select id="billing" class="select" aria-label="Billing">
+            <span class="settings-heading" id="billing-label">Billing</span>
+            <select id="billing" class="pair-source" aria-hidden="true" tabindex="-1">
               <option value="monthly" selected>Monthly</option>
               <option value="yearly">Yearly</option>
             </select>
+            <span class="radio-pair" role="radiogroup" aria-labelledby="billing-label" data-for="billing">
+              <label class="radio-opt"><input type="radio" name="billing-pair" value="monthly" checked /><span>Monthly</span></label>
+              <label class="radio-opt"><input type="radio" name="billing-pair" value="yearly" /><span>Yearly</span></label>
+            </span>
           </div>
           <div class="settings-head-row effort-row">
             <span class="settings-heading">Reasoning effort</span>
