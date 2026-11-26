@@ -253,7 +253,10 @@ function relTooltip(r) {
   const rl = r.rel || {};
   const chain = state.dataset?.stats?.chains?.[rl.chain];
   const pad = (s) => s.padEnd(9, " ");
-  const lines = [`${LEVEL_LABEL[r.level]} · ×${Math.exp(Z80 * r.sigma).toFixed(1)}`];
+  const lines = [`${LEVEL_LABEL[r.level]} confidence`];
+  if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) {
+    lines.push(`Real cost is likely ${fmtUsd(r.relLo)} to ${fmtUsd(r.relHi)} (80% chance)`, "");
+  }
   const sub = [];
   const mix = r.quotaMix?.[state.costMode];
   if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
@@ -264,7 +267,6 @@ function relTooltip(r) {
   for (const l of sub.slice(1)) lines.push(`${pad("")}${l}`);
   lines.push(`${pad("Cost")}${fmtUsd(r.apiMetric)}  ${rl.cl?.[state.costMode] || ""}`);
   if (r.scorePts > 0) lines.push(`${pad("Score")}~${fmtScore(r.score, state.benchKey)}  ±${r.scorePts.toFixed(1)} pts`);
-  if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) lines.push(`${pad("Range")}${fmtUsd(r.relLo)}–${fmtUsdShort(r.relHi)}`);
   return lines.join("\n");
 }
 
