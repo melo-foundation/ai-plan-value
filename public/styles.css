@@ -937,7 +937,20 @@ details[open] > summary.panel-toggle h2::before {
   overflow-x: auto;
 }
 
-/* Subsidy sources under the drawer matrix: a second table in the matrix style */
+/* Subsidy sources under the drawer matrix: collapsed by default, a second table in the matrix style */
+.prov-details > summary {
+  cursor: pointer;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--link);
+  border-top: 1px solid var(--cell-border);
+}
+
+.prov-details[open] > summary {
+  color: var(--panel-head-fg);
+}
+
 .prov-table {
   width: 100%;
   border-collapse: collapse;

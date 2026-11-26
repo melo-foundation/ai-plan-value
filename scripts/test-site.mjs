@@ -221,6 +221,22 @@ test("Cost metric options match COST_MODES and every mode has priced entries", (
   }
 });
 
+// 1z. One creator per model, one colour per creator (bars of a vendor share its colour)
+test("Each model has one creator and each creator one colour", () => {
+  const creatorsByModel = new Map(), colorsByCreator = new Map();
+  for (const e of entries) {
+    if (!e.baseModelId) continue;
+    (creatorsByModel.get(e.baseModelId) || creatorsByModel.set(e.baseModelId, new Set()).get(e.baseModelId)).add(e.modelCreator);
+    (colorsByCreator.get(e.modelCreator) || colorsByCreator.set(e.modelCreator, new Set()).get(e.modelCreator)).add(e.color);
+  }
+  const multiCreator = [...creatorsByModel].filter(([, v]) => v.size > 1).map(([k, v]) => `${k}: ${[...v].join("/")}`);
+  assert.deepEqual(multiCreator, [], "models with several creators");
+  const multiColor = [...colorsByCreator].filter(([, v]) => v.size > 1).map(([k, v]) => `${k}: ${[...v].join("/")}`);
+  assert.deepEqual(multiColor, [], "creators with several colours");
+  const argon = entries.filter((e) => e.baseModelId === "gemini-4-argon");
+  assert.ok(argon.length && argon.every((e) => e.modelCreator === "Google"), "Gemini 4 Argon is Google's on every plan");
+});
+
 // 2. Dataset size & uniqueness
 test("Dataset has expected scale and zero duplicate entry IDs", () => {
   assert.ok(entries.length >= 500, `Expected >= 500 entries, got ${entries.length}`);
@@ -1956,6 +1972,8 @@ test("Plan drawer sources: a table with plain-language sources and a date column
     ["GPT 5.6 Luna Plus × 2 (ruled plan ratio)", "estimated from GPT 5.6 Luna Plus (×2, Fei's plan ratio)"],
     ["gateway panel, 2026-10-06", "third-party gateway's usage panel, 2026-10-06"],
     ["pooled 17.1× Fei + 20.8× Priors", "average of Fei (17.1×) and Priors (20.8×)"],
+    ["Opus 5.5 tokens × 2 (price ratio)", "same quota as Opus 5.5: 2× the tokens, since each costs 1/2 as much"],
+    ["GPT-6 Astra Pro 10x: GPT 5.6 Sol tokens × 0.295 (price ratio)", "GPT-6 Astra Pro 10x: same quota as GPT 5.6 Sol: 0.295× the tokens, since each costs 3.39× as much"],
   ]) assert.equal(app.plainSource(raw), want);
   // Rendered table for a plan with a chain and bundled credits
   const plan = "ChatGPT Pro 20x";
@@ -1963,8 +1981,9 @@ test("Plan drawer sources: a table with plain-language sources and a date column
   assert.ok(planEntries.length > 0, `no ${plan} rows`);
   const models = [...new Set(planEntries.map((e) => String(e.modelDisplay).replace(/\s*\(.*\)$/, "")))].map((baseName) => ({ baseName }));
   const html = app.renderProvenance(planEntries, models);
-  assert.ok(/<table class="prov-table"/.test(html), "sources must render as a table");
-  assert.deepEqual([...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]).slice(0, 4), ["Model", "Subsidy", "Source", "Checked"]);
+  assert.ok(/<details class="prov-details"><summary>[^<]+<\/summary><table class="prov-table"/.test(html), "sources must render as a table, collapsed by default");
+  assert.ok(!/<details class="prov-details" open/.test(html), "sources collapsed by default");
+  assert.deepEqual([...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]).slice(0, 4), ["Model", "Subsidy", "Source", "Data date"]);
   assert.ok(/class="prov-date">\d{4}-\d{2}-\d{2}</.test(html), "dates must sit in their own column");
   const visible = html.replace(/ title="[^"]*"/g, ""); // the page's own wording stays on hover only
   assert.ok(!/Priors medium|\bpp\b|\| \$/.test(visible), "shorthand or raw source cells leaked into the drawer");

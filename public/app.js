@@ -626,6 +626,8 @@ function renderPlanDrawer(planName, allResolved) {
 
 // Pipeline shorthand → plain words (drawer and tooltips)
 function plainSource(line) {
+  const pre = /^([^:]{2,60}): (.+)$/.exec(String(line));
+  if (pre && !/^(Fei|Priors)$/.test(pre[1])) return `${pre[1]}: ${plainSource(pre[2])}`;
   let t = String(line);
   const pp = (x) => x.replace(/(\d+(?:\.\d+)?) pp\b/g, "$1% of the limit");
   t = t.replace(/^= (.+?) \(same pool, rate card\)$/, "estimated from $1 (same quota, priced by rate card)")
@@ -640,6 +642,13 @@ function plainSource(line) {
     .replace(/^pooled ([\d.]+)× Fei \+ ([\d.]+)× Priors$/, "average of Fei ($1×) and Priors ($2×)")
     .replace(/^inconsistent ×([\d.]+) \((.+?) vs (.+?), same pool\)$/, "disagrees ×$1 with other plans ($2 vs $3)")
     .replace(/^derived \(official plan ratio\)$/, "estimated from a sibling plan (official plan ratio)")
+    .replace(/^(.+?) tokens × 1 \(price ratio\)$/, "same quota as $1")
+    .replace(/^(.+?) tokens × ([\d.]+) \(price ratio\)$/, (_, m, r) => {
+      const x = Number(r);
+      return x >= 1
+        ? `same quota as ${m}: ${r}× the tokens, since each costs 1/${r} as much`
+        : `same quota as ${m}: ${r}× the tokens, since each costs ${Number((1 / x).toFixed(2))}× as much`;
+    })
     .replace(/^(.+?) × ([\d.]+)$/, "estimated from $1 (×$2)");
   t = t.replace(/Priors: Priors, /g, "Priors dataset, ").replace(/\bPriors (high|medium|low)\b/g, "Priors dataset ($1)").replace(/\bPriors, /g, "Priors dataset, ")
     .replace(/\b1 screenshot\b/g, "one user's screenshot").replace(/\bscreenshot\b(?!s)/g, "screenshot").replace(/\btweet\b/g, "a tweet")
@@ -700,10 +709,10 @@ function renderProvenance(planEntries, models) {
         )
         .join("")
     : "";
-  return `<table class="prov-table" aria-label="Subsidy sources">
-    <thead><tr><th>Model</th><th class="prov-num">Subsidy</th><th>Source</th><th>Checked</th></tr></thead>
+  return `<details class="prov-details"><summary>Where the subsidy numbers come from</summary><table class="prov-table" aria-label="Subsidy sources">
+    <thead><tr><th>Model</th><th class="prov-num">Subsidy</th><th>Source</th><th>Data date</th></tr></thead>
     <tbody>${rows}${creditRows}</tbody>
-  </table>`;
+  </table></details>`;
 }
 
 // The bars the chart shows for a set of rows: deduplicated by the cheapest-plan / cheapest-effort toggles, cheapest first.

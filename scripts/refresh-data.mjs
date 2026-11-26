@@ -4769,6 +4769,34 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   // Bundled credits outside the quota (scripts/included-credits.mjs): recorded per plan, never counted in the subsidy.
   const creditStats = applyIncludedCredits(expandedEntries, { log });
   log(`Included credits: ${creditStats.listed} rows listed, ${creditStats.none} none, ${creditStats.unknown} unknown`);
+  // One creator per model and one colour per creator. Rows built from seller data (Copilot, Droid,
+  // Command Code…) sometimes carry the seller as creator; colour came from whichever path built the row.
+  {
+    const creatorVotes = new Map(); // baseModelId → Map(creator → votes)
+    for (const e of expandedEntries) {
+      const c = e.modelCreator;
+      if (!c || !e.baseModelId || c === e.vendor) continue; // seller-as-creator rows don't vote
+      const m = creatorVotes.get(e.baseModelId) || new Map();
+      m.set(c, (m.get(c) || 0) + (e.aaLive ? 3 : 1));
+      creatorVotes.set(e.baseModelId, m);
+    }
+    const colorByCreator = new Map();
+    for (const m of aaByNorm.values()) {
+      if (m.creatorName && m.creatorColor && !colorByCreator.has(m.creatorName)) colorByCreator.set(m.creatorName, m.creatorColor);
+    }
+    let creatorFixed = 0, colorFixed = 0;
+    for (const e of expandedEntries) {
+      const votes = creatorVotes.get(e.baseModelId);
+      if (votes && votes.size) {
+        const best = [...votes].sort((a, b) => b[1] - a[1])[0][0];
+        if (e.modelCreator !== best) { e.modelCreator = best; creatorFixed++; }
+      }
+      const color = colorByCreator.get(e.modelCreator) || vendorColor(e.modelCreator, null);
+      if (e.color !== color) { e.color = color; colorFixed++; }
+    }
+    log(`Model creator fixed on ${creatorFixed} row(s); colour unified on ${colorFixed} row(s)`);
+  }
+
   for (const e of expandedEntries) for (const k of Object.keys(e)) if (k.startsWith("_")) delete e[k];
 
   expandedEntries.sort((a, b) => {

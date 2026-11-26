@@ -283,7 +283,8 @@ export function feiChain(row, ctx, depth = 0, seen = new Set()) {
       else if (r > 5 || r < 0.2) step = { k: "M3far", s: STEP_SIGMA.M3far, t: "price ratio" };
       else if (priceProp) step = { k: "M1", s: STEP_SIGMA.M1, t: "price-proportional pool" };
       else step = { k: "M3", s: STEP_SIGMA.M3, t: "price ratio" };
-      line = `${shortModel(anchor ? ctx.modelName(anchor) : m[1])} × ${Number(r.toFixed(3))}${step.k === "M1" ? " (same pool)" : ""}`;
+      // r scales the anchor's token allowance by the price ratio; in $ the quota is the same.
+      line = `${shortModel(anchor ? ctx.modelName(anchor) : m[1])} tokens × ${Number(r.toFixed(3))} (price ratio)`;
     } else {
       if (/由 .* 共享周池/.test(src)) step = { k: "M1", s: STEP_SIGMA.M1, t: "shared $ pool" };
       else if (/官方/.test(text) && /(倍率|worth|\d+\/\d+|为.*的\d倍)/.test(text)) step = { k: "P1", s: STEP_SIGMA.P1, t: "official plan ratio" };
