@@ -1,3 +1,20 @@
+/* Verdana fallback for Android/Linux: DejaVu Sans subset (Latin + site symbols), fonts/LICENSE */
+@font-face {
+  font-family: "DejaVu Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local("DejaVu Sans"), local("DejaVuSans"), url("./fonts/DejaVuSans-subset.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DejaVu Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local("DejaVu Sans Bold"), local("DejaVuSans-Bold"), url("./fonts/DejaVuSans-Bold-subset.woff2") format("woff2");
+}
+
 :root {
   color-scheme: light;
   --outer-bg: #dce3ec;
@@ -73,7 +90,7 @@ body {
   padding: 20px 14px 48px;
   background: var(--outer-bg);
   color: var(--fg);
-  font: 14.5px/1.45 Verdana, Tahoma, Arial, sans-serif;
+  font: 14.5px/1.45 Verdana, "DejaVu Sans", Tahoma, Arial, sans-serif;
 }
 
 a {
@@ -134,7 +151,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: bold 13px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  font: bold 13px/1.2 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--btn-fg);
   background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
   border: 1px solid var(--btn-border);
@@ -235,7 +252,7 @@ a {
 }
 
 .select {
-  font: 12.5px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  font: 12.5px/1.2 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--fg);
   background: var(--shell-bg);
   border-top: 1px solid var(--shell-border);
@@ -414,7 +431,7 @@ input[type="checkbox"]:checked {
 }
 
 .remove-btn {
-  font: bold 11px/1 Tahoma, Verdana, Arial, sans-serif;
+  font: bold 11px/1 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--btn-fg);
   background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
   border: 1px solid var(--btn-border);
@@ -513,7 +530,7 @@ input[type="checkbox"]:checked {
   padding: 0;
   border: 0;
   background: none;
-  font: 12px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  font: 12px/1.2 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--link);
   text-decoration: underline;
   cursor: pointer;
@@ -730,7 +747,7 @@ tr.grouped-item td:first-child {
 
 .search-input {
   width: min(300px, 100%);
-  font: 13px/1.2 Tahoma, Verdana, Arial, sans-serif;
+  font: 13px/1.2 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--fg);
   background: var(--shell-bg);
   border-top: 1px solid var(--shell-border);
@@ -894,7 +911,7 @@ details[open] > summary.panel-toggle h2::before {
 
 .plan-exp-btn {
   flex-shrink: 0;
-  font: bold 10.5px/1 Tahoma, Verdana, Arial, sans-serif;
+  font: bold 10.5px/1 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--btn-fg);
   background: linear-gradient(to bottom, var(--btn-top), var(--btn-bot));
   border: 1px solid var(--btn-border);
@@ -909,10 +926,50 @@ details[open] > summary.panel-toggle h2::before {
 
 .plan-drawer {
   grid-column: 1 / -1;
+  min-width: 0;
   margin-top: 1px;
   background: var(--shell-bg);
   border: 1px solid var(--panel-border);
+}
+
+.plan-matrix-wrap {
   overflow-x: auto;
+}
+
+/* Subsidy provenance under the drawer matrix: models · subsidy · source */
+.prov-list {
+  display: grid;
+  grid-template-columns: fit-content(42%) max-content minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 1px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  background: var(--filter-bg);
+  border-top: 1px solid var(--cell-border);
+}
+
+.prov-line {
+  display: contents;
+}
+
+.prov-label {
+  font-weight: bold;
+  color: var(--panel-head-fg);
+}
+
+.prov-val {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.prov-src {
+  color: var(--muted);
+  overflow-wrap: break-word;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .plan-matrix {
@@ -1154,7 +1211,7 @@ tbody tr:hover {
 }
 
 .method-formulas code {
-  font: bold 12.5px/1.4 Tahoma, Verdana, Arial, sans-serif;
+  font: bold 12.5px/1.4 Tahoma, Verdana, "DejaVu Sans", Arial, sans-serif;
   color: var(--panel-head-fg);
 }
 
@@ -1374,7 +1431,7 @@ tbody tr:hover {
     background: var(--shell-bg);
     box-shadow: 1px 0 0 var(--cell-border);
   }
-  .plan-drawer {
+  .plan-matrix-wrap {
     background:
       linear-gradient(to left, var(--shell-bg), var(--shell-bg)) right / 14px 100% no-repeat local,
       linear-gradient(to left, rgba(0, 0, 0, 0.16), transparent) right / 14px 100% no-repeat scroll,
@@ -1496,5 +1553,227 @@ tbody tr:hover {
 @media (max-width: 600px) {
   #methodDialog .method-metrics td:first-child {
     white-space: normal;
+  }
+}
+
+/* Table toolbar extras: Sort (phones only) and paging */
+.toolbar-sort,
+.card-sub {
+  display: none;
+}
+
+.table-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--filter-bg);
+  border-top: 1px solid var(--cell-border);
+}
+
+.table-more-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phone: full table as card rows, full-screen dialogs */
+@media (max-width: 600px) {
+  .table-toolbar {
+    gap: 6px 10px;
+  }
+  .table-toolbar .search-input {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .toolbar-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .toolbar-sort .select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #tableSortDir {
+    min-width: 40px;
+    justify-content: center;
+  }
+  .table-wrap {
+    overflow-x: visible;
+  }
+  .data-table,
+  .data-table tbody {
+    display: block;
+  }
+  .data-table tbody {
+    padding: 5px 4px;
+  }
+  .data-table thead {
+    display: none;
+  }
+  .data-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 0;
+    min-height: 60px;
+    padding: 5px 8px;
+    background: var(--shell-bg);
+    border: 1px solid var(--cell-border);
+    box-shadow: inset 0 1px 0 var(--btn-shine);
+  }
+  .data-table tbody tr + tr {
+    margin-top: 5px;
+  }
+  .data-table tbody tr:nth-child(even) {
+    background: var(--zebra);
+  }
+  .data-table tbody tr:hover {
+    background: var(--row-hover);
+  }
+  .data-table tbody td,
+  .data-table tbody tr.group-row td {
+    padding: 0;
+    height: auto;
+    border: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: left;
+  }
+  .data-table tbody td[data-label] {
+    display: inline-block;
+    order: 4;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .data-table tbody td[data-label]::before {
+    content: attr(data-label) " ";
+    color: var(--muted);
+  }
+  /* Line 1: model + glyph, Real cost */
+  .data-table tbody td.name-cell {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .data-table tbody td.real-cell {
+    order: 2;
+    flex: none;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .data-table tbody td.name-cell::before,
+  .data-table tbody td.real-cell::before {
+    content: none;
+  }
+  .data-table .name-cell .plan {
+    display: none;
+  }
+  /* Line 2: plan · fee · score */
+  .data-table tbody td.card-sub {
+    order: 3;
+    display: flex;
+    flex: 1 1 100%;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .card-sub span {
+    flex: none;
+  }
+  .card-sub span:first-child {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-sub span + span::before {
+    content: "\00a0·\00a0";
+  }
+  /* Line 3: remaining label/value pairs */
+  .data-table tbody td.score-cell,
+  .data-table tbody td.fee-cell,
+  .data-table tbody td.card-empty,
+  .data-table tbody td.col-hide-md {
+    display: none;
+  }
+  .data-table .meta-cell div {
+    display: inline;
+  }
+  .data-table .meta-cell div + div::before {
+    content: " · ";
+  }
+  .data-table tbody td.empty {
+    flex: 1 1 100%;
+    padding: 16px 0;
+    text-align: center;
+  }
+  .data-table tbody tr.grouped-item {
+    margin-left: 14px;
+  }
+  .data-table tbody tr.grouped-item td:first-child {
+    padding-left: 0;
+  }
+  .data-table tbody tr.group-row {
+    min-height: 44px;
+    align-items: center;
+    background: linear-gradient(to bottom, var(--panel-head-top), var(--panel-head-bot));
+    border-color: var(--panel-border);
+  }
+  .data-table tbody tr.group-row td.name-cell,
+  .data-table tbody tr.group-row td.real-cell {
+    font-size: 13.5px;
+  }
+  .data-table tbody tr.group-row td.card-sub,
+  .data-table tbody tr.group-row td[data-label] {
+    font-weight: normal;
+  }
+
+  .dialog,
+  #methodDialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .dialog-titlebar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 48px;
+    padding: 0 12px;
+  }
+  .dialog-body,
+  #methodDialog .method-body {
+    max-height: calc(100dvh - 48px);
+    overscroll-behavior: contain;
+  }
+  .settings-head-row.effort-row {
+    flex-wrap: wrap;
+  }
+  .effort-row .effort-range {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+  .effort-row .effort-pick {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .effort-row .effort-pick .select {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }

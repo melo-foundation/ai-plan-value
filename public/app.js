@@ -82,6 +82,7 @@ const state = {
   openWeightsOnly: false,
   extraCriteria: [], // [{ benchKey, minScore }]
   tableQuery: "",
+  tableLimit: 50, // phone card view: rows rendered before "Show 50 more"
   groupByPlan: false,
   expandedTableGroups: new Set(),
   cheapestPlanOnly: true,
@@ -249,20 +250,28 @@ function realCostText(r, cost = r.effectiveCost, lo = r.relLo, hi = r.relHi) {
   return `${tilde(r.costDerivedReal)}${fmtUsd(cost)}`;
 }
 
-function relTooltip(r) {
-  const rl = r.rel || {};
-  const chain = state.dataset?.stats?.chains?.[rl.chain];
-  const pad = (s) => s.padEnd(9, " ");
-  const lines = [`${LEVEL_LABEL[r.level]} confidence`];
-  if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) {
-    lines.push(`Real cost is likely ${fmtUsd(r.relLo)} to ${fmtUsd(r.relHi)} (80% chance)`, "");
-  }
+// Source lines behind a row's subsidy: cap reading, token-mix factor, then the chain's own lines.
+function subsidySources(r) {
+  const chain = state.dataset?.stats?.chains?.[r.rel?.chain];
   const sub = [];
   const mix = r.quotaMix?.[state.costMode];
   if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
   if (mix && Math.abs(mix.f - 1) > 0.005) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   sub.push(...(chain?.lines || []));
-  const subVal = r.isApi ? "1×" : r.unmetered ? "∞" : fmtMult(r.subsidy);
+  return sub;
+}
+
+const subsidyText = (r) => (r.isApi ? "1×" : r.unmetered ? "∞" : fmtMult(r.subsidy));
+
+function relTooltip(r) {
+  const rl = r.rel || {};
+  const pad = (s) => s.padEnd(9, " ");
+  const lines = [`${LEVEL_LABEL[r.level]} confidence`];
+  if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) {
+    lines.push(`Real cost is likely ${fmtUsd(r.relLo)} to ${fmtUsd(r.relHi)} (80% chance)`, "");
+  }
+  const sub = subsidySources(r);
+  const subVal = subsidyText(r);
   lines.push(`${pad("Subsidy")}${subVal}  ${sub[0] || ""}`);
   for (const l of sub.slice(1)) lines.push(`${pad("")}${l}`);
   lines.push(`${pad("Cost")}${fmtUsd(r.apiMetric)}  ${rl.cl?.[state.costMode] || ""}`);
@@ -403,6 +412,16 @@ function getAllEntriesResolved() {
         !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
           ? (e.priceUsd / effectiveCost) * capShare
           : null;
+      // T3 turn mode: hours of agent time the quota buys (turns/mo × minutes per turn)
+      const minPerTurn = e.t3Turn?.minutesPerTurn;
+      const hoursPerMonth =
+        mode === "turn" && minPerTurn > 0
+          ? e.unmetered
+            ? Infinity
+            : volumePerMonth != null
+              ? (volumePerMonth * minPerTurn) / 60
+              : null
+          : null;
 
       return {
         ...e,
@@ -426,6 +445,7 @@ function getAllEntriesResolved() {
         realTaskCost,
         realMtok,
         tasksPerMonth: volumePerMonth,
+        hoursPerMonth,
       };
     });
 }
@@ -542,17 +562,48 @@ function renderPlanDrawer(planName, allResolved) {
 
   return `
     <div class="plan-drawer">
-      <table class="plan-matrix">
-        <thead>
-          <tr>
-            <th>Model</th>
-            ${headCols}
-          </tr>
-        </thead>
-        <tbody>${bodyRows}</tbody>
-      </table>
+      <div class="plan-matrix-wrap">
+        <table class="plan-matrix">
+          <thead>
+            <tr>
+              <th>Model</th>
+              ${headCols}
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+      ${renderProvenance(planEntries, models)}
     </div>
   `;
+}
+
+// One line per source in the plan's subsidy chains: models · subsidy · source (as in the glyph tooltip).
+function renderProvenance(planEntries, models) {
+  const order = new Map(models.map((m, i) => [m.baseName, i]));
+  const groups = new Map();
+  for (const e of planEntries) {
+    const val = subsidyText(e);
+    const sources = subsidySources(e);
+    const key = `${e.rel?.chain}|${val}|${sources.join("|")}`;
+    const baseName = String(e.modelDisplay || e.baseModelId).replace(/\s*\((?:max|xhigh|high|medium|low|non-reasoning)\)\s*$/i, "");
+    if (!groups.has(key)) groups.set(key, { val, sources, names: new Set(), rank: Infinity });
+    const g = groups.get(key);
+    g.names.add(baseName);
+    g.rank = Math.min(g.rank, order.get(baseName) ?? Infinity);
+  }
+  if (!groups.size) return "";
+  const lines = [...groups.values()]
+    .sort((a, b) => a.rank - b.rank)
+    .flatMap((g) => {
+      const src = g.sources.length ? g.sources : ["—"];
+      return src.map(
+        (s, i) =>
+          `<div class="prov-line"><span class="prov-label">${i ? "" : esc([...g.names].join(", "))}</span><span class="prov-val num">${i ? "" : esc(g.val)}</span><span class="prov-src">${esc(s).replace(/\d{4}-\d{2}-\d{2}/g, '<span class="nowrap">$&</span>')}</span></div>`
+      );
+    })
+    .join("");
+  return `<div class="prov-list" aria-label="Subsidy sources">${lines}</div>`;
 }
 
 function renderBarChart(allRows, allResolved) {
@@ -645,6 +696,26 @@ function renderBarChart(allRows, allResolved) {
   });
 }
 
+const DESC_SORT_KEYS = new Set(["score", "subsidy", "tasksPerMonth", "hoursPerMonth", "context", "speed"]);
+const TABLE_PAGE = 50;
+const phoneMq = window.matchMedia("(max-width: 600px)");
+
+function setSort(key, dir) {
+  if (dir) {
+    state.sortDir = dir;
+  } else if (state.sortKey === key) {
+    state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  } else {
+    state.sortDir = DESC_SORT_KEYS.has(key) || key.startsWith("extra:") ? "desc" : "asc";
+  }
+  state.sortKey = key;
+  state.tableLimit = TABLE_PAGE;
+  render();
+}
+
+const fmtHours = (h) =>
+  h === Infinity ? "∞" : !Number.isFinite(h) ? "—" : h < 10 ? h.toFixed(1) : Math.round(h).toLocaleString();
+
 function renderTable(rows) {
   const q = state.tableQuery.trim().toLowerCase();
   const visible = q
@@ -658,6 +729,7 @@ function renderTable(rows) {
   const benchMeta = activeBenchMeta();
   const scoreKey = activeScoreKey();
   const isTokens = state.costMode === "tokens";
+  const isTurn = state.costMode === "turn";
   const modeMeta = COST_MODES[state.costMode] || COST_MODES.task;
   const unit = modeMeta.unit;
   const volLabel = modeMeta.vol;
@@ -678,12 +750,21 @@ function renderTable(rows) {
     { key: "effectiveCost", label: `Real $/${unit}`, cls: "num-col" },
     { key: "altCost", label: isTokens ? "Real $/task" : "Real $/1M", cls: "num-col col-hide-sm" },
     { key: "tasksPerMonth", label: volLabel, cls: "num-col col-hide-sm" },
+    ...(isTurn ? [{ key: "hoursPerMonth", label: "Hours/mo", cls: "num-col col-hide-sm" }] : []),
   ];
+  const labelOf = Object.fromEntries(cols.map((c) => [c.key, c.label]));
+  const dl = (key) => ` data-label="${esc(labelOf[key])}"`;
 
   if (!cols.some((c) => c.key === state.sortKey)) {
     state.sortKey = "effectiveCost";
     state.sortDir = "asc";
   }
+
+  // Mobile Sort select (headers are hidden in card view)
+  const sortSel = $("tableSort");
+  sortSel.innerHTML = cols.map((c) => `<option value="${esc(c.key)}">${esc(c.label)}</option>`).join("");
+  sortSel.value = state.sortKey;
+  $("tableSortDir").textContent = state.sortDir === "asc" ? "▲" : "▼";
 
   const thead = $("tableHead");
   thead.innerHTML = `<tr>${cols
@@ -694,23 +775,7 @@ function renderTable(rows) {
     .join("")}</tr>`;
 
   thead.querySelectorAll("th[data-sort]").forEach((th) => {
-    th.addEventListener("click", () => {
-      const key = th.dataset.sort;
-      if (state.sortKey === key) {
-        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-      } else {
-        state.sortKey = key;
-        const descDefault =
-          key === "score" ||
-          key === "subsidy" ||
-          key === "tasksPerMonth" ||
-          key === "context" ||
-          key === "speed" ||
-          key.startsWith("extra:");
-        state.sortDir = descDefault ? "desc" : "asc";
-      }
-      render();
-    });
+    th.addEventListener("click", () => setSort(th.dataset.sort));
   });
 
   const dir = state.sortDir === "asc" ? 1 : -1;
@@ -733,7 +798,8 @@ function renderTable(rows) {
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
         case "apiCost": return r.apiMetric ?? 1e9;
         case "altCost": return altCost(r) ?? 1e9;
-        case "tasksPerMonth": return r.tasksPerMonth ?? -1;
+        case "tasksPerMonth": return r.unmetered ? 1e12 : r.tasksPerMonth ?? -1;
+        case "hoursPerMonth": return Number.isFinite(r.hoursPerMonth) ? r.hoursPerMonth : r.hoursPerMonth === Infinity ? 1e12 : -1;
         default: return r.effectiveCost ?? 1e9;
       }
     };
@@ -744,20 +810,25 @@ function renderTable(rows) {
   function altCost(r) {
     return isTokens ? r.realTaskCost : r.realMtok;
   }
+  const limit = phoneMq.matches ? state.tableLimit : Infinity;
+  const setMore = (shown, total) => {
+    $("tableMore").hidden = shown >= total;
+    $("tableMoreCount").textContent = `${shown.toLocaleString()} / ${total.toLocaleString()}`;
+  };
   if (!sorted.length) {
     tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No plans match these limits.</td></tr>`;
+    setMore(0, 0);
     return;
   }
 
-  const renderRow = (r, grouped) => {
-    const tasksLabel = r.unmetered
-      ? "∞"
-      : r.tasksPerMonth
-        ? Math.round(r.tasksPerMonth).toLocaleString()
-        : "—";
+  const fmtCount = (n, unmetered) => (unmetered ? "∞" : n > 0 ? Math.round(n).toLocaleString() : "—");
+  const scoreLabel = (v) => `${benchMeta.label} ${v}`;
+  // Phone card line 2 (hidden on wider screens, where fee and score have their own columns)
+  const cardSub = (parts) => `<td class="card-sub">${parts.filter(Boolean).map((p) => `<span>${p}</span>`).join("")}</td>`;
 
+  const renderRow = (r, grouped) => {
     const extraCells = state.extraCriteria
-      .map((c) => `<td class="num-col col-hide-sm">${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
+      .map((c) => `<td class="num-col col-hide-sm"${dl(`extra:${c.benchKey}`)}>${fmtScore(getScore(r, c.benchKey), c.benchKey)}</td>`)
       .join("");
 
     const nameCell = grouped
@@ -765,23 +836,26 @@ function renderTable(rows) {
       : `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
 
     const accessCell = grouped
-      ? `<td class="meta-cell col-hide-sm col-hide-md"></td>`
-      : `<td class="meta-cell col-hide-sm col-hide-md"><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
+      ? `<td class="meta-cell col-hide-sm col-hide-md card-empty"${dl("access")}></td>`
+      : `<td class="meta-cell col-hide-sm col-hide-md"${dl("access")}><div>${esc(r.harness)}</div><div class="plan">${esc(r.quotaWindowLabel)}</div></td>`;
 
     const rowCls = [grouped ? "grouped-item" : "", isFaded(r) ? "is-extrapolated" : ""].filter(Boolean).join(" ");
+    const scoreText = `${tilde(r.scoreDerived)}${fmtScore(r.score, scoreKey)}`;
 
     return `
       <tr${rowCls ? ` class="${rowCls}"` : ""}>
-        <td>${nameCell}</td>
-        <td class="num-col">${tilde(r.scoreDerived)}${fmtScore(r.score, scoreKey)}</td>
+        <td class="name-cell"${dl("model")}>${nameCell}</td>
+        <td class="num-col score-cell"${dl("score")}>${scoreText}</td>
         ${extraCells}
         ${accessCell}
-        <td class="num-col">${feeText(r)}</td>
-        <td class="num-col col-hide-sm">${r.unmetered ? "∞" : `${tilde(r.subDerived)}${fmtMult(r.subsidy)}`}</td>
-        <td class="num-col col-hide-sm col-hide-md">${tilde(r.costDerived)}${fmtUsd(r.apiMetric)}</td>
-        <td class="num-col real-cell">${realCostText(r)}</td>
-        <td class="num-col col-hide-sm">${tilde(isTokens ? r.altDerived : r.subDerived)}${fmtUsd(altCost(r))}</td>
-        <td class="num-col col-hide-sm">${tasksLabel}</td>
+        <td class="num-col fee-cell"${dl("fee")}>${feeText(r)}</td>
+        <td class="num-col col-hide-sm"${dl("subsidy")}>${r.unmetered ? "∞" : `${tilde(r.subDerived)}${fmtMult(r.subsidy)}`}</td>
+        <td class="num-col col-hide-sm col-hide-md"${dl("apiCost")}>${tilde(r.costDerived)}${fmtUsd(r.apiMetric)}</td>
+        <td class="num-col real-cell"${dl("effectiveCost")}>${realCostText(r)}</td>
+        <td class="num-col col-hide-sm"${dl("altCost")}>${tilde(isTokens ? r.altDerived : r.subDerived)}${fmtUsd(altCost(r))}</td>
+        <td class="num-col col-hide-sm"${dl("tasksPerMonth")}>${fmtCount(r.tasksPerMonth, r.unmetered)}</td>
+        ${isTurn ? `<td class="num-col col-hide-sm"${dl("hoursPerMonth")}>${fmtHours(r.hoursPerMonth)}</td>` : ""}
+        ${cardSub([grouped ? null : esc(cleanPlan(r)), feeText(r), scoreLabel(scoreText)])}
       </tr>
     `;
   };
@@ -794,12 +868,15 @@ function renderTable(rows) {
       groups.get(pName).rows.push(r);
     }
     const html = [];
-    for (const [pName, g] of groups.entries()) {
+    const groupList = [...groups.entries()];
+    for (const [pName, g] of groupList.slice(0, limit)) {
       const isOpen = state.expandedTableGroups.has(pName);
       const maxScore = Math.max(...g.rows.map((r) => r.score ?? -Infinity));
       const minCost = Math.min(...g.rows.map((r) => r.effectiveCost ?? Infinity));
       const minAlt = Math.min(...g.rows.map((r) => altCost(r) ?? Infinity));
       const maxTasks = Math.max(...g.rows.map((r) => r.tasksPerMonth ?? -1));
+      const hours = g.rows.map((r) => r.hoursPerMonth).filter((h) => h != null);
+      const maxHours = hours.length ? Math.max(...hours) : null;
       const hasUnmetered = g.rows.some((r) => r.unmetered);
       const finiteSubs = g.rows.map((r) => r.subsidy).filter((s) => Number.isFinite(s));
       let subText = hasUnmetered ? "∞" : "—";
@@ -812,29 +889,27 @@ function renderTable(rows) {
         .map((c) => {
           const vals = g.rows.map((r) => getScore(r, c.benchKey)).filter((v) => v != null);
           const bestVal = vals.length ? Math.max(...vals) : null;
-          return `<td class="num-col col-hide-sm">${fmtScore(bestVal, c.benchKey)}</td>`;
+          return `<td class="num-col col-hide-sm"${dl(`extra:${c.benchKey}`)}>${fmtScore(bestVal, c.benchKey)}</td>`;
         })
         .join("");
-      const tasksText = hasUnmetered
-        ? "∞"
-        : maxTasks > 0
-          ? Math.round(maxTasks).toLocaleString()
-          : "—";
 
       const groupFeeText = feeText(g.sample);
+      const groupScore = fmtScore(Number.isFinite(maxScore) ? maxScore : null, scoreKey);
 
       html.push(`
         <tr class="group-row" data-group="${esc(pName)}">
-          <td><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}</td>
-          <td class="num-col">${fmtScore(Number.isFinite(maxScore) ? maxScore : null, scoreKey)}</td>
+          <td class="name-cell"${dl("model")}><span class="group-caret">${isOpen ? "▾" : "▸"}</span>${renderLink(pName, g.sample.planUrl)}</td>
+          <td class="num-col score-cell"${dl("score")}>${groupScore}</td>
           ${extraSummary}
-          <td class="meta-cell col-hide-sm col-hide-md">${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>
-          <td class="num-col">${groupFeeText}</td>
-          <td class="num-col col-hide-sm">${subText}</td>
-          <td class="num-col col-hide-sm col-hide-md">—</td>
-          <td class="num-col real-cell">${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
-          <td class="num-col col-hide-sm">${fmtUsd(Number.isFinite(minAlt) ? minAlt : null)}</td>
-          <td class="num-col col-hide-sm">${tasksText}</td>
+          <td class="meta-cell col-hide-sm col-hide-md"${dl("access")}>${esc(g.sample.harness)} · ${esc(g.sample.quotaWindowLabel)}</td>
+          <td class="num-col fee-cell"${dl("fee")}>${groupFeeText}</td>
+          <td class="num-col col-hide-sm"${dl("subsidy")}>${subText}</td>
+          <td class="num-col col-hide-sm col-hide-md card-empty"${dl("apiCost")}>—</td>
+          <td class="num-col real-cell"${dl("effectiveCost")}>${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
+          <td class="num-col col-hide-sm"${dl("altCost")}>${fmtUsd(Number.isFinite(minAlt) ? minAlt : null)}</td>
+          <td class="num-col col-hide-sm"${dl("tasksPerMonth")}>${fmtCount(maxTasks, hasUnmetered)}</td>
+          ${isTurn ? `<td class="num-col col-hide-sm"${dl("hoursPerMonth")}>${fmtHours(maxHours)}</td>` : ""}
+          ${cardSub([groupFeeText, scoreLabel(groupScore), `${g.rows.length} ${g.rows.length === 1 ? "row" : "rows"}`])}
         </tr>
       `);
       if (isOpen) {
@@ -842,6 +917,7 @@ function renderTable(rows) {
       }
     }
     tbody.innerHTML = html.join("");
+    setMore(Math.min(limit, groupList.length), groupList.length);
 
     tbody.querySelectorAll("tr.group-row").forEach((tr) => {
       tr.addEventListener("click", (e) => {
@@ -853,7 +929,8 @@ function renderTable(rows) {
       });
     });
   } else {
-    tbody.innerHTML = sorted.map((r) => renderRow(r, false)).join("");
+    tbody.innerHTML = sorted.slice(0, limit).map((r) => renderRow(r, false)).join("");
+    setMore(Math.min(limit, sorted.length), sorted.length);
   }
 }
 
@@ -1467,7 +1544,21 @@ $("resetSettingsBtn").addEventListener("click", () => {
 
 $("tableSearch").addEventListener("input", (e) => {
   state.tableQuery = e.target.value;
+  state.tableLimit = TABLE_PAGE;
   render();
+});
+
+$("tableSort").addEventListener("change", (e) => {
+  const key = e.target.value;
+  setSort(key, DESC_SORT_KEYS.has(key) || key.startsWith("extra:") ? "desc" : "asc");
+});
+$("tableSortDir").addEventListener("click", () => setSort(state.sortKey, state.sortDir === "asc" ? "desc" : "asc"));
+$("tableMoreBtn").addEventListener("click", () => {
+  state.tableLimit += TABLE_PAGE;
+  render();
+});
+phoneMq.addEventListener("change", () => {
+  if (state.dataset) render();
 });
 
 $("groupByPlan").addEventListener("change", (e) => {

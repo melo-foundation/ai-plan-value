@@ -46,9 +46,9 @@ Spec: `docs/design/quota-weight-methodology.md`.
 
 ## 5. Site
 
-- [ ] Mobile item 7: below 600px, render the full table as card rows, with a Sort select and "Show 50 more".
-- [ ] Mobile item 8: full-screen dialogs using `dvh` units on phones.
-- [ ] Self-host DejaVu Sans as the Verdana fallback for Android (about 40 KB).
-- [ ] Hours/mo column in T3 mode.
-- [ ] Provenance list in the plan drawer.
+- [x] Mobile item 7: below 600px, render the full table as card rows, with a Sort select and "Show 50 more".
+- [x] Mobile item 8: full-screen dialogs using `dvh` units on phones.
+- [x] Self-host DejaVu Sans as the Verdana fallback for Android (about 40 KB).
+- [x] Hours/mo column in T3 mode.
+- [x] Provenance list in the plan drawer.
 - [ ] Combined real-world cost metric with Raw / Harness / Custom mixes (`docs/design/combined-metric-design.md`). It depends on steps 1–3.
