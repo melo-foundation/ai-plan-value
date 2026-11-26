@@ -1459,9 +1459,25 @@ async function loadData() {
   }
 }
 
-// Benchmarks with their own per-task cost, paired with that cost metric when either changes.
-const COST_BENCH_PAIR = { agent: "codingAgentIndex", cursor: "cursorBench" };
+// Auto-pair (not locked): agent ↔ Coding Agent Index, CursorBench ↔ CursorBench, AA task ↔ Intelligence.
+// When one control changes, the other follows only while it is at its default (task / intelligenceIndex) or
+// still paired with the previous choice; anything else the user picked (e.g. hle, turn) is left alone.
+const COST_BENCH_PAIR = { task: "intelligenceIndex", agent: "codingAgentIndex", cursor: "cursorBench" };
 const BENCH_COST_PAIR = Object.fromEntries(Object.entries(COST_BENCH_PAIR).map(([c, b]) => [b, c]));
+
+// Benchmark to show after the cost metric changes from prevCost to nextCost.
+function pairedBench(prevCost, nextCost, bench) {
+  const target = COST_BENCH_PAIR[nextCost];
+  const synced = bench === "intelligenceIndex" || bench === COST_BENCH_PAIR[prevCost];
+  return synced && target ? target : bench;
+}
+
+// Cost metric to use after the benchmark changes from prevBench to nextBench.
+function pairedCost(prevBench, nextBench, cost) {
+  const target = BENCH_COST_PAIR[nextBench];
+  const synced = cost === "task" || cost === BENCH_COST_PAIR[prevBench];
+  return synced && target ? target : cost;
+}
 
 function setBench(key) {
   state.benchKey = key;
@@ -1479,10 +1495,8 @@ function setCostMode(mode) {
 $("benchSelect").addEventListener("change", (e) => {
   const prev = state.benchKey;
   setBench(e.target.value);
-  // The cost follows only while it is the default or still paired with the previous benchmark.
-  const costFor = (b) => BENCH_COST_PAIR[b] || (b === "intelligenceIndex" ? "task" : null);
-  const synced = state.costMode === "task" || state.costMode === costFor(prev);
-  if (synced && costFor(state.benchKey) && costFor(state.benchKey) !== state.costMode) setCostMode(costFor(state.benchKey));
+  const cost = pairedCost(prev, state.benchKey, state.costMode);
+  if (cost !== state.costMode) setCostMode(cost);
   render();
 });
 
@@ -1647,11 +1661,8 @@ $("costMode").addEventListener("change", (e) => {
   state.costMode = e.target.value;
   state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
   $("maxCost").value = "4";
-  // Auto-pair (not locked). The benchmark follows only while it is the default or still paired with
-  // the previous cost: agent ↔ Coding Agent Index, CursorBench ↔ CursorBench, AA task ↔ Intelligence.
-  const benchFor = (m) => COST_BENCH_PAIR[m] || (m === "task" ? "intelligenceIndex" : null);
-  const synced = state.benchKey === "intelligenceIndex" || state.benchKey === benchFor(prev);
-  if (synced && benchFor(state.costMode) && benchFor(state.costMode) !== state.benchKey) setBench(benchFor(state.costMode));
+  const bench = pairedBench(prev, state.costMode, state.benchKey);
+  if (bench !== state.benchKey) setBench(bench);
   render();
 });
 
