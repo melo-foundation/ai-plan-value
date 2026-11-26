@@ -132,7 +132,7 @@ Fable on Claude Pro / Max / Ultra: `capShare` 0.5, `subsidyReadings { shared, ow
 | Mark | Meaning |
 |---|---|
 | `~` before a value | derived cell: subsidy with a transfer step, estimated cost, or estimated score |
-| ● ◐ ○ ◌ after Real cost | row level; tooltip lists level, ×factor, subsidy chain, cost source, score error, range |
+| ● ◐ ○ ◌ after the model name | row level; tooltip lists level, ×factor, subsidy chain, cost source, score error, range |
 | faded row | Low or Speculative |
 
 ## Settings

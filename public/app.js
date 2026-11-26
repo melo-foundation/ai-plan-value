@@ -268,7 +268,7 @@ function relTooltip(r) {
   return lines.join("\n");
 }
 
-// One graded glyph per row, after the Real cost value
+// One graded glyph per row, after the model name
 function relGlyph(r) {
   if (!r.level) return "";
   return `<span class="tier-glyph rel-glyph rel-${r.level}" title="${esc(relTooltip(r))}">${LEVEL_GLYPH[r.level]}</span>`;
@@ -615,13 +615,13 @@ function renderBarChart(allRows, allResolved) {
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
           <div class="bar-label">
-            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}</div>
+            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
             <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}</div>
           </div>
           <div class="bar-track-wrap">
             <span class="bar-fill${isExtrap ? " is-extrapolated" : ""}" style="width:${widthPct.toFixed(2)}%; background-color:${barColor}"></span>
-            <span class="bar-val">${realCostText(r)}${relGlyph(r)}</span>
+            <span class="bar-val">${realCostText(r)}</span>
             <span class="bar-note">${r.scoreDerived ? `${esc(benchMeta.label)} ~${esc(fmtScore(r.score, scoreKey))}` : esc(note)}</span>
           </div>
           ${isExpanded ? renderPlanDrawer(planName, allResolved) : ""}
@@ -756,8 +756,8 @@ function renderTable(rows) {
       .join("");
 
     const nameCell = grouped
-      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div>`
-      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
+      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>`
+      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
 
     const accessCell = grouped
       ? `<td class="meta-cell col-hide-sm col-hide-md"></td>`
@@ -774,7 +774,7 @@ function renderTable(rows) {
         <td class="num-col">${feeText(r)}</td>
         <td class="num-col col-hide-sm">${r.unmetered ? "∞" : `${tilde(r.subDerived)}${fmtMult(r.subsidy)}`}</td>
         <td class="num-col col-hide-sm col-hide-md">${tilde(r.costDerived)}${fmtUsd(r.apiMetric)}</td>
-        <td class="num-col real-cell">${realCostText(r)}${relGlyph(r)}</td>
+        <td class="num-col real-cell">${realCostText(r)}</td>
         <td class="num-col col-hide-sm">${tilde(isTokens ? r.altDerived : r.subDerived)}${fmtUsd(altCost(r))}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
