@@ -639,9 +639,12 @@ function renderProvenance(planEntries, models) {
     g.rank = Math.min(g.rank, order.get(baseName) ?? Infinity);
   }
   if (!groups.size) return "";
+  // Source page and check date; the page's own wording is on hover (it can be a raw table cell).
   const creditSrc = (c) => {
-    const s = esc(`${c.text} · ${c.checked}`).replace(/\d{4}-\d{2}-\d{2}/g, '<span class="nowrap">$&</span>');
-    return c.url ? `<a class="row-link" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">${s}</a>` : s;
+    let host = "";
+    try { host = new URL(c.url).hostname.replace(/^www\./, ""); } catch {}
+    const s = `${esc(host ? `${host}, checked` : "checked")} <span class="nowrap">${esc(c.checked || "")}</span>`;
+    return c.url ? `<a class="row-link" href="${esc(c.url)}" title="${esc(c.text || "")}" target="_blank" rel="noopener noreferrer">${s}</a>` : s;
   };
   const creditLines = (planEntries[0].includedCredits || [])
     .map(
