@@ -1833,6 +1833,8 @@ html.egg-undo.egg-reveal::after {
     grid-area: track;
     justify-self: start;
     align-self: center;
+    /* Desktop scales the longest bar to 68% to leave room for the label; here the bar has its own line. */
+    width: calc(var(--bar-ratio, 0.68) * 100%) !important;
     height: 6px;
     min-width: 6px;
     max-width: 100%;
