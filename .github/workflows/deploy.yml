@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: the build job commits data/reliability/history.jsonl back to main ([skip ci]).
+  contents: write
   pages: write
   id-token: write
   issues: write
@@ -64,6 +65,36 @@ jobs:
         if: steps.refresh.outcome == 'failure' || steps.tests.outcome == 'failure'
         run: |
           echo "Refresh or automated tests failed; keeping previous live Pages deployment intact."
+          exit 1
+
+      - name: Commit reliability history to main
+        # Append-only ledger (docs/RELIABILITY.md § Calibration). Done in a separate worktree on the
+        # latest main so the refreshed public/ files never mix with the commit; a failed push only
+        # loses this run's lines and never blocks the deploy.
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=data/reliability/history.jsonl
+          [ -f "$F" ] || { echo "No history file"; exit 0; }
+          BASE=$( (git show "HEAD:$F" 2>/dev/null || true) | wc -l)
+          tail -n +"$((BASE + 1))" "$F" > /tmp/history-new.jsonl
+          [ -s /tmp/history-new.jsonl ] || { echo "No new history lines"; exit 0; }
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3; do
+            git fetch --quiet origin main
+            rm -rf /tmp/hist-wt && git worktree prune
+            git worktree add --quiet --detach /tmp/hist-wt origin/main
+            mkdir -p "/tmp/hist-wt/$(dirname "$F")"
+            cat /tmp/history-new.jsonl >> "/tmp/hist-wt/$F"
+            git -C /tmp/hist-wt add "$F"
+            git -C /tmp/hist-wt commit --quiet -m "Record reliability history $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            if git -C /tmp/hist-wt push --quiet origin HEAD:main; then echo "History pushed"; exit 0; fi
+            sleep $((i * 5))
+          done
+          echo "::warning::Reliability history not pushed; this run's ledger lines are lost"
           exit 1
 
       - name: Render link-preview image from fresh data

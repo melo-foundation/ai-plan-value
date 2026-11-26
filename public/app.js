@@ -257,6 +257,8 @@ function subsidySources(r) {
   const mix = r.quotaMix?.[state.costMode];
   if (state.fableCap === "own" && r.subsidyReadings) sub.push(`Fable only ×${(r.capShare ?? 0.5).toFixed(1)}`);
   if (mix && Math.abs(mix.f - 1) > 0.005) sub.push(`token mix ×${mix.f.toFixed(2)} (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
+  const client = r.clientFactor?.[state.costMode];
+  if (client) sub.push(`Agent SDK client ÷${(1 / client.f).toFixed(1)} (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
   sub.push(...(chain?.lines || []));
   return sub;
 }
@@ -368,7 +370,8 @@ function getAllEntriesResolved() {
     .map((e) => {
       const isApi = e.billing === "metered";
       const reading = state.fableCap === "own" && e.subsidyReadings ? e.subsidyReadings.own : e.subsidyMultiple;
-      const mixF = (m) => e.quotaMix?.[m]?.f ?? 1;
+      // Per-metric subsidy factors: Claude token mix; Agent SDK client weighting (T3 turn).
+      const mixF = (m) => (e.quotaMix?.[m]?.f ?? 1) * (e.clientFactor?.[m]?.f ?? 1);
       const subFor = (m) => (isApi ? 1 : e.unmetered ? Infinity : reading * mixF(m));
       const subsidy = subFor(mode);
       const accessMeta = getPlanAccessMeta(e);
@@ -398,7 +401,7 @@ function getAllEntriesResolved() {
 
       // Reliability: σ of ln real cost = subsidy chain ⊕ token mix ⊕ cost metric; level also bounded by the score error.
       const rl = e.rel || {};
-      const sigma = qsum(rl.s, rl.w?.[mode], rl.c?.[mode]);
+      const sigma = qsum(rl.s, rl.w?.[mode], rl.c?.[mode], rl.x?.[mode]);
       const scorePts = benchAgent ? rl.score?.agent ?? 0 : NO_SCORE_ERR.has(state.benchKey) ? 0 : rl.score?.ii ?? 0;
       const level = e.rel ? worseLevel(levelFromSigma(sigma), levelFromScore(scorePts), rl.cap) : "speculative";
       const costDerived = Boolean(rl.ce?.includes(mode));

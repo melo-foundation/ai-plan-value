@@ -1,0 +1,90 @@
+{"d":"2026-11-26","id":"ChatGPT Pro 10x|gpt-5-6-luna","v":21.459,"s":0.3081,"lo":14.46,"hi":31.85,"k":["unresolved","P1"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 20x|gpt-5-6-luna","v":21.459,"s":0.3996,"lo":12.86,"hi":35.81,"k":["S3","reading","T45","P2"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|gpt-6-astra","v":3.9984,"s":0.4,"lo":2.395,"hi":6.676,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|claude-opus-5-5","v":3.9994,"s":0.4,"lo":2.395,"hi":6.678,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|claude-sonnet-5-5","v":4.0004,"s":0.4,"lo":2.396,"hi":6.679,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|claude-fable-5-2","v":3.9992,"s":0.4,"lo":2.395,"hi":6.677,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|gemini-4-neon","v":3.9996,"s":0.4,"lo":2.395,"hi":6.678,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|gpt-6-1-sol","v":4.0001,"s":0.4,"lo":2.396,"hi":6.679,"k":["S4","reading","M1","floor"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 5x|gemini-3-8-flash","v":27.151,"s":0.4,"lo":16.26,"hi":45.34,"k":["S3","T45","P1","floor"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 20x|gemini-3-8-flash","v":54.299,"s":0.4,"lo":32.52,"hi":90.67,"k":["S3","T45","P1","floor"],"x":1}
+{"d":"2026-11-26","id":"Claude Max|claude-opus-5","v":57.803,"s":0.6054,"lo":26.61,"hi":125.6,"k":["S4","promo","raw","T45","P2","inconsistent"],"x":1}
+{"d":"2026-11-26","id":"SuperGrok Plus|grok-4-6","v":11.641,"s":0.3937,"lo":7.029,"hi":19.28,"k":["S3","T45","P2"],"x":1}
+{"d":"2026-11-26","id":"SuperGrok Heavy|grok-4-6","v":9.7182,"s":0.3937,"lo":5.868,"hi":16.1,"k":["S3","T45","P2"],"x":1}
+{"d":"2026-11-26","id":"SuperGrok Plus|grok-4-7","v":12.937,"s":0.4301,"lo":7.455,"hi":22.45,"k":["S4","T45","P2"],"x":1}
+{"d":"2026-11-26","id":"SuperGrok Heavy|grok-4-7","v":10.776,"s":0.4301,"lo":6.209,"hi":18.7,"k":["S4","T45","P2"],"x":1}
+{"d":"2026-11-26","id":"Cursor Pro+|grok-4-6","v":19.418,"s":0.3674,"lo":12.13,"hi":31.1,"k":["S4","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Allegretto|kimi-k3","v":22.026,"s":0.3354,"lo":14.33,"hi":33.86,"k":["S4","raw","M3proxy"],"x":1}
+{"d":"2026-11-26","id":"Kimi Moderato|kimi-k3","v":9.0253,"s":0.4183,"lo":5.28,"hi":15.43,"k":["S4","raw","M3proxy","P1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Allegro|kimi-k3","v":16.892,"s":0.3354,"lo":10.99,"hi":25.96,"k":["S4","raw","M3proxy"],"x":1}
+{"d":"2026-11-26","id":"Kimi Plus|kimi-k3","v":4.5269,"s":0.4183,"lo":2.648,"hi":7.738,"k":["S4","raw","M3proxy","P1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Pro|kimi-k3","v":11.001,"s":0.4183,"lo":6.436,"hi":18.81,"k":["S4","raw","M3proxy","P1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Max|kimi-k3","v":8.4531,"s":0.4183,"lo":4.945,"hi":14.45,"k":["S4","raw","M3proxy","P1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Ultra|kimi-k3","v":8.4104,"s":0.4183,"lo":4.92,"hi":14.38,"k":["S4","raw","M3proxy","P1"],"x":1}
+{"d":"2026-11-26","id":"MiniMax M Plan Go (CN Annual)|minimax-m3-1-flash","v":5.6505,"s":0.5809,"lo":2.684,"hi":11.9,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"MiniMax M Plan Explore (CN)|minimax-m3-1-flash","v":5.8168,"s":0.5809,"lo":2.763,"hi":12.25,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"MiniMax M Plan Explore (CN Annual)|minimax-m3-1-flash","v":6.9802,"s":0.5809,"lo":3.315,"hi":14.7,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"MiniMax M Plan Build (CN)|minimax-m3-1-flash","v":5.9036,"s":0.5809,"lo":2.804,"hi":12.43,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"MiniMax M Plan Build (CN Annual)|minimax-m3-1-flash","v":7.0844,"s":0.5809,"lo":3.365,"hi":14.92,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Plus|gpt-5-6-terra","v":18.116,"s":0.45,"lo":10.18,"hi":32.25,"k":["S4","raw","T90","M3"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 10x|gpt-5-6-terra","v":36.232,"s":0.3967,"lo":21.79,"hi":60.24,"k":["unresolved","P1","M3"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 20x|gpt-5-6-terra","v":37.879,"s":0.5454,"lo":18.83,"hi":76.2,"k":["S6","raw","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Claude Max|claude-fable-5-1","v":12.829,"s":0.6614,"lo":5.496,"hi":29.95,"k":["S4","promo","raw","T45","P2","M3far"],"x":1}
+{"d":"2026-11-26","id":"Claude Pro|claude-sonnet-5-5","v":63.981,"s":0.4,"lo":38.32,"hi":106.8,"k":["S3","M3","floor"],"x":1}
+{"d":"2026-11-26","id":"Claude Pro|claude-haiku-5-5","v":45.701,"s":0.461,"lo":25.31,"hi":82.51,"k":["S3","M3far"],"x":1}
+{"d":"2026-11-26","id":"Claude Ultra|claude-sonnet-5-5","v":66.072,"s":0.4,"lo":39.57,"hi":110.3,"k":["S4","reading","T45","M3","floor"],"x":1}
+{"d":"2026-11-26","id":"Claude Ultra|claude-haiku-5-5","v":47.194,"s":0.5152,"lo":24.39,"hi":91.34,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Claude Max|claude-sonnet-5-5","v":76.82,"s":0.4801,"lo":41.52,"hi":142.1,"k":["S5","reading","attribution","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Claude Max|claude-haiku-5-5","v":54.871,"s":0.6087,"lo":25.15,"hi":119.7,"k":["S5","reading","attribution","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 10x|gpt-6-astra","v":26.754,"s":0.4,"lo":16.02,"hi":44.67,"k":["unresolved","P1","M3","floor"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|claude-fable-5-1","v":4.0669,"s":0.5249,"lo":2.075,"hi":7.969,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|claude-opus-5","v":7.7422,"s":0.3681,"lo":4.83,"hi":12.41,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|claude-sonnet-5-5","v":5.292,"s":0.3681,"lo":3.302,"hi":8.482,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gpt-6-astra","v":7.7422,"s":0.3681,"lo":4.83,"hi":12.41,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gpt-6-sol","v":7.7422,"s":0.3681,"lo":4.83,"hi":12.41,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gpt-6-luna","v":7.7422,"s":0.5249,"lo":3.951,"hi":15.17,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gpt-5-6-terra","v":7.9948,"s":0.3681,"lo":4.988,"hi":12.81,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gpt-5-6-luna","v":7.9948,"s":0.5249,"lo":4.08,"hi":15.67,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gemini-3-8-flash","v":8.5164,"s":0.5249,"lo":4.346,"hi":16.69,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|grok-4-7","v":14.588,"s":0.3681,"lo":9.101,"hi":23.38,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|grok-4-6","v":14.588,"s":0.3681,"lo":9.101,"hi":23.38,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|inkling","v":10.932,"s":0.3681,"lo":6.821,"hi":17.52,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|mistral-medium-3-5","v":7.7422,"s":0.3681,"lo":4.83,"hi":12.41,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|glm-5-3-flash","v":12.222,"s":0.5249,"lo":6.237,"hi":23.95,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|glm-5-3","v":11.473,"s":0.3681,"lo":7.158,"hi":18.39,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|kimi-k3","v":7.7422,"s":0.3681,"lo":4.83,"hi":12.41,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|qwen-3-8-max","v":8.4621,"s":0.3681,"lo":5.279,"hi":13.56,"k":["S4","reading","T45","M3"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|nemotron-3-ultra","v":10.409,"s":0.5249,"lo":5.312,"hi":20.4,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|deepseek-v4-1-flash-1017","v":3.5692,"s":0.5249,"lo":1.821,"hi":6.994,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|minimax-m3","v":12.39,"s":0.5249,"lo":6.323,"hi":24.28,"k":["S4","reading","T45","M3far"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 20x|gpt-6-2-astra","v":15.019,"s":0.5701,"lo":7.233,"hi":31.19,"k":["S6","raw","T45","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 500|gpt-6-2-astra","v":12.529,"s":0.372,"lo":7.778,"hi":20.18,"k":["priors","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 10x|gpt-6-2-astra","v":12.529,"s":0.5,"lo":6.601,"hi":23.78,"k":["unresolved","P1","M3","floor","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Plus|gpt-6-2-astra","v":6.2646,"s":0.364,"lo":3.929,"hi":9.988,"k":["S3","raw","T45","M2"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|gpt-6-2-astra","v":2.0227,"s":0.8062,"lo":0.7198,"hi":5.684,"k":["S4","reading","M1","floor","M4"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 20x|gpt-6-2-sol","v":29.865,"s":0.372,"lo":18.54,"hi":48.11,"k":["priors","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 10x|gpt-6-2-sol","v":29.865,"s":0.372,"lo":18.54,"hi":48.11,"k":["priors","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Pro 500|gpt-6-2-sol","v":29.865,"s":0.372,"lo":18.54,"hi":48.11,"k":["priors","M2"],"x":1}
+{"d":"2026-11-26","id":"ChatGPT Plus|gpt-6-2-sol","v":14.933,"s":0.3162,"lo":9.957,"hi":22.39,"k":["S3","M2"],"x":1}
+{"d":"2026-11-26","id":"Devin Max|gpt-6-2-sol","v":3.3495,"s":0.8062,"lo":1.192,"hi":9.413,"k":["S4","reading","M1","floor","M4"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gemini-4-carbon","v":8.1691,"s":0.8749,"lo":2.662,"hi":25.07,"k":["S4","reading","T45","M3far","M4"],"x":1}
+{"d":"2026-11-26","id":"Command Code GOAT|gemini-4-carbon","v":2.1999,"s":0.7228,"lo":0.8712,"hi":5.555,"k":["S2","floor","M4"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gemini-4-argon","v":8.1691,"s":0.8749,"lo":2.662,"hi":25.07,"k":["S4","reading","T45","M3far","M4"],"x":1}
+{"d":"2026-11-26","id":"Command Code GOAT|gemini-4-argon","v":2.1999,"s":0.7228,"lo":0.8712,"hi":5.555,"k":["S2","floor","M4"],"x":1}
+{"d":"2026-11-26","id":"Droid Max|gemini-4-hydrogen","v":8.1691,"s":0.8749,"lo":2.662,"hi":25.07,"k":["S4","reading","T45","M3far","M4"],"x":1}
+{"d":"2026-11-26","id":"Command Code GOAT|gemini-4-hydrogen","v":2.1999,"s":0.7228,"lo":0.8712,"hi":5.555,"k":["S2","floor","M4"],"x":1}
+{"d":"2026-11-26","id":"Claude Max|claude-fable-5-2","v":30.638,"s":0.4776,"lo":16.61,"hi":56.51,"k":["S5","reading","attribution","T45","ratio","X1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Pro|gemini-4-carbon","v":18.255,"s":0.2217,"lo":13.74,"hi":24.25,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Pro|gemini-4-hydrogen","v":18.255,"s":0.2217,"lo":13.74,"hi":24.25,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Pro|gemini-4-argon","v":18.255,"s":0.2217,"lo":13.74,"hi":24.25,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 5x|gemini-4-carbon","v":21.708,"s":0.2375,"lo":16.01,"hi":29.43,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 5x|gemini-4-hydrogen","v":21.708,"s":0.2375,"lo":16.01,"hi":29.43,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 5x|gemini-4-argon","v":21.708,"s":0.2375,"lo":16.01,"hi":29.43,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 20x|gemini-4-carbon","v":37.318,"s":0.2335,"lo":27.67,"hi":50.33,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 20x|gemini-4-hydrogen","v":37.318,"s":0.2335,"lo":27.67,"hi":50.33,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Google AI Ultra 20x|gemini-4-argon","v":37.318,"s":0.2335,"lo":27.67,"hi":50.33,"k":["pooled","M1"],"x":1}
+{"d":"2026-11-26","id":"Kimi Plus|kimi-k3-1-pro","v":3.0179,"s":0.3354,"lo":1.963,"hi":4.639,"k":["S4","raw","P1","token"],"x":1}
+{"d":"2026-11-26","id":"Kimi Pro|kimi-k3-1-pro","v":7.3341,"s":0.3354,"lo":4.772,"hi":11.27,"k":["S4","raw","P1","token"],"x":1}
+{"d":"2026-11-26","id":"Kimi Max|kimi-k3-1-pro","v":5.6354,"s":0.3354,"lo":3.666,"hi":8.662,"k":["S4","raw","P1","token"],"x":1}
+{"d":"2026-11-26","id":"Kimi Ultra|kimi-k3-1-pro","v":5.6069,"s":0.3354,"lo":3.648,"hi":8.618,"k":["S4","raw","P1","token"],"x":1}
+{"t":"deploy","d":"2026-11-26T07:22:30.882Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
