@@ -1235,9 +1235,7 @@ function render() {
   const hidden = state.minConf === "speculative" ? 0 : getFilteredRows(allResolved, "speculative").length - rows.length;
   $("extrapFooter").hidden = hidden <= 0;
   $("extrapFooterText").textContent =
-    state.minConf === "low"
-      ? `${hidden} speculative ${hidden === 1 ? "row" : "rows"} hidden`
-      : `${hidden} ${hidden === 1 ? "row" : "rows"} below ${LEVEL_LABEL[state.minConf]} hidden`;
+    `${hidden} ${{ high: "lower-confidence", medium: "low-confidence", low: "speculative" }[state.minConf]} ${hidden === 1 ? "row" : "rows"} hidden`;
   syncUrlFromState();
 }
 
