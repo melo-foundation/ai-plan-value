@@ -15,9 +15,9 @@ Unmeasured, no data: `anthropic/claude-fable-5-2/5h/interactive`, `anthropic/cla
 
 Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 20; tmux (for `--drive tmux`); the account idle on every other device and surface (web, desktop, phone, scheduled and cloud agents).
 
-1. Check the setup:
+1. Check the setup (`--oauth` also prints both bars from `api.anthropic.com/api/oauth/usage`):
 
-       node scripts/quota-probe.mjs probe
+       node scripts/quota-probe.mjs probe --oauth
 
 2. Practise without API calls:
 
@@ -37,6 +37,12 @@ Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 
        node scripts/quota-probe.mjs set-raw <submission.jsonl> <url>
 
 5. Submit (below).
+
+6. Record a holdout for G4 (once per account): work normally in one of your own projects, one Claude Code session at a time, for at least 20 points of the bar:
+
+       node scripts/quota-probe.mjs record-holdout --dir <project> --model claude-opus-5-5 --plan max_5x --bar 7d
+
+   Then step 4 and 5 for the file it writes.
 
 Start with the bar under test below 60%. The run stops at 85% (5h) or 95% (weekly). On a weekly run it pauses when the 5h bar reaches 85% and resumes after the 5h reset.
 
@@ -63,13 +69,16 @@ Start with the bar under test below 60%. The run stops at 85% (5h) or 95% (weekl
 | `--account-label` | any stable private string | account UUID in `~/.claude.json` |
 | `--session-n` | arm rotation index | your earlier files today |
 | `--no-safe-mode` | run Claude Code without `--safe-mode` | off |
+| `--oauth` | allow reads of `api.anthropic.com/api/oauth/usage` (idle baseline, `--meter oauth`, `probe`) | off |
 
 Drives for `--class interactive`:
 
 - `tmux`: the probe starts the TUI in a detached tmux session and pastes each prompt. Watch with `tmux attach -t <name>`; do not type into it.
 - `guided`: the probe prints the command to start Claude Code in a second terminal, then one line per request (`/clear`, `@prompt-0001.txt Reply with the single word: ok`, or the question to paste). Press Enter in the probe terminal after each answer. Use it for 5h runs on Pro; a weekly `read` arm needs thousands of pastes.
 
-`--meter manual` and `--meter oauth` record start and end readings only (`anchored: false`, ±1 point). Use at least 10 points per arm (`--points 10`). `manual`: type both bars from `/usage` when asked. `oauth`: read from `api.anthropic.com/api/oauth/usage` (undocumented; the token is read from `~/.claude/.credentials.json` and never written).
+`--meter manual` and `--meter oauth` record start and end readings only (`anchored: false`, ±1 point). Use at least 10 points per arm (`--points 10`). `manual`: type both bars from `/usage` when asked. `oauth` (needs `--oauth`): read from `api.anthropic.com/api/oauth/usage` (undocumented; the token is read from `~/.claude/.credentials.json` or `CLAUDE_CODE_OAUTH_TOKEN` and never written).
+
+Idle baseline: `sdk` sends a one-word request before and after `--idle-min` minutes; `interactive` asks you to type both bars from `/usage` (`--oauth`: reads them).
 
 The submission stores no credentials, prompts, paths or email. `account_hash` = first 8 hex of SHA-256(account UUID + a random salt in `~/.config/ai-plan-value/quota-probe-salt`).
 
@@ -86,6 +95,8 @@ The submission stores no credentials, prompts, paths or email. `account_hash` = 
 | `tmux not found` | install tmux, or use `--drive guided` |
 | `no account id found` | pass `--account-label <string>`; reuse the same string on every run from this account |
 | `OAuth usage unavailable` | use `--meter manual` |
+| `--meter oauth needs --oauth` | add `--oauth` |
+| `record-holdout`: `fewer than 20 points` | keep working and record again |
 | `stopped at 85% of the 5h bar` / `95% of the 7d bar` | rerun after the reset time shown by `probe` |
 | fitter: `raw.url missing` | step 4 |
 | fitter: `idle_ticks = N` | rerun |

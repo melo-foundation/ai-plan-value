@@ -9,6 +9,7 @@
  *   node scripts/quota-probe.mjs probe [--ping]
  *   node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan max_5x [options]
  *   node scripts/quota-probe.mjs run ... --dry-run          simulated meter and usage, no API calls, no credentials
+ *   node scripts/quota-probe.mjs record-holdout --dir <project> ...  log ordinary work as a G4 holdout session
  *   node scripts/quota-probe.mjs set-raw <file> <url>       record where the raw log bundle was uploaded
  *   node scripts/quota-probe.mjs statusline-log <file>      status line command used by the interactive class
  *
@@ -652,9 +653,9 @@ class InteractiveBackend {
     }
   }
   async idle(minutes) {
-    const o = await readOauthUsage();
+    const o = this.opts.oauth ? await readOauthUsage() : { ok: false, error: "--oauth not given" };
     if (!o.ok) {
-      log(`  idle baseline: OAuth usage unavailable (${o.error}); type the bars from /usage instead.`);
+      log(`  idle baseline: type the bars from /usage (${o.error}).`);
       const a = await askReadings("now");
       log(`  wait ${minutes} min without using the account anywhere…`);
       await sleep(minutes * 60 * 1000);
@@ -980,7 +981,91 @@ function claudeVersion(bin) {
 function checkEnv(opts) {
   if (process.env.CLAUDE_CODE_ENTRYPOINT) fail(`CLAUDE_CODE_ENTRYPOINT=${process.env.CLAUDE_CODE_ENTRYPOINT} is set in this shell: unset CLAUDE_CODE_ENTRYPOINT and restart the terminal.`);
   if (opts.class === "interactive" && opts.drive === "tmux" && spawnSync("tmux", ["-V"]).status !== 0) fail("tmux not found: install tmux, or use --drive guided");
+  if (opts.meter === "oauth" && !opts.oauth) fail("--meter oauth needs --oauth");
   claudeVersion(opts.claude);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Holdout recording (G4): ordinary work in your own project, meter from the status line
+// ---------------------------------------------------------------------------------------------
+
+async function recordHoldout(a) {
+  const dir = path.resolve(a.dir || process.cwd());
+  const model = a.model || "claude-opus-5-5";
+  const plan = a.plan || "max_5x";
+  const bar = a.bar || "7d";
+  const bin = a.claude || "claude";
+  const submitter = String(a.submitter || "anonymous").replace(/[^A-Za-z0-9_.-]/g, "-");
+  if (process.env.CLAUDE_CODE_ENTRYPOINT) fail("CLAUDE_CODE_ENTRYPOINT is set in this shell: unset CLAUDE_CODE_ENTRYPOINT and restart the terminal.");
+  const price = QW.priceFor(QW.loadPrices(), model);
+  if (!price) fail(`no list price for ${model} in data/quota-weights/prices.json`);
+  const acct = accountHash(a["account-label"]);
+  if (!acct) fail("no account id found in ~/.claude.json (oauthAccount.accountUuid): pass --account-label <any stable private string>");
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "quota-probe-holdout-"));
+  const be = new InteractiveBackend({ model, effort: a.effort || "medium", claude: bin, "no-safe-mode": true }, work);
+  await be.start();
+  const t0 = Date.now();
+  const cmd = `cd ${sq(dir)} && env -u CLAUDE_CODE_ENTRYPOINT ${sq(bin)} --model ${sq(model)} --settings ${sq(be.settingsJson())}`;
+  log("Holdout recording: work normally in Claude Code for at least 20 points of the bar, using only this session.");
+  log("Mix cache-heavy turns (long conversations) with write-heavy ones (new sessions, large files).\n");
+  log(`   ${cmd}\n`);
+  await ask("Press Enter here when you have exited Claude Code… ");
+  const calls = transcriptCalls(transcriptsFor(dir)).filter((c) => Date.parse(c.ts) >= t0 && (!c.model || c.model.startsWith(model)));
+  const status = readStatusLog(be.statusFile);
+  const rows = [];
+  for (const c of calls) rows.push({ t: "req", ts: c.ts, arm: "mixed", request_id: `req-${uuid().slice(0, 12)}`, input: c.input, output: c.output, cache_read: c.cache_read, cache_write_5m: c.cache_write_5m, cache_write_1h: c.cache_write_1h });
+  for (const r of status) {
+    if (r.five_hour?.used_pct != null) rows.push({ t: "meter", ts: r.ts, bar: "5h", used_pct: Number(r.five_hour.used_pct), resets_at: epochIso(r.five_hour.resets_at) });
+    if (r.seven_day?.used_pct != null) rows.push({ t: "meter", ts: r.ts, bar: "7d", used_pct: Number(r.seven_day.used_pct), resets_at: epochIso(r.seven_day.resets_at) });
+  }
+  rows.sort((x, y) => Date.parse(x.ts) - Date.parse(y.ts) || (x.t === "req" ? -1 : 1));
+  const date = nowIso().slice(0, 10);
+  const out = nextFile(`${submitter}-holdout`, date);
+  const header = {
+    schema: QW.SCHEMA.session,
+    session_id: `${date}-${submitter}-holdout-${out.n}-${crypto.randomBytes(3).toString("hex")}`,
+    submitter,
+    account_hash: acct,
+    vendor: "anthropic",
+    plan,
+    plan_price_usd: PLAN_PRICE[plan] ?? null,
+    model,
+    effort: a.effort || "medium",
+    client: "claude-code",
+    client_version: claudeVersion(bin),
+    entrypoint: calls.find((c) => c.entrypoint)?.entrypoint || "cli",
+    client_class: "interactive",
+    label_emulated: false,
+    meter_source: "statusline",
+    meter_resolution: 1,
+    bar_under_test: bar,
+    bars: ["5h", "7d"].map((b) => ({ id: b, resets_at: rows.filter((r) => r.t === "meter" && r.bar === b).slice(-1)[0]?.resets_at ?? null })),
+    cache_ttl: "mixed",
+    shared_account: false,
+    idle_before_min: 0,
+    idle_after_min: 0,
+    idle_ticks: 0,
+    holdout: true,
+    segmenting: "point",
+    prices_usd_per_mtok: Object.fromEntries(QW.KINDS.map((k) => [k, Number((price[k] * 1e6).toFixed(6))])),
+    raw: { url: null, sha256: null },
+    probe_version: PROBE_VERSION,
+    started_at: new Date(t0).toISOString(),
+    ended_at: nowIso(),
+    notes: "Ordinary work, one session at a time; holdout for G4 (not fitted).",
+  };
+  const rawFile = out.file.replace(/\.jsonl$/, ".raw.jsonl");
+  fs.writeFileSync(rawFile, calls.map((c) => JSON.stringify({ t: "usage", ts: c.ts, model: c.model, usage: c.usageRaw })).join("\n") + "\n");
+  header.raw.sha256 = crypto.createHash("sha256").update(fs.readFileSync(rawFile)).digest("hex");
+  fs.writeFileSync(out.file, [header, ...rows].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const pts = (b) => {
+    const m = rows.filter((r) => r.t === "meter" && r.bar === b);
+    return m.length ? m[m.length - 1].used_pct - m[0].used_pct : 0;
+  };
+  log(`wrote ${out.file}: ${calls.length} API calls, ${bar} moved ${pts(bar)} points`);
+  if (pts(bar) < 20) log(`fewer than 20 points on the ${bar} bar: G4 needs ≥ 5-point chunks with a spread of cache-read share; record more.`);
+  log(`raw bundle ${rawFile}`);
+  log(`Next: upload the raw bundle, then node scripts/quota-probe.mjs set-raw ${sq(out.file)} <url>`);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -989,8 +1074,9 @@ function checkEnv(opts) {
 
 const HELP = `quota-probe ${PROBE_VERSION}
 
-  node scripts/quota-probe.mjs probe [--ping]
+  node scripts/quota-probe.mjs probe [--oauth] [--ping]
   node scripts/quota-probe.mjs run --model <id> --bar 5h|7d --class sdk|interactive --plan <plan> [options]
+  node scripts/quota-probe.mjs record-holdout --dir <project> --model <id> --plan <plan> [--bar 7d] [--submitter <login>]
   node scripts/quota-probe.mjs set-raw <submission.jsonl> <url>
 
 run options
@@ -1003,6 +1089,7 @@ run options
   --effort       low (default)
   --drive        tmux (default when tmux exists) | guided      interactive class
   --meter        statusline (default) | manual | oauth          interactive class; manual / oauth = unanchored
+  --oauth        allow reads of api.anthropic.com/api/oauth/usage (idle baseline, --meter oauth, probe)
   --idle-min     idle baseline before and after, minutes (default 10)
   --scale        request size multiplier (default 1)
   --submitter    GitHub login (default anonymous)
@@ -1039,10 +1126,12 @@ async function main() {
     log(`CLAUDE_CODE_ENTRYPOINT ${process.env.CLAUDE_CODE_ENTRYPOINT ? `set (${process.env.CLAUDE_CODE_ENTRYPOINT}): unset it and restart the terminal` : "unset"}`);
     log(`tmux ${spawnSync("tmux", ["-V"]).status === 0 ? "found" : "not found (needed for --drive tmux)"}`);
     log(`account hash ${accountHash(a["account-label"]) || "unavailable: pass --account-label"}`);
-    const o = await readOauthUsage();
-    if (o.ok) {
-      for (const b of ["5h", "7d"]) log(`${b} bar ${o[b]?.used_pct ?? "—"}% · resets ${o[b]?.resets_at ?? "—"}`);
-    } else log(`OAuth usage: ${o.error}`);
+    if (a.oauth) {
+      const o = await readOauthUsage();
+      if (o.ok) {
+        for (const b of ["5h", "7d"]) log(`${b} bar ${o[b]?.used_pct ?? "—"}% · resets ${o[b]?.resets_at ?? "—"}`);
+      } else log(`OAuth usage: ${o.error}`);
+    }
     if (a.ping) {
       const be = new SdkBackend({ model: a.model || "claude-haiku-5-5", effort: "low", claude: bin, "no-safe-mode": a["no-safe-mode"] }, fs.mkdtempSync(path.join(os.tmpdir(), "quota-probe-")));
       const r = await be.send("read", { text: "Reply with the single word: ok", newSession: true, ping: true });
@@ -1052,6 +1141,7 @@ async function main() {
     log("Plan: read it from /usage or your account page; pass it as --plan.");
     return;
   }
+  if (cmd === "record-holdout") return recordHoldout(a);
   if (cmd !== "run") fail(`unknown command ${cmd}\n${HELP}`);
   const bar = a.bar || "7d";
   if (!QW.BARS.includes(bar)) fail("--bar must be 5h or 7d");
