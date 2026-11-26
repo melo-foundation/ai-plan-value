@@ -1892,3 +1892,10 @@ html.egg-undo.egg-reveal::after {
     gap: 8px;
   }
 }
+
+/* Tablet: Min/Top + benchmark + value need the full width; budget and max cost share the row below */
+@media (min-width: 601px) and (max-width: 780px) {
+  .filter-bar > .filter-item:first-child {
+    grid-column: 1 / -1;
+  }
+}
