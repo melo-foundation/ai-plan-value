@@ -729,7 +729,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
     if (bid === "aa-cost-per-task-index" || bid === "aa-price-blended" || iiVer || PRIORS_BENCH_TO_KEY[bid]) {
       let rec = variantObs.get(vid);
       if (!rec) {
-        rec = { cpt: null, price3to1: null, benchmarks: {}, iiVer: null };
+        rec = { cpt: null, price3to1: null, benchmarks: {}, iiVer: null, iiRaw: null, iiDate: null };
         variantObs.set(vid, rec);
       }
       if (bid === "aa-cost-per-task-index") {
@@ -739,6 +739,8 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
       } else if (iiVer) {
         if (rec.iiVer == null || compareVersions(iiVer, rec.iiVer) >= 0) {
           rec.iiVer = iiVer;
+          rec.iiRaw = toNum(obs.value);
+          rec.iiDate = obs.observedAt || null;
           rec.benchmarks.intelligenceIndex = round1(obs.value);
         }
       } else {
@@ -751,7 +753,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
   // Group multi-effort AA variants by canonical base model slug
   const aaVariantsByBase = new Map(); // baseSlug -> Map<effort, variantObj>
   for (const [vid, rec] of variantObs.entries()) {
-    const intel = rec.benchmarks.intelligenceIndex;
+    const intel = rec.iiRaw ?? rec.benchmarks.intelligenceIndex;
     if (intel == null || rec.cpt == null || rec.cpt <= 0) continue;
 
     const [rawModelId, rawEffort] = vid.split("@");
@@ -799,6 +801,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
       creatorName: aaHeadline?.creatorName || labMeta?.name || null,
       creatorColor: aaHeadline?.creatorColor || null,
       intelligenceIndex: intel,
+      iiDate: rec.iiDate,
       costPerTaskUsd: rec.cpt,
       benchmarks: mergedBenchmarks,
       aaUrl: vMeta?.sourceModel?.url || aaHeadline?.sourceUrl || `https://artificialanalysis.ai/models/${baseSlug}`,
@@ -1328,6 +1331,7 @@ function parseFeiBenchConfigs(csvText, aaByNorm) {
       creatorName: aaHeadline?.creatorName || null,
       creatorColor: aaHeadline?.creatorColor || null,
       intelligenceIndex: score,
+      iiDate: r.checked_at || null,
       costPerTaskUsd: cpt,
       benchmarks: isHeadlineEffort
         ? { ...aaHeadline.benchmarks, intelligenceIndex: round1(score) }
@@ -2867,6 +2871,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   // Merge multi-effort AA variants: upstream Fei2411 + live AA first, backfilled with Priors per-effort sub-tests
   const aaVariantsByBase = new Map();
+  let newerPriorsScores = 0;
   for (const [baseSlug, effMap] of priorsParsed.aaVariantsByBase.entries()) {
     aaVariantsByBase.set(baseSlug, new Map(effMap));
   }
@@ -2891,6 +2896,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       }
       const pv = target.get(targetEff);
       const effSuffix = EFFORT_LABELS[targetEff] || "";
+      // Fei2411 lags AA by days; keep Priors' score when its AA observation is newer.
+      const priorsNewer = pv?.iiDate && fv.iiDate && pv.iiDate > fv.iiDate && pv.intelligenceIndex != null;
+      if (priorsNewer) newerPriorsScores++;
       target.set(targetEff, {
         ...pv,
         ...fv,
@@ -2900,9 +2908,19 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         displayName: effSuffix ? `${fv.baseDisplay} (${effSuffix})` : fv.baseDisplay,
         pricing: fv.pricing || pv?.pricing || null,
         benchmarks: { ...(pv?.benchmarks || {}), ...(fv.benchmarks || {}) },
+        ...(priorsNewer
+          ? {
+              intelligenceIndex: pv.intelligenceIndex,
+              costPerTaskUsd: pv.costPerTaskUsd ?? fv.costPerTaskUsd,
+              iiDate: pv.iiDate,
+              benchmarks: { ...(pv.benchmarks || {}), ...(fv.benchmarks || {}), intelligenceIndex: round1(pv.intelligenceIndex) },
+            }
+          : {}),
       });
     }
   }
+
+  if (newerPriorsScores) log(`Kept ${newerPriorsScores} newer Priors Intelligence Index score(s) over Fei2411`);
 
   // Fill strictly bracketed missing intermediate efforts (Option A: interpolated between lower & higher measured efforts)
   const interpolatedEffortVariants = interpolateMissingEfforts(aaVariantsByBase, openRouterIndex, aaByNorm);
