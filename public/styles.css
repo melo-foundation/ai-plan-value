@@ -1899,3 +1899,8 @@ html.egg-undo.egg-reveal::after {
     grid-column: 1 / -1;
   }
 }
+
+/* Description and explainer text: shown only in the Shift x5 easter egg (html[data-slop]) */
+.intro-text {
+  display: none;
+}

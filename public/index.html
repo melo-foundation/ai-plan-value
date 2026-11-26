@@ -67,6 +67,12 @@
       </header>
 
       <main class="workspace">
+        <section class="intro-text hero">
+          <h2 class="hero-title">What does your AI plan actually cost per task?</h2>
+          <p>Subscriptions sell certainty: one flat fee for AI that feels unlimited. It rarely is. Behind every &ldquo;unlimited&rdquo; label sits a quota, and the size of that quota decides what your work really costs. AI Plan Value takes community-measured usage data, combines it with Artificial Analysis benchmark scores and list API prices, and boils it down to a single number you can compare: what one real task costs you on each plan.</p>
+          <p>ChatGPT Plus and Pro, Claude Pro, Max and Ultra, Google AI Pro and Ultra, Cursor, GitHub Copilot, Kimi, Devin and more &mdash; filtered by the intelligence you need, the budget you have and the price per task you&rsquo;ll accept. Free, open source, and refreshed every six hours so the numbers stay as current as the plans they describe.</p>
+        </section>
+
         <section class="panel filter-panel" aria-label="Filters">
           <div class="panel-head">
             <h2>Filters</h2>
@@ -140,6 +146,7 @@
 
             <div id="extraCriteria" class="extra-criteria" hidden></div>
           </div>
+          <p class="intro-text">Three sliders describe the work you actually do: how smart the model must be, what you can spend per month, and the most you&rsquo;ll pay per task. Everything below reacts instantly &mdash; bars, rows and totals shrink to just the plans that clear all three. Need stricter matching, like a specific reasoning level or open-weights models only? Open <em>Settings</em>.</p>
         </section>
 
         <section class="panel" aria-label="Real cost bar chart">
@@ -156,6 +163,7 @@
               </label>
             </div>
           </div>
+          <p class="intro-text">The headline result. Each bar is one plan-and-model pair reduced to a single honest price: your monthly fee divided by how many benchmark-quality tasks its quota really covers. Shorter bar, cheaper work. By default you&rsquo;re seeing only each model&rsquo;s cheapest qualifying plan at its cheapest sufficient reasoning level &mdash; untick the boxes above to widen the comparison.</p>
           <div id="extrapBanner" class="extrap-banner" hidden>
             <svg class="infobar-ico" viewBox="0 0 16 16" aria-hidden="true">
               <polygon points="8,1 15,14 1,14" fill="#f7d23c" stroke="#7a5d00" stroke-width="1.2" stroke-linejoin="miter" />
@@ -178,6 +186,7 @@
           <summary class="panel-head panel-toggle">
             <h2>Full Comparison Table</h2>
           </summary>
+          <p class="intro-text">The complete picture, no editorialising: every plan-model combination with its measured quota, subsidy, real cost per task and confidence grade. Search, sort and group your way to the raw numbers behind the chart &mdash; this is where the edge cases live.</p>
           <div class="table-toolbar">
             <input id="tableSearch" class="search-input" type="search" placeholder="Filter by model or plan…" aria-label="Filter table by model or plan" />
             <span class="toolbar-sort">
@@ -221,6 +230,7 @@
         </div>
       </div>
       <div class="dialog-body settings-body">
+        <p class="intro-text">Decide how cost is computed and which plans belong in the comparison: the cost metric, the confidence floor, billing period, reasoning effort and more. Every change applies across the whole page immediately, so you can experiment freely.</p>
         <div class="settings-section">
           <div class="settings-head-row">
             <label class="settings-heading" for="costMode">Cost metric</label>
@@ -353,6 +363,7 @@
         <button id="closeMethodBtn" class="btn btn-sm" type="button">Close</button>
       </div>
       <div class="dialog-body method-body">
+        <p class="intro-text">Every number on this site is built from measurements, not marketing &mdash; and every measurement carries uncertainty. Below are the exact formulas, the confidence grade attached to each row, and links to the raw sources, so you can audit any figure down to its origin.</p>
         <div class="settings-section">
           <div class="settings-heading">Real cost</div>
           <p>What a piece of work actually costs you on a plan, if you use the plan's whole quota.</p>
