@@ -115,3 +115,4 @@
 {"t":"deploy","d":"2026-11-26T10:36:35.232Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T10:39:33.458Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T10:42:00.899Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
+{"t":"deploy","d":"2026-11-26T10:44:26.543Z","counts":{"high":894,"medium":944,"low":627,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
