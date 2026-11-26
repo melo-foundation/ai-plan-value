@@ -290,7 +290,7 @@ function subsidySources(r) {
   if (mix) sub.push(`Adjusted ×${mix.f.toFixed(2)} for how Claude's limit counts cached tokens (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   const client = r.clientFactor?.[state.costMode];
   if (client) sub.push(`Adjusted ÷${(1 / client.f).toFixed(1)}: T3 Code's SDK client uses the limit faster (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
-  sub.push(...(chain?.lines || []));
+  sub.push(...(chain?.lines || []).map(plainSource));
   return sub;
 }
 
@@ -624,6 +624,30 @@ function renderPlanDrawer(planName, allResolved) {
   `;
 }
 
+// Pipeline shorthand → plain words (drawer and tooltips)
+function plainSource(line) {
+  let t = String(line);
+  const pp = (x) => x.replace(/(\d+(?:\.\d+)?) pp\b/g, "$1% of the limit");
+  t = t.replace(/^= (.+?) \(same pool, rate card\)$/, "estimated from $1 (same quota, priced by rate card)")
+    .replace(/^= (.+?) \(same pool\)$/, "estimated from $1 (same quota)")
+    .replace(/^= (.+?) \(assumed equal\)$/, "assumed the same as $1")
+    .replace(/^(.+?) × ([\d.]+) \(ruled plan ratio\)$/, "estimated from $1 (×$2, Fei's plan ratio)")
+    .replace(/^(.+?) × ([\d.]+) \(official plan ratio\)$/, "estimated from $1 (×$2, official plan ratio)")
+    .replace(/^(.+?) × ([\d.]+) \(shared \$ pool\)$/, "estimated from $1 (×$2, shared dollar pool)")
+    .replace(/^(.+?) × ([\d.]+) \(token pool\)$/, "estimated from $1 (×$2, same token pool)")
+    .replace(/^(.+?) ÷ ([\d.]+) \(Fable\/Opus, Pro \+ Ultra\)$/, "estimated from $1 (÷$2: Fable uses the limit about 2.5× faster)")
+    .replace(/^Fable only ÷ 0\.5 \(50% cap\)$/, "halved: Fable alone can use only half the weekly limit")
+    .replace(/^pooled ([\d.]+)× Fei \+ ([\d.]+)× Priors$/, "average of Fei ($1×) and Priors ($2×)")
+    .replace(/^inconsistent ×([\d.]+) \((.+?) vs (.+?), same pool\)$/, "disagrees ×$1 with other plans ($2 vs $3)")
+    .replace(/^derived \(official plan ratio\)$/, "estimated from a sibling plan (official plan ratio)")
+    .replace(/^(.+?) × ([\d.]+)$/, "estimated from $1 (×$2)");
+  t = t.replace(/Priors: Priors, /g, "Priors dataset, ").replace(/\bPriors (high|medium|low)\b/g, "Priors dataset ($1)").replace(/\bPriors, /g, "Priors dataset, ")
+    .replace(/\b1 screenshot\b/g, "one user's screenshot").replace(/\bscreenshot\b(?!s)/g, "screenshot").replace(/\btweet\b/g, "a tweet")
+    .replace(/\bgateway panel\b/g, "third-party gateway's usage panel").replace(/^official credits$/, "official credit amount")
+    .replace(/^list price$/, "API list price").replace(/^official, /, "official figure, ");
+  return pp(t);
+}
+
 // One line per source in the plan's subsidy chains: models · subsidy · source (as in the glyph tooltip).
 function renderProvenance(planEntries, models) {
   const order = new Map(models.map((m, i) => [m.baseName, i]));
@@ -643,26 +667,43 @@ function renderProvenance(planEntries, models) {
   const creditSrc = (c) => {
     let host = "";
     try { host = new URL(c.url).hostname.replace(/^www\./, ""); } catch {}
-    const s = `${esc(host ? `${host}, checked` : "checked")} <span class="nowrap">${esc(c.checked || "")}</span>`;
+    const s = esc(host || "source");
     return c.url ? `<a class="row-link" href="${esc(c.url)}" title="${esc(c.text || "")}" target="_blank" rel="noopener noreferrer">${s}</a>` : s;
   };
-  const creditLines = (planEntries[0].includedCredits || [])
-    .map(
-      (c, i) =>
-        `<div class="prov-line prov-credit"><span class="prov-label">${i ? "" : "Bundled (not counted)"}</span><span class="prov-val num">${esc(creditItemText(c))}</span><span class="prov-src">${creditSrc(c)}</span></div>`
-    )
-    .join("");
-  const lines = [...groups.values()]
+  // Split a trailing ", YYYY-MM-DD" into its own column
+  const splitDate = (t) => {
+    const m = /^(.*?),?\s*(\d{4}-\d{2}-\d{2})$/.exec(String(t));
+    return m ? [m[1], m[2]] : [String(t), ""];
+  };
+  const rows = [...groups.values()]
     .sort((a, b) => a.rank - b.rank)
-    .flatMap((g) => {
+    .map((g, gi) => {
       const src = g.sources.length ? g.sources : ["—"];
-      return src.map(
-        (s, i) =>
-          `<div class="prov-line"><span class="prov-label">${i ? "" : esc([...g.names].join(", "))}</span><span class="prov-val num">${i ? "" : esc(g.val)}</span><span class="prov-src">${esc(s).replace(/\d{4}-\d{2}-\d{2}/g, '<span class="nowrap">$&</span>')}</span></div>`
-      );
+      const zebra = gi % 2 ? " prov-alt" : "";
+      return src
+        .map((raw, i) => {
+          const [text, date] = splitDate(plainSource(raw));
+          return i === 0
+            ? `<tr class="prov-row${zebra}"><td class="prov-model">${esc([...g.names].join(", "))}</td><td class="prov-num">${esc(g.val)}</td><td class="prov-src">${esc(text)}${date ? `<span class="prov-date-inline">${esc(date)}</span>` : ""}</td><td class="prov-date">${esc(date)}</td></tr>`
+            : `<tr class="prov-row prov-step${zebra}"><td class="prov-model"></td><td class="prov-num"></td><td class="prov-src"><span class="prov-arrow">↳</span>${esc(text)}${date ? `<span class="prov-date-inline">${esc(date)}</span>` : ""}</td><td class="prov-date">${esc(date)}</td></tr>`;
+        })
+        .join("");
     })
     .join("");
-  return `<div class="prov-list" aria-label="Subsidy sources">${lines}${creditLines}</div>`;
+  const credits = planEntries[0].includedCredits || [];
+  const creditRows = credits.length
+    ? `<tr><th colspan="4" class="prov-sub">Bundled extras, not counted in the subsidy</th></tr>` +
+      credits
+        .map(
+          (c, i) =>
+            `<tr class="prov-row${i % 2 ? " prov-alt" : ""}"><td class="prov-model" colspan="2">${esc(creditItemText(c).replace(/^\+/, ""))}</td><td class="prov-src">${creditSrc(c)}${c.checked ? `<span class="prov-date-inline">${esc(c.checked)}</span>` : ""}</td><td class="prov-date">${esc(c.checked || "")}</td></tr>`
+        )
+        .join("")
+    : "";
+  return `<table class="prov-table" aria-label="Subsidy sources">
+    <thead><tr><th>Model</th><th class="prov-num">Subsidy</th><th>Source</th><th>Checked</th></tr></thead>
+    <tbody>${rows}${creditRows}</tbody>
+  </table>`;
 }
 
 // The bars the chart shows for a set of rows: deduplicated by the cheapest-plan / cheapest-effort toggles, cheapest first.

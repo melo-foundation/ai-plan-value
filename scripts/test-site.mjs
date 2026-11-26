@@ -1253,7 +1253,7 @@ test("Included credits: meta line, tooltips, drawer, table row and Methodology s
   // Popups can't be hovered further: the plan popup must list every bundled item, not a summary
   assert.ok(/planText = [^;]*creditsFullText|creditItems = creditsFullText\(r\)[\s\S]{0,300}Bundled \(not counted in the subsidy\)/.test(fnBody("renderBarChart")), "Bar plan popup must list every bundled item");
   assert.ok(/includedCredits/.test(fnBody("relTooltip")) && /not counted in the subsidy/.test(fnBody("relTooltip")), "Reliability tooltip must list every bundled item");
-  assert.ok(/includedCredits/.test(fnBody("renderProvenance")) && /Bundled \(not counted\)/.test(fnBody("renderProvenance")), "Drawer provenance must list credits");
+  assert.ok(/includedCredits/.test(fnBody("renderProvenance")) && /Bundled extras, not counted in the subsidy/.test(fnBody("renderProvenance")), "Drawer provenance must list credits");
   assert.ok((fnBody("renderTable").match(/creditsDiv\(/g) || []).length >= 2, "Table row and group row must show credits");
   assert.ok(html.includes("Bundled credits (API, cloud) are listed per plan and not counted in the subsidy."), "Methodology credits line missing");
   assert.equal(creditsText({ includedCredits: [] }), "");
@@ -1537,7 +1537,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
   const ctx = vm.createContext(g);
   vm.runInContext(appJs.replace(/\bimport\.meta\.url\b/g, JSON.stringify("http://localhost/app.js?v=test")), ctx, { filename: "public/app.js" });
   const api = vm.runInContext(
-    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
+    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, plainSource, renderProvenance, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
     ctx
   );
   const app = { ...api, $: document.getElementById, document, location, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
@@ -1944,6 +1944,31 @@ test("Mobile CSS: full-screen dialogs ≤600px, card rows, tap targets ≤780px,
     assert.ok(!/(^|[\s(,])1fr/.test(g.replace(/minmax\(0, 1fr\)/g, "")), `${r.selectors.join(", ")} uses a bare 1fr track (${g}); use minmax(0, 1fr)`);
   }
   assert.ok(grids >= 1, "no .workspace grid rule found");
+});
+
+test("Plan drawer sources: a table with plain-language sources and a date column", () => {
+  const app = loadApp("", { data: dataset });
+  // Shorthand → plain words
+  for (const [raw, want] of [
+    ["Priors medium, 2026-11-09", "Priors dataset (medium), 2026-11-09"],
+    ["1 screenshot, 19 pp, 2026-10-03", "one user's screenshot, 19% of the limit, 2026-10-03"],
+    ["= GPT-6.1 Sol (same pool, rate card)", "estimated from GPT-6.1 Sol (same quota, priced by rate card)"],
+    ["GPT 5.6 Luna Plus × 2 (ruled plan ratio)", "estimated from GPT 5.6 Luna Plus (×2, Fei's plan ratio)"],
+    ["gateway panel, 2026-10-06", "third-party gateway's usage panel, 2026-10-06"],
+    ["pooled 17.1× Fei + 20.8× Priors", "average of Fei (17.1×) and Priors (20.8×)"],
+  ]) assert.equal(app.plainSource(raw), want);
+  // Rendered table for a plan with a chain and bundled credits
+  const plan = "ChatGPT Pro 20x";
+  const planEntries = app.getAllEntriesResolved().filter((e) => e.plan === plan);
+  assert.ok(planEntries.length > 0, `no ${plan} rows`);
+  const models = [...new Set(planEntries.map((e) => String(e.modelDisplay).replace(/\s*\(.*\)$/, "")))].map((baseName) => ({ baseName }));
+  const html = app.renderProvenance(planEntries, models);
+  assert.ok(/<table class="prov-table"/.test(html), "sources must render as a table");
+  assert.deepEqual([...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]).slice(0, 4), ["Model", "Subsidy", "Source", "Checked"]);
+  assert.ok(/class="prov-date">\d{4}-\d{2}-\d{2}</.test(html), "dates must sit in their own column");
+  const visible = html.replace(/ title="[^"]*"/g, ""); // the page's own wording stays on hover only
+  assert.ok(!/Priors medium|\bpp\b|\| \$/.test(visible), "shorthand or raw source cells leaked into the drawer");
+  assert.ok(/Bundled extras, not counted in the subsidy/.test(html) && /developers\.openai\.com/.test(html), "bundled credits row with its source host");
 });
 
 test("Phone table: every cell carries its column's data-label; Sort select and Show 50 more page the rows", () => {

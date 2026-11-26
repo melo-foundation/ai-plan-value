@@ -937,36 +937,91 @@ details[open] > summary.panel-toggle h2::before {
   overflow-x: auto;
 }
 
-/* Subsidy provenance under the drawer matrix: models · subsidy · source */
-.prov-list {
-  display: grid;
-  grid-template-columns: fit-content(42%) max-content minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 1px;
-  padding: 5px 8px;
-  font-size: 11.5px;
-  line-height: 1.35;
-  background: var(--filter-bg);
-  border-top: 1px solid var(--cell-border);
+/* Subsidy sources under the drawer matrix: a second table in the matrix style */
+.prov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  border-top: 2px solid var(--panel-border);
 }
 
-.prov-line {
-  display: contents;
-}
-
-.prov-label {
-  font-weight: bold;
+.prov-table th {
+  text-align: left;
+  font-size: 11px;
+  padding: 4px 8px;
   color: var(--panel-head-fg);
-}
-
-.prov-val {
-  text-align: right;
+  background: linear-gradient(to bottom, var(--th-top), var(--th-bot));
+  border-bottom: 1px solid var(--cell-border);
   white-space: nowrap;
 }
 
-.prov-src {
+.prov-table td {
+  padding: 4px 8px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--grid-line);
+}
+
+.prov-table .prov-alt td {
+  background: var(--zebra);
+}
+
+.prov-table .prov-step td {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.prov-table .prov-model {
+  font-weight: bold;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.prov-table .prov-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.prov-table .prov-src {
+  width: 100%;
   color: var(--muted);
   overflow-wrap: break-word;
+}
+
+.prov-table .prov-arrow {
+  margin-right: 5px;
+  color: var(--muted);
+}
+
+.prov-table .prov-date {
+  white-space: nowrap;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.prov-table th.prov-sub {
+  padding-top: 6px;
+  border-top: 1px solid var(--cell-border);
+}
+
+.prov-table .prov-date-inline {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .prov-table .prov-date,
+  .prov-table th:last-child {
+    display: none;
+  }
+  .prov-table .prov-date-inline {
+    display: block;
+    font-size: 11px;
+  }
+  .prov-table td,
+  .prov-table th {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
 }
 
 .nowrap {
