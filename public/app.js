@@ -268,6 +268,9 @@ function relTooltip(r) {
   return lines.join("\n");
 }
 
+// Reliability tooltip on the whole model name, not only the glyph
+const relTitle = (r) => (r.level ? ` title="${esc(relTooltip(r))}"` : "");
+
 // One graded glyph per row, after the model name
 function relGlyph(r) {
   if (!r.level) return "";
@@ -615,7 +618,7 @@ function renderBarChart(allRows, allResolved) {
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
           <div class="bar-label">
-            <div class="bar-model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>
+            <div class="bar-model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>
             <div class="bar-plan"><span class="plan-text" title="${esc(planText)}">${planHtml}</span>${expBtn}</div>
             <div class="bar-meta">${esc([r.isApi ? null : feeText(r), r.harness, r.quotaWindowLabel].filter(Boolean).join(" · "))}</div>
           </div>
@@ -756,8 +759,8 @@ function renderTable(rows) {
       .join("");
 
     const nameCell = grouped
-      ? `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>`
-      : `<div class="model">${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
+      ? `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div>`
+      : `<div class="model"${relTitle(r)}>${renderLink(r.modelDisplay, r.aaUrl)}${relGlyph(r)}</div><div class="plan">${renderLink(cleanPlan(r), r.planUrl)}</div>`;
 
     const accessCell = grouped
       ? `<td class="meta-cell col-hide-sm col-hide-md"></td>`
