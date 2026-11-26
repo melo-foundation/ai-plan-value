@@ -22,6 +22,10 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// Current Claude plans: pro, max ($100), ultra ($200). Older names map onto them.
+const PLAN_ALIASES = { max_5x: "max", max_20x: "ultra" };
+const normPlan = (p) => PLAN_ALIASES[p] || p;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, "..");
 export const QW_DIR = path.join(ROOT, "data", "quota-weights");
@@ -559,12 +563,12 @@ export function buildSegments(subs, prices) {
           session: h.session_id,
           submitter: h.submitter,
           account: h.account_hash,
-          plan: h.plan,
+          plan: normPlan(h.plan),
           entrypoint: h.entrypoint,
           clientVersion: h.client_version || null,
           cls,
           cell: cellKey(h.vendor, h.model, bar, cls),
-          group: [h.account_hash, h.plan, bar, cls, h.model, isoWeek(firstTs)].join("|"),
+          group: [h.account_hash, normPlan(h.plan), bar, cls, h.model, isoWeek(firstTs)].join("|"),
           emulated: h.label_emulated === true,
           idleRecorded: h.idle_ticks === 0,
           holdout: h.holdout === true,
@@ -1264,7 +1268,7 @@ export function simulateSession({ rand, trueW = SIM_TRUE_W, price = SIM_PRICE, p
     submitter,
     account_hash: account,
     vendor: "anthropic",
-    plan: "max_5x",
+    plan: "max",
     plan_price_usd: 100,
     model,
     effort: "low",
@@ -1419,7 +1423,7 @@ function indexCsv(subs, segs) {
   }
   for (const sub of subs.filter((x) => x.error)) {
     const h = sub.header || {};
-    lines.push([h.session_id, h.submitter, h.account_hash, h.vendor, h.plan, h.model, h.entrypoint, "", "", "", "", "", "", "", "", "", false, sub.error].map(esc).join(","));
+    lines.push([h.session_id, h.submitter, h.account_hash, h.vendor, normPlan(h.plan), h.model, h.entrypoint, "", "", "", "", "", "", "", "", "", false, sub.error].map(esc).join(","));
   }
   return lines.join("\n") + "\n";
 }

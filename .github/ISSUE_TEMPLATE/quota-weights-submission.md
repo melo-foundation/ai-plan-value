@@ -13,7 +13,7 @@ labels: quota-weights
 
 | | |
 |---|---|
-| Plan | <!-- pro / max_5x / max_20x / ultra / team --> |
+| Plan | <!-- pro / max / ultra / team --> |
 | Model | <!-- claude-opus-5-5 --> |
 | Bar | <!-- 7d / 5h --> |
 | Client class | <!-- interactive (tmux / guided) / sdk --> |

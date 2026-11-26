@@ -7,7 +7,7 @@
  * Spec: docs/design/quota-weight-methodology.md §1.2–§1.5, §2. Usage: docs/QUOTA-WEIGHTS.md.
  *
  *   node scripts/quota-probe.mjs probe [--ping]
- *   node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan max_5x [options]
+ *   node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan max [options]
  *   node scripts/quota-probe.mjs run ... --dry-run          simulated meter and usage, no API calls, no credentials
  *   node scripts/quota-probe.mjs record-holdout --dir <project> ...  log ordinary work as a G4 holdout session
  *   node scripts/quota-probe.mjs set-raw <file> <url>       record where the raw log bundle was uploaded
@@ -56,16 +56,18 @@ const ARM_ENV = {
 const CLEAR_ENV = ["CLAUDE_CODE_ENTRYPOINT", "DISABLE_PROMPT_CACHING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M"];
 
 // Starting list-$ per meter point, used only to size the first requests; the run re-estimates it
-// from its own ticks. Sources: methodology §1.6 and §1.5 (Pro 5h ≈ $0.27, Max 5x ≈ $1.4 interactive /
+// from its own ticks. Sources: methodology §1.6 and §1.5 (Pro 5h ≈ $0.27, Max ≈ $1.4 interactive /
 // $0.68 headless, weekly ≈ 7.7 (interactive) / 12.2 (headless) windows), kler run (Team).
 const PARITY_GUESS = {
   pro: { interactive: { "5h": 0.27, "7d": 2.1 }, sdk: { "5h": 0.13, "7d": 1.6 } },
-  max_5x: { interactive: { "5h": 1.4, "7d": 10.7 }, sdk: { "5h": 0.68, "7d": 8.3 } },
-  max_20x: { interactive: { "5h": 5.6, "7d": 21.4 }, sdk: { "5h": 2.7, "7d": 16.6 } },
+  max: { interactive: { "5h": 1.4, "7d": 10.7 }, sdk: { "5h": 0.68, "7d": 8.3 } },
   ultra: { interactive: { "5h": 5.6, "7d": 21.4 }, sdk: { "5h": 2.7, "7d": 16.6 } },
   team: { interactive: { "5h": 0.62, "7d": 4.8 }, sdk: { "5h": 0.28, "7d": 3.4 } },
 };
-const PLAN_PRICE = { pro: 20, max_5x: 100, max_20x: 200, ultra: null, team: null };
+const PLAN_PRICE = { pro: 20, max: 100, ultra: 200, team: null };
+// Current Claude plans are Pro, Max ($100) and Ultra ($200). Older names map onto them.
+const PLAN_ALIASES = { max_5x: "max", max_20x: "ultra" };
+const normPlan = (p) => PLAN_ALIASES[p] || p;
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -355,7 +357,7 @@ class DryRunBackend {
     this.rand = QW.rng(Number(opts.seed || 1));
     const price = QW.priceFor(QW.loadPrices(), opts.model) || Object.fromEntries(QW.KINDS.map((k) => [k, QW.SIM_PRICE[k]]));
     this.price = price;
-    const g = PARITY_GUESS[opts.plan]?.[opts.class] || PARITY_GUESS.max_5x.sdk;
+    const g = PARITY_GUESS[opts.plan]?.[opts.class] || PARITY_GUESS.max.sdk;
     this.m5 = QW.simMeter({ rand: this.rand, parity: g["5h"], price, start: 20 + this.rand() });
     this.m7 = QW.simMeter({ rand: this.rand, parity: g["7d"], price, start: 30 + this.rand() });
     this.t = Date.parse("2026-11-02T00:00:00Z");
@@ -762,7 +764,7 @@ export async function runProbe(opts) {
   const price = QW.priceFor(prices, opts.model);
   if (!price) fail(`no list price for ${opts.model} in data/quota-weights/prices.json`);
   const usdOf = (r) => QW.KINDS.reduce((a, k) => a + (r[QW.TOKEN_FIELD[k]] || 0) * price[k], 0);
-  let P = (PARITY_GUESS[opts.plan] || PARITY_GUESS.max_5x)[opts.class][bar];
+  let P = (PARITY_GUESS[opts.plan] || PARITY_GUESS.max)[opts.class][bar];
 
   let out;
   if (dry) {
@@ -992,7 +994,7 @@ function checkEnv(opts) {
 async function recordHoldout(a) {
   const dir = path.resolve(a.dir || process.cwd());
   const model = a.model || "claude-opus-5-5";
-  const plan = a.plan || "max_5x";
+  const plan = normPlan(a.plan || "max");
   const bar = a.bar || "7d";
   const bin = a.claude || "claude";
   const submitter = String(a.submitter || "anonymous").replace(/[^A-Za-z0-9_.-]/g, "-");
@@ -1083,7 +1085,7 @@ run options
   --model        claude-opus-5-5 | claude-sonnet-5-5 | claude-haiku-5-5 | claude-fable-5-2
   --bar          7d (default) | 5h
   --class        interactive (default) | sdk
-  --plan         pro | max_5x (default) | max_20x | ultra | team
+  --plan         pro | max (default) | ultra | team
   --arms         default 7d: input,read,write1h · 5h: input,output,read,write1h,write5m
   --points       anchored points per arm (default 7d: 3, 5h: 5)
   --effort       low (default)
@@ -1153,7 +1155,7 @@ async function main() {
     model: a.model || "claude-opus-5-5",
     bar,
     class: cls,
-    plan: a.plan || "max_5x",
+    plan: normPlan(a.plan || "max"),
     effort: a.effort || "low",
     drive: a.drive || (hasTmux ? "tmux" : "guided"),
     meter: a.meter || "statusline",

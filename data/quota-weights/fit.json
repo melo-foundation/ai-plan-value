@@ -1,6 +1,6 @@
 {
  "schema": "quota-weights.fit/1",
- "generatedAt": "2026-11-26T07:43:31.579Z",
+ "generatedAt": "2026-11-26T07:59:16.665Z",
  "seed": 1,
  "options": {
   "boot": 2000,
@@ -3488,7 +3488,7 @@
     "cacheWrite1h": 1.56802
    },
    "parityUsdPerPoint": {
-    "40eb5f83|max_5x|5h|sdk|claude-opus-5-5|2026-W40": 0.680021,
+    "40eb5f83|max|5h|sdk|claude-opus-5-5|2026-W40": 0.680021,
     "2e2faf89|team|5h|sdk|claude-opus-5-5|2026-W42": 0.275083
    },
    "diagnostics": {

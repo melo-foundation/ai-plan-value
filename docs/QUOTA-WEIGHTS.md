@@ -21,16 +21,16 @@ Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 
 
 2. Practise without API calls:
 
-       node scripts/quota-probe.mjs run --dry-run --bar 7d --class interactive --plan max_5x
+       node scripts/quota-probe.mjs run --dry-run --bar 7d --class interactive --plan ultra
 
 3. Record. Pick the row for your cell, set `--plan` and `--submitter <your GitHub login>`:
 
    | Cell | Command |
    |---|---|
-   | weekly bar, interactive (site cell, run first) | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan max_5x` |
-   | 5h bar, interactive | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 5h --class interactive --plan max_5x` |
-   | 5h bar, `claude -p` | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 5h --class sdk --plan max_5x` |
-   | weekly bar, `claude -p` | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class sdk --plan max_5x` |
+   | weekly bar, interactive (site cell, run first) | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan ultra` |
+   | 5h bar, interactive | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 5h --class interactive --plan ultra` |
+   | 5h bar, `claude -p` | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 5h --class sdk --plan ultra` |
+   | weekly bar, `claude -p` | `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class sdk --plan ultra` |
 
 4. Upload the `.raw.jsonl` file the run prints (gist or issue attachment), then:
 
@@ -40,7 +40,7 @@ Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 
 
 6. Record a holdout for G4 (once per account): work normally in one of your own projects, one Claude Code session at a time, for at least 20 points of the bar:
 
-       node scripts/quota-probe.mjs record-holdout --dir <project> --model claude-opus-5-5 --plan max_5x --bar 7d
+       node scripts/quota-probe.mjs record-holdout --dir <project> --model claude-opus-5-5 --plan ultra --bar 7d
 
    Then step 4 and 5 for the file it writes.
 
@@ -48,9 +48,9 @@ Start with the bar under test below 60%. The run stops at 85% (5h) or 95% (weekl
 
 ### Values
 
-| Run | Arms | Anchored points per arm | Quota used | Requests (Max 5x, simulated) |
+| Run | Arms | Anchored points per arm | Quota used | Requests (Max, simulated) |
 |---|---|---|---|---|
-| weekly bar | `input`, `read`, `write1h` | 3 | about 12% of a week; 1–2 five-hour windows on Pro and Max 5x | about 3,000 (`read` about 2,700) |
+| weekly bar | `input`, `read`, `write1h` | 3 | about 12% of a week; 1–2 five-hour windows on Pro and Max | about 3,000 (`read` about 2,700) |
 | 5h bar | `input`, `output`, `read`, `write1h`, `write5m` | 5 | about 30% of one window | about 700 (sdk) |
 
 | Option | Values | Default |
@@ -58,7 +58,7 @@ Start with the bar under test below 60%. The run stops at 85% (5h) or 95% (weekl
 | `--model` | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2` | `claude-opus-5-5` |
 | `--bar` | `7d`, `5h` | `7d` |
 | `--class` | `interactive`, `sdk` | `interactive` |
-| `--plan` | `pro`, `max_5x`, `max_20x`, `ultra`, `team` | `max_5x` |
+| `--plan` | `pro`, `max`, `ultra`, `team` (`max_5x` → `max`, `max_20x` → `ultra`) | `max` |
 | `--drive` | `tmux`, `guided` | `tmux` when installed |
 | `--meter` | `statusline`, `manual`, `oauth` | `statusline` |
 | `--arms` | comma list of `input,output,read,write1h,write5m` | per bar, above |
@@ -122,7 +122,7 @@ JSON Lines, UTF-8. Line 1 is the header. Unknown schema versions are rejected.
 | `session_id` | unique in the repo |
 | `submitter` | GitHub login |
 | `account_hash` | 8 hex |
-| `vendor`, `plan`, `plan_price_usd` | `anthropic`, `max_5x`, `100` |
+| `vendor`, `plan`, `plan_price_usd` | `anthropic`, `max`, `100` |
 | `model`, `effort` | `claude-opus-5-5`, `low` |
 | `client`, `client_version`, `entrypoint` | `claude-code`, `2.1.332`, `cli` / `sdk-cli` / `sdk-ts` / `claude-vscode` |
 | `client_class` | `interactive` / `sdk` (default: `sdk` when `entrypoint` starts with `sdk`) |
