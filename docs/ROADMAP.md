@@ -53,4 +53,5 @@ Spec: `docs/design/quota-weight-methodology.md`.
 - [x] Self-host DejaVu Sans as the Verdana fallback for Android (about 40 KB).
 - [x] Hours/mo column in T3 mode.
 - [x] Provenance list in the plan drawer.
+- [ ] Included credits still `unknown` (`scripts/included-credits.mjs`): SuperGrok tiers (x.ai/pricing 403), Kimi Moderato / Allegretto / Allegro, GLM existing-subscriber tiers, MiniMax Token Plan CN + Global, Step Plan (platform.stepfun.com unreachable; Studio 40% quota unverified). Recheck and set `listed` or `none`.
 - [ ] Combined real-world cost metric with Raw / Harness / Custom mixes (`docs/design/combined-metric-design.md`). It depends on steps 1–3.

@@ -200,6 +200,20 @@ Yearly subsidy = subsidy × monthly price ÷ yearly price per month
 - `stats.billing.unmatched` non-empty: add records for the listed plans.
 - `stats.billing.mismatches` non-empty: recheck the official monthly price.
 
+## Included credits
+
+Credits and products a plan bundles outside its quota (API credits, cloud credits, storage, X Premium) are listed per plan and not counted in the subsidy or any cost.
+
+| Where | Shows |
+|---|---|
+| Bar meta line, bar and row tooltips, table row | `+$100/mo API credits (not counted)`; more items as `, +N more` |
+| Plan drawer | one line per item: value, official quote, check date, link |
+
+- Records, sources and check dates: `INCLUDED_CREDITS` in `scripts/included-credits.mjs`.
+- To add a plan: add a record with `status` `listed` (and `credits`), `none` or `unknown`, plus `url` and `checked`. Set `usdPerMonth` only when the official page states a $ amount per month.
+- `stats.includedCredits.unmatched` non-empty: add records for the listed plans.
+- The build throws if applying the records changes `subsidyMultiple`, a price or a cost.
+
 ## Fable cap
 
 Fable on Claude Pro / Max / Ultra: `capShare` 0.5, `subsidyReadings { shared, own }`, own = shared × 0.5. `Tasks/mo` = fee ÷ real cost × capShare in the Shared reading.
@@ -241,13 +255,15 @@ The bar chart and the table both show rows at or above the Min confidence settin
 - `entry.quotaMix[metric]`: `{ f, lo, hi }` on corrected Claude rows.
 - `entry.clientFactor[metric]`: `{ f, lo, hi, k }`; the page multiplies the subsidy by `f`.
 - Subscription rows: `priceUsdMonthly`; `priceUsdYearly` (annual fee ÷ 12, or null); `billingYearly` (`official`, `none`, `unknown`, `variant`); `billingOnly: "yearly"` on annual-variant rows; `hideYearly` on their monthly twins; `rel.y` (0.03) on rows with an official annual price.
+- Subscription rows: `includedCredits` (`[{ kind, usdPerMonth, text, url, checked }]`); `includedCreditsStatus` (`listed`, `none`, `unknown`).
+- `stats.includedCredits`: row counts per status, `unmatched` plans, `subsidyUnchanged`.
 - `stats.billing`: row counts per status, `unmatched` plans, `mismatches` (stored vs official monthly price).
 - `stats.chains[id]`: `steps [{k, s, t}]`, `lines` (nearest step first), `anchors`, `flags`.
 - `stats.reliability`: σ tables, `sigmaBuckets`, thresholds, `counts`, `countsByMode`, `consistency`, `unresolved`, `priorsSkipped`, `droppedRows`, `t3Harness`, `t3HarnessFit`, `sdkClient`, `calibration`, `lastDeploy`, `history`.
 
 ## Tests
 
-`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record.
+`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record; a subscription row lacks `includedCreditsStatus`; a listed credit lacks a URL or check date; Claude Max ≠ $100 or Claude Ultra ≠ $200 API credits; a subsidy changes with `includedCredits`; a plan has no included-credits record.
 
 Tests that need history print `SKIP` until the ledger has the data:
 
