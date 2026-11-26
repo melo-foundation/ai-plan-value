@@ -2020,7 +2020,7 @@ loadStarCount();
     toast.setAttribute("role", "status");
     toast.innerHTML =
       '<div class="egg-toast-emoji">🎉</div><div class="egg-toast-body">' +
-      '<div class="egg-toast-title slop-text-gradient">Congratulations!</div>' +
+      '<div class="egg-toast-title slop-text-gradient">Congratulation!</div>' +
       '<div class="egg-toast-text">Your UI has been modernized ✨</div>' +
       '<div class="egg-toast-hint"><kbd>Shift</kbd> ×5 to undo</div></div>' +
       '<button class="egg-toast-close" type="button" aria-label="Close">✕</button>';
