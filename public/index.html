@@ -73,6 +73,7 @@
                     <optgroup label="Overall">
                       <option value="intelligenceIndex" selected>Intelligence Index</option>
                       <option value="codingAgentIndex">Coding Agent Index</option>
+                      <option value="cursorBench">CursorBench</option>
                     </optgroup>
                     <optgroup label="Domains">
                       <option value="engineering">Engineering</option>
@@ -200,6 +201,7 @@
             <select id="costMode" class="select" aria-label="Cost metric">
               <option value="task" selected>Per task</option>
               <option value="tokens">Per 1M tokens</option>
+              <option value="turn">Per T3 Code turn</option>
             </select>
           </div>
           <div class="settings-head-row">
@@ -319,9 +321,13 @@
               <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a>
               (context windows, open weights, supported efforts, domain backfill),
               <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a>
-              (ARC-AGI-2 fallback for unmeasured effort ratios), and
+              (ARC-AGI-2 fallback for unmeasured effort ratios),
               <a href="https://artificialanalysis.ai/agents/coding-agents" target="_blank" rel="noopener noreferrer">Artificial Analysis Coding Agents</a>
-              (Coding Agent Index, agent $/task).
+              (Coding Agent Index, agent $/task),
+              <a href="https://cursor.com/cursorbench" target="_blank" rel="noopener noreferrer">CursorBench</a>
+              ($/task), and
+              <a href="https://t3.codes" target="_blank" rel="noopener noreferrer">T3 Code</a>
+              ($/turn from user telemetry), both via Priors.
             </li>
             <li>
               <strong>Plan subsidies:</strong>
@@ -340,6 +346,8 @@
             <div><code>Real $/task</code> = API $/task ÷ plan subsidy</div>
             <div><code>Coding Agent</code> = AA agent run for the plan's agent; open endpoints and APIs use the model's default agent</div>
             <div><code>Real $/1M tokens</code> = API 3:1 blended $/1M ÷ plan subsidy</div>
+            <div><code>Real $/turn</code> = mean API-list cost of a real T3 Code turn (30 days of user telemetry) ÷ plan subsidy</div>
+            <div><code>CursorBench</code> = CursorBench score and $/task for the model and reasoning level</div>
             <div><code>Tasks/mo (or Mtok/mo)</code> = monthly fee ÷ real cost</div>
           </div>
           <p class="dialog-note">

@@ -932,7 +932,7 @@ function parsePriorsSnapshot(snapshot, aaByNorm, openRouterIndex = null) {
       });
     }
   }
-  return { date: snapshot.date || null, items: out, aaVariantsByBase };
+  return { date: snapshot.date || null, items: out, aaVariantsByBase, t3Index: parseT3CodeTurns(snapshot, aaByNorm), cursorBenchIndex: parseCursorBench(snapshot, aaByNorm) };
 }
 
 function extractBalancedJsonObject(text, openBraceIdx) {
@@ -1029,6 +1029,54 @@ const HARNESS_TO_AA_AGENT = {
   "Copilot IDE / CLI": "copilot-cli",
 };
 const UNMEASURED_HARNESSES = new Set(["Cursor IDE", "Command Code CLI", "Factory Droid CLI", "First-party app"]);
+
+/**
+ * T3 Code (t3.codes) usage telemetry carried in the Priors snapshot: mean API-list cost and wall time
+ * of a real completed turn per model+effort over a 30-day window. Turns run in whichever harness
+ * T3 Code drives (Claude Code, Codex, Antigravity, OpenCode, Cursor, Grok), mostly first-party.
+ */
+function parseT3CodeTurns(snapshot, aaByNorm) {
+  const index = new Map();
+  for (const obs of snapshot.observations || []) {
+    if (obs.benchmarkId !== "t3-cost-per-turn" && obs.benchmarkId !== "t3-turn-time") continue;
+    const [rawModel, rawEffort] = String(obs.variantId || "").split("@");
+    if (!rawModel) continue;
+    const key = `${normSlug(canonicalBaseSlug(rawModel, aaByNorm))}|${cleanEffort(rawEffort)}`;
+    const rec = index.get(key) || { costPerTurnUsd: null, minutesPerTurn: null, turns: null, users: null, window: null };
+    const det = obs.details || {};
+    if (obs.benchmarkId === "t3-cost-per-turn") {
+      const v = toNum(obs.value);
+      if (v != null && v > 0) rec.costPerTurnUsd = Number(v.toFixed(4));
+    } else {
+      rec.minutesPerTurn = toNum(obs.value);
+    }
+    rec.turns = Math.max(rec.turns || 0, toNum(det.turns) || 0) || null;
+    rec.users = Math.max(rec.users || 0, toNum(det.users) || 0) || null;
+    rec.window = rec.window || det.window || null;
+    index.set(key, rec);
+  }
+  for (const [k, r] of index) if (r.costPerTurnUsd == null) index.delete(k);
+  return index;
+}
+
+/** CursorBench (cursor.com/cursorbench, via the Priors snapshot): score %, mean $/task, steps, tokens per model+effort. */
+function parseCursorBench(snapshot, aaByNorm) {
+  const index = new Map();
+  for (const obs of snapshot.observations || []) {
+    if (obs.benchmarkId !== "cursorbench") continue;
+    const [rawModel, rawEffort] = String(obs.variantId || "").split("@");
+    const score = toNum(obs.value);
+    const cost = toNum(obs.costUsd);
+    if (!rawModel || score == null || cost == null || cost <= 0) continue;
+    index.set(`${normSlug(canonicalBaseSlug(rawModel, aaByNorm))}|${cleanEffort(rawEffort)}`, {
+      score: round1(score),
+      costPerTaskUsd: Number(cost.toFixed(4)),
+      steps: toNum(obs.steps),
+      tokensPerTask: toNum(obs.details?.tokensPerTask),
+    });
+  }
+  return index;
+}
 
 function resolveCodingAgent(entry, agentIndex) {
   if (!agentIndex) return null;
@@ -2853,7 +2901,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
 
   // 3. Parse adamholter/priors raw-GitHub gzip snapshot ONLY as secondary backfill
   //    (per-effort sub-test scores like HLE/FrontierCode + few unmeasured new-model carryovers)
-  let priorsParsed = { date: null, items: [], aaVariantsByBase: new Map() };
+  let priorsParsed = { date: null, items: [], aaVariantsByBase: new Map(), t3Index: new Map(), cursorBenchIndex: new Map() };
   if (priorsGzBuf) {
     try {
       const rawJson = zlib.gunzipSync(priorsGzBuf).toString("utf8");
@@ -2863,6 +2911,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       sourceStatus.priorsRepo.itemCount = priorsParsed.items.length;
       sourceStatus.priorsRepo.snapshotDate = priorsParsed.date;
       log(`Loaded optional backfill from adamholter/priors (${priorsParsed.date})`);
+      log(`T3 Code turn costs: ${priorsParsed.t3Index.size} variant(s); CursorBench: ${priorsParsed.cursorBenchIndex.size} variant(s)`);
     } catch (err) {
       sourceStatus.priorsRepo.error = err.message;
       log("Priors snapshot parse error:", err.message);
@@ -2872,6 +2921,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   // Merge multi-effort AA variants: upstream Fei2411 + live AA first, backfilled with Priors per-effort sub-tests
   const aaVariantsByBase = new Map();
   let newerPriorsScores = 0;
+  const keptNewerScores = []; // { key, kept, dropped, keptDate, droppedDate } for the data tests
   for (const [baseSlug, effMap] of priorsParsed.aaVariantsByBase.entries()) {
     aaVariantsByBase.set(baseSlug, new Map(effMap));
   }
@@ -2898,7 +2948,16 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       const effSuffix = EFFORT_LABELS[targetEff] || "";
       // Fei2411 lags AA by days; keep Priors' score when its AA observation is newer.
       const priorsNewer = pv?.iiDate && fv.iiDate && pv.iiDate > fv.iiDate && pv.intelligenceIndex != null;
-      if (priorsNewer) newerPriorsScores++;
+      if (priorsNewer) {
+        newerPriorsScores++;
+        keptNewerScores.push({
+          key: `${baseSlug}|${targetEff}`,
+          kept: Number(pv.intelligenceIndex.toFixed(2)),
+          dropped: Number(fv.intelligenceIndex.toFixed(2)),
+          keptDate: pv.iiDate,
+          droppedDate: fv.iiDate,
+        });
+      }
       target.set(targetEff, {
         ...pv,
         ...fv,
@@ -3721,6 +3780,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       unclassifiedPlans.add(entry.plan);
     }
     entry.codingAgent = resolveCodingAgent(entry, agentIndex);
+    const variantKey = `${normSlug(entry.baseModelId)}|${entry.effort || "default"}`;
+    entry.t3Turn = priorsParsed.t3Index?.get(variantKey) || null;
+    entry.cursorBench = priorsParsed.cursorBenchIndex?.get(variantKey) || null;
 
     if (!openRouterIndex) return entry;
     const orModel = resolveOpenRouterModel(entry.baseModelId, openRouterIndex, aaByNorm);
@@ -3890,6 +3952,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       effortAccuracy,
       codingAgentEstimates,
       estimateTiers: buildEstimateTiers(effortAccuracy, codingAgentEstimates?.accuracy),
+      aaIndexFreshness: { keptNewerPriors: keptNewerScores.length, variants: keptNewerScores },
+      t3CodeTurns: { variants: priorsParsed.t3Index.size, entries: expandedEntries.filter((e) => e.t3Turn).length },
+      cursorBench: { variants: priorsParsed.cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
     },
     entries: expandedEntries,

@@ -105,6 +105,78 @@ test("Coding Agent Index joins only exact agent/model/effort matches with sane v
   }
 });
 
+// 1c. T3 Code real-usage turn costs (via Priors)
+test("T3 Code $/turn joins exact model+effort with sane telemetry", () => {
+  const withT3 = entries.filter((e) => e.t3Turn);
+  const variants = new Set(withT3.map((e) => `${e.baseModelId}|${e.effort}`));
+  assert.ok(variants.size >= 60, `Expected >= 60 model+effort variants with T3 turn cost, got ${variants.size}`);
+  assert.equal(dataset.stats?.t3CodeTurns?.entries, withT3.length, "stats.t3CodeTurns.entries out of sync");
+  const byVariant = new Map();
+  for (const e of withT3) {
+    const t = e.t3Turn;
+    assert.ok(Number.isFinite(t.costPerTurnUsd) && t.costPerTurnUsd > 0 && t.costPerTurnUsd < 50, `Bad t3Turn.costPerTurnUsd on ${e.id}: ${t.costPerTurnUsd}`);
+    assert.ok(Number.isInteger(t.turns) && t.turns > 0, `Bad t3Turn.turns on ${e.id}`);
+    assert.ok(Number.isInteger(t.users) && t.users > 0 && t.users <= t.turns, `Bad t3Turn.users on ${e.id}`);
+    assert.ok(t.minutesPerTurn == null || (t.minutesPerTurn > 0 && t.minutesPerTurn < 240), `Bad t3Turn.minutesPerTurn on ${e.id}`);
+    assert.match(String(t.window || ""), /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$/, `Bad t3Turn.window on ${e.id}`);
+    // Same model+effort must carry identical telemetry across every plan
+    const k = `${e.baseModelId}|${e.effort}`;
+    const prev = byVariant.get(k);
+    if (prev) assert.equal(prev, t.costPerTurnUsd, `Inconsistent T3 cost across plans for ${k}`);
+    byVariant.set(k, t.costPerTurnUsd);
+  }
+  // Higher effort of the same model costs more per turn in nearly all cases
+  const ORDER = ["low", "medium", "high", "xhigh", "max"];
+  let pairs = 0, inverted = 0;
+  for (const [k, cost] of byVariant) {
+    const [base, eff] = k.split("|");
+    const nextEff = ORDER[ORDER.indexOf(eff) + 1];
+    const next = nextEff ? byVariant.get(`${base}|${nextEff}`) : undefined;
+    if (next != null) { pairs++; if (next < cost) inverted++; }
+  }
+  assert.ok(pairs >= 20 && inverted / pairs <= 0.2, `T3 cost not increasing with effort: ${inverted}/${pairs} inverted`);
+});
+
+// 1d. CursorBench score and $/task (via Priors)
+test("CursorBench joins exact model+effort with sane score and $/task", () => {
+  const withCb = entries.filter((e) => e.cursorBench);
+  const variants = new Set(withCb.map((e) => `${e.baseModelId}|${e.effort}`));
+  assert.ok(variants.size >= 25, `Expected >= 25 model+effort variants with CursorBench, got ${variants.size}`);
+  assert.equal(dataset.stats?.cursorBench?.entries, withCb.length, "stats.cursorBench.entries out of sync");
+  const byVariant = new Map();
+  for (const e of withCb) {
+    const c = e.cursorBench;
+    assert.ok(Number.isFinite(c.score) && c.score > 0 && c.score <= 100, `Bad cursorBench.score on ${e.id}: ${c.score}`);
+    assert.ok(Number.isFinite(c.costPerTaskUsd) && c.costPerTaskUsd > 0 && c.costPerTaskUsd < 200, `Bad cursorBench.costPerTaskUsd on ${e.id}`);
+    const k = `${e.baseModelId}|${e.effort}`;
+    const prev = byVariant.get(k);
+    if (prev) assert.deepEqual(prev, c, `Inconsistent CursorBench data across plans for ${k}`);
+    byVariant.set(k, c);
+  }
+});
+
+// 1e. Newer AA Intelligence Index scores win over lagging Fei2411 configs
+test("Intelligence Index uses the newest AA observation per model+effort", () => {
+  const fresh = dataset.stats?.aaIndexFreshness;
+  assert.ok(fresh && Array.isArray(fresh.variants), "Missing stats.aaIndexFreshness");
+  assert.equal(fresh.keptNewerPriors, fresh.variants.length);
+  let checked = 0;
+  for (const v of fresh.variants) {
+    assert.ok(v.keptDate > v.droppedDate, `Kept score for ${v.key} is not newer (${v.keptDate} vs ${v.droppedDate})`);
+    const [base, eff] = v.key.split("|");
+    const rows = entries.filter((e) => e.baseModelId === base && (e.effort || "default") === eff && !e.effortEstimate);
+    for (const e of rows) {
+      checked++;
+      assert.ok(Math.abs(e.intelligenceIndex - v.kept) < 0.01, `${e.id} shows ${e.intelligenceIndex}, expected newer ${v.kept} (stale ${v.dropped})`);
+    }
+  }
+  if (fresh.variants.length) assert.ok(checked > 0, "No entries matched the refreshed variants");
+  for (const e of entries) {
+    if (e.intelligenceIndex == null || e.benchmarks?.intelligenceIndex == null) continue;
+    assert.ok(Math.abs(e.intelligenceIndex - e.benchmarks.intelligenceIndex) <= 0.051, `${e.id}: intelligenceIndex ${e.intelligenceIndex} vs benchmarks ${e.benchmarks.intelligenceIndex}`);
+  }
+});
+
 // 2. Dataset size & uniqueness
 test("Dataset has expected scale and zero duplicate entry IDs", () => {
   assert.ok(entries.length >= 500, `Expected >= 500 entries, got ${entries.length}`);

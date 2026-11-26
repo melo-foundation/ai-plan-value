@@ -32,6 +32,7 @@ const COST_STOPS_TOKENS = [
 const BENCHMARKS = {
   intelligenceIndex: { label: "Intelligence", unit: "", min: 0, max: 64, step: 1, def: 45 },
   codingAgentIndex: { label: "Coding Agent", unit: "", min: 0, max: 60, step: 1, def: 40 },
+  cursorBench: { label: "CursorBench", unit: "%", min: 0, max: 66, step: 1, def: 40 },
   engineering: { label: "Engineering", unit: "", min: 20, max: 72, step: 1, def: 50 },
   financeAndAccounting: { label: "Finance & Accounting", unit: "", min: 25, max: 65, step: 1, def: 48 },
   strategyAndOps: { label: "Strategy & Ops", unit: "", min: 20, max: 67, step: 1, def: 50 },
@@ -188,6 +189,9 @@ function getScore(entry, benchKey) {
   if (benchKey === "codingAgentIndex") {
     return entry.codingAgent?.index ?? null;
   }
+  if (benchKey === "cursorBench") {
+    return entry.cursorBench?.score ?? null;
+  }
   const b = entry.benchmarks;
   if (b && b[benchKey] != null) return b[benchKey];
   if (benchKey === "intelligenceIndex") return entry.intelligenceIndex;
@@ -312,6 +316,8 @@ function getAllEntriesResolved() {
     if (e.isPreliminary && e.replacesId) replaced.add(e.replacesId);
   }
   const isTokens = state.costMode === "tokens";
+  const isTurn = state.costMode === "turn";
+  const cursorMode = state.benchKey === "cursorBench";
   // Coding Agent mode: score and $/task are AA's measured agent run for this exact model + effort,
   // so effort interpolation/extrapolation markers (which describe model-level AA data) don't apply.
   const agentMode = state.benchKey === "codingAgentIndex";
@@ -323,7 +329,13 @@ function getAllEntriesResolved() {
       const subsidy = isApi ? 1 : e.unmetered ? Infinity : e.subsidyMultiple;
       const accessMeta = getPlanAccessMeta(e);
       const score = getScore(e, state.benchKey);
-      const taskCost = agentMode ? e.codingAgent?.costPerTaskUsd ?? null : e.aaCostPerTaskUsd;
+      // Per-task cost follows the active benchmark: AA agent run, CursorBench task, or AA Intelligence Index task.
+      const taskCost = agentMode
+        ? e.codingAgent?.costPerTaskUsd ?? null
+        : cursorMode
+          ? e.cursorBench?.costPerTaskUsd ?? null
+          : e.aaCostPerTaskUsd;
+      const turnCost = e.t3Turn?.costPerTurnUsd ?? null;
       const unmeteredFree = Boolean(e.unmetered);
 
       const p = e.aaPricing || {};
@@ -337,8 +349,11 @@ function getAllEntriesResolved() {
       const realTaskCost =
         taskCost == null ? null : unmeteredFree ? 0 : taskCost / (subsidy || 1);
 
-      const apiMetric = isTokens ? apiMtok : taskCost;
-      const effectiveCost = isTokens ? realMtok : realTaskCost;
+      const realTurnCost =
+        turnCost == null ? null : unmeteredFree ? 0 : turnCost / (subsidy || 1);
+
+      const apiMetric = isTokens ? apiMtok : isTurn ? turnCost : taskCost;
+      const effectiveCost = isTokens ? realMtok : isTurn ? realTurnCost : realTaskCost;
 
       const volumePerMonth =
         !isApi && e.priceUsd && !e.unmetered && effectiveCost != null && effectiveCost > 0
@@ -348,7 +363,7 @@ function getAllEntriesResolved() {
       return {
         ...e,
         ...accessMeta,
-        estTier: agentMode ? e.codingAgent?.confidence ?? null : e.estimateConfidence ?? null,
+        estTier: agentMode ? e.codingAgent?.confidence ?? null : cursorMode ? null : e.estimateConfidence ?? null,
         ...(agentMode ? { harness: e.codingAgent?.agent ?? accessMeta.harness ?? e.harness } : {}),
         isApi,
         score,
@@ -357,6 +372,7 @@ function getAllEntriesResolved() {
         effectiveCost,
         realTaskCost,
         realMtok,
+        realTurnCost,
         tasksPerMonth: volumePerMonth,
       };
     });
@@ -449,7 +465,7 @@ function renderPlanDrawer(planName, allResolved) {
                 : "—";
           const isExtrap = e.estTier === "medium" || e.estTier === "low";
           const scoreTilde = e.estTier ? "~" : "";
-          const costTilde = e.estTier && state.costMode !== "tokens" ? "~" : "";
+          const costTilde = e.estTier && state.costMode === "task" ? "~" : "";
           return `<td class="pm-cell${passes ? "" : " dim"}${isExtrap ? " is-extrapolated" : ""}"><span class="pm-cost">${costTilde}${fmtUsd(e.effectiveCost)}${estMark(e)}${interpMark(e)}</span><span class="pm-score">${scoreTilde}${esc(scoreStr)}</span></td>`;
         })
         .join("");
@@ -538,7 +554,7 @@ function renderBarChart(rows, allResolved) {
         : `<button class="plan-exp-btn" type="button" data-exp="${esc(expKey)}" title="Show all models on ${esc(planName)}">${isExpanded ? "▾" : "▸"}</button>`;
 
       const isExtrap = r.estTier === "medium" || r.estTier === "low";
-      const costTilde = r.estTier && state.costMode !== "tokens" ? "~" : "";
+      const costTilde = r.estTier && state.costMode === "task" ? "~" : "";
 
       return `
         <div class="bar-row${isExtrap ? " is-extrapolated" : ""}">
@@ -580,6 +596,9 @@ function renderTable(rows) {
   const benchMeta = activeBenchMeta();
   const scoreKey = activeScoreKey();
   const isTokens = state.costMode === "tokens";
+  const isTask = state.costMode === "task";
+  const unit = isTokens ? "1M" : state.costMode === "turn" ? "turn" : "task";
+  const volLabel = isTokens ? "Mtok/mo" : state.costMode === "turn" ? "Turns/mo" : "Tasks/mo";
 
   const cols = [
     { key: "model", label: state.groupByPlan ? "Plan / Model" : "Model & Plan", cls: "" },
@@ -593,10 +612,10 @@ function renderTable(rows) {
     { key: "access", label: "Harness / Reset", cls: "col-hide-sm" },
     { key: "fee", label: "Fee", cls: "num-col" },
     { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
-    { key: "apiCost", label: isTokens ? "API $/1M" : "API $/task", cls: "num-col col-hide-sm" },
-    { key: "effectiveCost", label: isTokens ? "Real $/1M" : "Real $/task", cls: "num-col" },
-    { key: "altCost", label: isTokens ? "Real $/task" : "Real $/1M", cls: "num-col col-hide-sm" },
-    { key: "tasksPerMonth", label: isTokens ? "Mtok/mo" : "Tasks/mo", cls: "num-col col-hide-sm" },
+    { key: "apiCost", label: `API $/${unit}`, cls: "num-col col-hide-sm" },
+    { key: "effectiveCost", label: `Real $/${unit}`, cls: "num-col" },
+    { key: "altCost", label: isTask ? "Real $/1M" : "Real $/task", cls: "num-col col-hide-sm" },
+    { key: "tasksPerMonth", label: volLabel, cls: "num-col col-hide-sm" },
   ];
 
   if (!cols.some((c) => c.key === state.sortKey)) {
@@ -661,7 +680,7 @@ function renderTable(rows) {
 
   const tbody = $("rows");
   function altCost(r) {
-    return isTokens ? r.realTaskCost : r.realMtok;
+    return isTask ? r.realMtok : r.realTaskCost;
   }
   if (!sorted.length) {
     tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No plans match these limits.</td></tr>`;
@@ -690,7 +709,7 @@ function renderTable(rows) {
     const isExtrap = r.estTier === "medium" || r.estTier === "low";
     const rowCls = [grouped ? "grouped-item" : "", isExtrap ? "is-extrapolated" : ""].filter(Boolean).join(" ");
     const scoreTilde = r.estTier ? "~" : "";
-    const costTilde = r.estTier && !isTokens ? "~" : "";
+    const costTilde = r.estTier && isTask ? "~" : "";
 
     return `
       <tr${rowCls ? ` class="${rowCls}"` : ""}>
@@ -702,7 +721,7 @@ function renderTable(rows) {
         <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
         <td class="num-col col-hide-sm">${costTilde}${fmtUsd(r.apiMetric)}</td>
         <td class="num-col real-cell">${costTilde}${fmtUsd(r.effectiveCost)}</td>
-        <td class="num-col col-hide-sm">${r.estTier && isTokens ? "~" : ""}${fmtUsd(altCost(r))}</td>
+        <td class="num-col col-hide-sm">${r.estTier && !isTask ? "~" : ""}${fmtUsd(altCost(r))}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
     `;
@@ -945,8 +964,8 @@ function loadStateFromUrl() {
     }
   }
 
-  if (params.get("mode") === "tokens") {
-    state.costMode = "tokens";
+  if (params.get("mode") === "tokens" || params.get("mode") === "turn") {
+    state.costMode = params.get("mode");
   }
 
   const accessRaw = params.get("access");
@@ -1105,15 +1124,20 @@ function syncUrlFromState() {
 
 function render() {
   const isTokens = state.costMode === "tokens";
+  const isTurn = state.costMode === "turn";
   $("chartHeading").textContent = isTokens
     ? "Best Real Cost per 1M Tokens"
-    : "Best Real Cost per Task";
+    : isTurn
+      ? "Best Real Cost per T3 Code Turn"
+      : state.benchKey === "cursorBench"
+        ? "Best Real Cost per CursorBench Task"
+        : "Best Real Cost per Task";
   $("effortToggleLabel").textContent = isTokens
     ? "Highest-scoring reasoning level only"
     : "Cheapest applicable reasoning level only";
   $("minScoreOut").textContent = `≥ ${fmtThreshold(state.minScore, state.benchKey)}`;
   $("maxBudgetOut").textContent = BUDGET_STOPS[state.budgetIdx].label;
-  $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : "Max cost/task:";
+  $("maxCostLabel").textContent = isTokens ? "Max $/1M tokens:" : isTurn ? "Max cost/turn:" : "Max cost/task:";
   $("maxCostOut").textContent = currentCostStops()[state.maxCostIdx].label;
   const allResolved = getAllEntriesResolved();
   const rows = getFilteredRows(allResolved);
