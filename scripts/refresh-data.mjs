@@ -18,6 +18,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
+import { applyBillingPeriods } from "./billing-periods.mjs";
 
 // Claude quota token weighting (docs/RELIABILITY.md): rescale Claude first-party subsidies from the
 // sample's token mix to each cost metric's mix (cache reads ≈ 0.5× API price toward quota).
@@ -4685,6 +4686,9 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     t3Harness,
     mixSamples: mixSamples.slice(0, 400),
   };
+  // Monthly / yearly billing prices (scripts/billing-periods.mjs); the page picks one per the Billing setting.
+  const billingStats = applyBillingPeriods(expandedEntries, { yearlySigma: REL.BILLING_STEP_SIGMA, log });
+  log(`Billing: ${billingStats.official} rows with an official annual price, ${billingStats.none} monthly-only, ${billingStats.unknown} unknown, ${billingStats.variant} annual-variant rows (${billingStats.linkedTwins} linked to a monthly twin)`);
   for (const e of expandedEntries) for (const k of Object.keys(e)) if (k.startsWith("_")) delete e[k];
 
   expandedEntries.sort((a, b) => {
@@ -4722,6 +4726,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
       t3CodeTurns: { variants: priorsParsed.t3Index.size, entries: expandedEntries.filter((e) => e.t3Turn).length },
       cursorBench: { variants: priorsParsed.cursorBenchIndex.size, entries: expandedEntries.filter((e) => e.cursorBench).length },
       unclassifiedPlans: [...unclassifiedPlans].sort(),
+      billing: billingStats,
       reliability: reliabilityStats,
       chains,
     },

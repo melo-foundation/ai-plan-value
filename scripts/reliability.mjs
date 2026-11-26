@@ -42,6 +42,8 @@ export const STEP_SIGMA = {
   T45: 0.15, // data older than 45 days
   T90: 0.3, // data older than 90 days
 };
+// Yearly billing fee from an official annual list price (same step as S1).
+export const BILLING_STEP_SIGMA = STEP_SIGMA.S1;
 export const UPSTREAM_FLOOR = { high: 0.08, medium: 0.18, low: 0.4 };
 
 // Display buckets for step σ (Methodology table, docs/RELIABILITY.md).
