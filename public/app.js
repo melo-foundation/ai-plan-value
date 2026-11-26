@@ -1370,14 +1370,20 @@ function render() {
   const rows = getFilteredRows(allResolved);
   renderBarChart(rows, allResolved);
   renderTable(rows);
-  // Rows hidden by Min confidence (live count), or Speculative rows on view
-  const specShown = rows.filter((r) => r.level === "speculative").length;
-  $("extrapBanner").hidden = !(state.minConf === "speculative" && specShown > 0);
-  $("extrapBannerText").textContent = `${specShown} speculative ${specShown === 1 ? "row" : "rows"} shown`;
-  const hidden = state.minConf === "speculative" ? 0 : getFilteredRows(allResolved, "speculative").length - rows.length;
+  // Banner: rows below the default (Medium) now on view. Footer: rows at the next level down, revealed one level per "Show".
+  const below = rows.filter((r) => LEVEL_RANK[r.level] > LEVEL_RANK.medium);
+  const lowShown = below.filter((r) => r.level === "low").length;
+  const specShown = below.length - lowShown;
+  $("extrapBanner").hidden = below.length === 0;
+  $("extrapBannerText").textContent = `${below.length} ${
+    lowShown && specShown ? "low-confidence and speculative" : specShown ? "speculative" : "low-confidence"
+  } ${below.length === 1 ? "row" : "rows"} shown`;
+  const next = LEVELS[LEVEL_RANK[state.minConf] + 1];
+  const hidden = next ? getFilteredRows(allResolved, next).length - rows.length : 0;
   $("extrapFooter").hidden = hidden <= 0;
-  $("extrapFooterText").textContent =
-    `${hidden} ${{ high: "lower-confidence", medium: "low-confidence", low: "speculative" }[state.minConf]} ${hidden === 1 ? "row" : "rows"} hidden`;
+  $("extrapFooterText").textContent = next
+    ? `${hidden} ${{ medium: "medium-confidence", low: "low-confidence", speculative: "speculative" }[next]} ${hidden === 1 ? "row" : "rows"} hidden`
+    : "";
   syncUrlFromState();
 }
 
@@ -1592,7 +1598,7 @@ function setMinConf(level) {
   render();
 }
 $("disableExtrapBtn").addEventListener("click", () => setMinConf("medium"));
-$("enableExtrapBtn").addEventListener("click", () => setMinConf("speculative"));
+$("enableExtrapBtn").addEventListener("click", () => setMinConf(LEVELS[LEVEL_RANK[state.minConf] + 1] || "speculative"));
 
 $("hideCnPortal").addEventListener("change", (e) => {
   state.hideCnPortal = e.target.checked;

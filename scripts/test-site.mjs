@@ -1650,21 +1650,31 @@ test("Reliability display: glyph after the model name, tooltip on the whole name
     assert.ok(banded > 100, `${mode}: only ${banded} tooltips carry the band line`);
   }
 
-  // Footer: live count of rows hidden by Min confidence
+  // Footer: rows at the next level down (one level per "Show"); banner: rows below Medium on view
   app.state.costMode = "task";
-  const WORD = { high: "lower-confidence", medium: "low-confidence", low: "speculative" };
+  const NEXT = { high: "medium", medium: "low", low: "speculative" };
+  const WORD = { medium: "medium-confidence", low: "low-confidence", speculative: "speculative" };
   for (const level of ["high", "medium", "low", "speculative"]) {
     app.state.minConf = level;
     app.render();
     const all = app.getAllEntriesResolved();
-    const hidden = app.getFilteredRows(all, "speculative").filter((r) => app.LEVEL_RANK[r.level] > app.LEVEL_RANK[level]).length;
+    const shownRows = app.getFilteredRows(all);
+    const below = shownRows.filter((r) => app.LEVEL_RANK[r.level] > app.LEVEL_RANK.medium);
+    assert.equal(app.$("extrapBanner").hidden, below.length === 0, `${level}: banner visibility`);
+    if (below.length) assert.ok(app.$("extrapBannerText").textContent.startsWith(`${below.length} `), `${level}: banner counts every row below Medium`);
     if (level === "speculative") {
       assert.equal(app.$("extrapFooter").hidden, true, "no footer when everything is shown");
       continue;
     }
+    const nextLevel = NEXT[level];
+    const hidden = app.getFilteredRows(all, nextLevel).length - shownRows.length;
     assert.ok(hidden > 0, `${level}: expected hidden rows`);
     assert.equal(app.$("extrapFooter").hidden, false, `${level}: footer must show`);
-    assert.equal(app.$("extrapFooterText").textContent, `${hidden} ${WORD[level]} rows hidden`, `${level}: footer text`);
+    assert.equal(app.$("extrapFooterText").textContent, `${hidden} ${WORD[nextLevel]} rows hidden`, `${level}: footer text`);
+    // "Show" reveals exactly the next level
+    app.$("enableExtrapBtn").fire("click");
+    assert.equal(app.state.minConf, nextLevel, `${level}: Show must step to ${nextLevel}`);
+    app.state.minConf = level;
   }
 
   // Bar chart follows Min confidence (one bar per row when both dedupe toggles are off)
