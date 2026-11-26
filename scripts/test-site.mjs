@@ -729,6 +729,75 @@ test("Level counts and UI wiring (Min confidence, Cost, Fable cap, glyphs)", () 
   }
 });
 
+// 13. Site: phone card table, self-hosted font, T3 Hours/mo, drawer provenance
+const cssText = fs.readFileSync(path.join(ROOT, "public", "styles.css"), "utf8");
+const fnBody = (name) => {
+  const start = appJs.indexOf(`function ${name}(`);
+  assert.ok(start !== -1, `Missing function ${name}`);
+  const next = appJs.indexOf("\nfunction ", start + 1);
+  return appJs.slice(start, next === -1 ? undefined : next);
+};
+
+test("Full table cells carry data-label (phone card rows) with Sort and Show 50 more", () => {
+  const body = fnBody("renderTable");
+  const tds = [...body.matchAll(/<td\b[^>]*>/g)].map((m) => m[0]);
+  assert.ok(tds.length >= 20, `Too few <td> templates in renderTable: ${tds.length}`);
+  const unlabeled = tds.filter((t) => !t.includes("${dl(") && !/class="(card-sub|empty)"/.test(t));
+  assert.equal(unlabeled.length, 0, `Table cells without data-label: ${unlabeled.join(" | ")}`);
+  assert.ok(/const dl = \(key\) => ` data-label="\$\{esc\(labelOf\[key\]\)\}"`/.test(body), "dl() must emit the column label");
+  assert.ok(/<tr class="group-row"[\s\S]*?\$\{dl\("model"\)\}/.test(body), "Group rows must carry data-label");
+  assert.ok(/td\[data-label\]::before\s*\{\s*content:\s*attr\(data-label\)/.test(cssText), "Missing td[data-label]::before { content: attr(data-label) }");
+  assert.ok(/@media \(max-width: 600px\)[\s\S]*\.data-table thead\s*\{\s*display: none;/.test(cssText), "Phone card view must hide the table header");
+  for (const id of ["tableSort", "tableSortDir", "tableMore", "tableMoreBtn"]) assert.ok(html.includes(`id="${id}"`), `Missing #${id}`);
+  assert.ok(/TABLE_PAGE = 50/.test(appJs) && /state\.tableLimit \+= TABLE_PAGE/.test(appJs), "Show 50 more must page by 50");
+  assert.ok(/tr\.group-row\s*\{[^}]*min-height: 44px/.test(cssText), "Phone group rows must be >= 44px");
+});
+
+test("DejaVu Sans subset is self-hosted, licensed, and follows Verdana in the font stacks", () => {
+  const faces = [...cssText.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]);
+  assert.ok(faces.length >= 1, "No @font-face in styles.css");
+  let total = 0;
+  for (const face of faces) {
+    assert.ok(/font-family:\s*"DejaVu Sans"/.test(face), "@font-face must define DejaVu Sans");
+    const url = face.match(/url\("\.\/(fonts\/[^"]+\.woff2)"\)/)?.[1];
+    assert.ok(url, `@font-face without a ./fonts/*.woff2 url: ${face}`);
+    const file = path.join(ROOT, "public", url);
+    assert.ok(fs.existsSync(file), `Font file missing: ${url}`);
+    const buf = fs.readFileSync(file);
+    assert.equal(buf.subarray(0, 4).toString("latin1"), "wOF2", `${url} is not woff2`);
+    total += buf.length;
+  }
+  assert.ok(total <= 60 * 1024, `Font files total ${total} bytes (> 60 KB)`);
+  assert.ok(fs.existsSync(path.join(ROOT, "public", "fonts", "LICENSE")), "Missing public/fonts/LICENSE");
+  const stacks = [...cssText.matchAll(/font(?:-family)?:[^;]*Verdana[^;]*;/g)].map((m) => m[0]);
+  assert.ok(stacks.length >= 5, "Too few Verdana font stacks");
+  for (const s of stacks) assert.ok(/Verdana, "DejaVu Sans"/.test(s), `DejaVu Sans must follow Verdana: ${s}`);
+});
+
+test("Hours/mo column appears in T3 turn mode only, = fee ÷ real $/turn × min/turn ÷ 60", () => {
+  const body = fnBody("renderTable");
+  assert.ok(/isTurn \? \[\{ key: "hoursPerMonth", label: "Hours\/mo"/.test(body), "Hours/mo column must be gated on turn mode");
+  assert.ok(/isTurn \? `<td[^`]*\$\{dl\("hoursPerMonth"\)\}/.test(body), "Hours/mo cell must be gated on turn mode");
+  assert.ok(/const isTurn = state\.costMode === "turn"/.test(body));
+  assert.ok(/mode === "turn" && minPerTurn > 0/.test(appJs) && /\(volumePerMonth \* minPerTurn\) \/ 60/.test(appJs), "hoursPerMonth formula changed");
+  const withMin = entries.filter((e) => e.billing === "subscription" && !e.unmetered && e.t3Turn?.minutesPerTurn > 0 && e.priceUsd > 0);
+  assert.ok(withMin.length >= 50, `Only ${withMin.length} subscription rows have minutesPerTurn`);
+  for (const e of withMin) {
+    const realTurn = e.t3Turn.costPerTurnUsd / (e.subsidyMultiple * (e.quotaMix?.turn?.f ?? 1));
+    const hours = ((e.priceUsd / realTurn) * (e.capShare ?? 1) * e.t3Turn.minutesPerTurn) / 60;
+    assert.ok(Number.isFinite(hours) && hours > 0 && hours < 1e6, `Implausible Hours/mo ${hours} on ${e.id}`);
+  }
+});
+
+test("Plan drawer lists subsidy provenance from stats.chains", () => {
+  const body = fnBody("renderProvenance");
+  assert.ok(/subsidySources\(e\)/.test(body) && /subsidyText\(e\)/.test(body), "Provenance must reuse the tooltip's subsidy sources");
+  assert.ok(/renderProvenance\(planEntries, models\)/.test(fnBody("renderPlanDrawer")), "Drawer must render provenance");
+  assert.ok(/chain\?\.lines/.test(fnBody("subsidySources")), "Sources must come from stats.chains lines");
+  const missing = entries.filter((e) => e.billing === "subscription" && !(chains[e.rel.chain]?.lines?.length));
+  assert.ok(missing.length <= entries.length * 0.05, `${missing.length} subscription rows have no chain lines`);
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

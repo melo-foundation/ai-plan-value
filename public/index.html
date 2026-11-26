@@ -169,16 +169,25 @@
           </summary>
           <div class="table-toolbar">
             <input id="tableSearch" class="search-input" type="search" placeholder="Filter by model or plan…" aria-label="Filter table by model or plan" />
+            <span class="toolbar-sort">
+              <label class="effort-pick" for="tableSort">Sort</label>
+              <select id="tableSort" class="select" aria-label="Sort"></select>
+              <button id="tableSortDir" class="btn btn-sm" type="button" aria-label="Sort direction" title="Sort direction">▲</button>
+            </span>
             <label class="toolbar-check">
               <input id="groupByPlan" type="checkbox" />
               <span>Group by plan</span>
             </label>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="data-table">
               <thead id="tableHead"></thead>
               <tbody id="rows"></tbody>
             </table>
+          </div>
+          <div id="tableMore" class="table-more" hidden>
+            <button id="tableMoreBtn" class="btn" type="button">Show 50 more</button>
+            <span id="tableMoreCount" class="table-more-count"></span>
           </div>
         </details>
 
@@ -235,7 +244,7 @@
               <option value="own">Fable only</option>
             </select>
           </div>
-          <div class="settings-head-row">
+          <div class="settings-head-row effort-row">
             <span class="settings-heading">Reasoning effort</span>
             <div class="effort-range">
               <label class="effort-pick">
