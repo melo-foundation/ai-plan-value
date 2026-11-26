@@ -1459,9 +1459,30 @@ async function loadData() {
   }
 }
 
-$("benchSelect").addEventListener("change", (e) => {
-  state.benchKey = e.target.value;
+// Benchmarks with their own per-task cost, paired with that cost metric when either changes.
+const COST_BENCH_PAIR = { agent: "codingAgentIndex", cursor: "cursorBench" };
+const BENCH_COST_PAIR = Object.fromEntries(Object.entries(COST_BENCH_PAIR).map(([c, b]) => [b, c]));
+
+function setBench(key) {
+  state.benchKey = key;
+  $("benchSelect").value = key;
   syncBenchSlider(true);
+}
+
+function setCostMode(mode) {
+  state.costMode = mode;
+  $("costMode").value = mode;
+  state.maxCostIdx = 4;
+  $("maxCost").value = "4";
+}
+
+$("benchSelect").addEventListener("change", (e) => {
+  const prev = state.benchKey;
+  setBench(e.target.value);
+  // The cost follows only while it is the default or still paired with the previous benchmark.
+  const costFor = (b) => BENCH_COST_PAIR[b] || (b === "intelligenceIndex" ? "task" : null);
+  const synced = state.costMode === "task" || state.costMode === costFor(prev);
+  if (synced && costFor(state.benchKey) && costFor(state.benchKey) !== state.costMode) setCostMode(costFor(state.benchKey));
   render();
 });
 
@@ -1622,9 +1643,15 @@ settingsDialog.addEventListener("click", (e) => {
 });
 
 $("costMode").addEventListener("change", (e) => {
+  const prev = state.costMode;
   state.costMode = e.target.value;
   state.maxCostIdx = 4; // ≤ $5/task or ≤ $5/1M tokens
   $("maxCost").value = "4";
+  // Auto-pair (not locked). The benchmark follows only while it is the default or still paired with
+  // the previous cost: agent ↔ Coding Agent Index, CursorBench ↔ CursorBench, AA task ↔ Intelligence.
+  const benchFor = (m) => COST_BENCH_PAIR[m] || (m === "task" ? "intelligenceIndex" : null);
+  const synced = state.benchKey === "intelligenceIndex" || state.benchKey === benchFor(prev);
+  if (synced && benchFor(state.costMode) && benchFor(state.costMode) !== state.benchKey) setBench(benchFor(state.costMode));
   render();
 });
 
