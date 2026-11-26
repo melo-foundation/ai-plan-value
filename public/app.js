@@ -356,6 +356,7 @@ function getAllEntriesResolved() {
         apiMetric,
         effectiveCost,
         realTaskCost,
+        realMtok,
         tasksPerMonth: volumePerMonth,
       };
     });
@@ -594,6 +595,7 @@ function renderTable(rows) {
     { key: "subsidy", label: "Subsidy", cls: "num-col col-hide-sm" },
     { key: "apiCost", label: isTokens ? "API $/1M" : "API $/task", cls: "num-col col-hide-sm" },
     { key: "effectiveCost", label: isTokens ? "Real $/1M" : "Real $/task", cls: "num-col" },
+    { key: "altCost", label: isTokens ? "Real $/task" : "Real $/1M", cls: "num-col col-hide-sm" },
     { key: "tasksPerMonth", label: isTokens ? "Mtok/mo" : "Tasks/mo", cls: "num-col col-hide-sm" },
   ];
 
@@ -649,6 +651,7 @@ function renderTable(rows) {
         case "fee": return r.isApi ? 0 : (r.priceUsd ?? 1e9);
         case "subsidy": return Number.isFinite(r.subsidy) ? r.subsidy : 1e9;
         case "apiCost": return r.apiMetric ?? 1e9;
+        case "altCost": return altCost(r) ?? 1e9;
         case "tasksPerMonth": return r.tasksPerMonth ?? -1;
         default: return r.effectiveCost ?? 1e9;
       }
@@ -657,6 +660,9 @@ function renderTable(rows) {
   });
 
   const tbody = $("rows");
+  function altCost(r) {
+    return isTokens ? r.realTaskCost : r.realMtok;
+  }
   if (!sorted.length) {
     tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No plans match these limits.</td></tr>`;
     return;
@@ -696,6 +702,7 @@ function renderTable(rows) {
         <td class="num-col col-hide-sm">${r.unmetered ? "∞" : fmtMult(r.subsidy)}${estMark(r)}</td>
         <td class="num-col col-hide-sm">${costTilde}${fmtUsd(r.apiMetric)}</td>
         <td class="num-col real-cell">${costTilde}${fmtUsd(r.effectiveCost)}</td>
+        <td class="num-col col-hide-sm">${r.estTier && isTokens ? "~" : ""}${fmtUsd(altCost(r))}</td>
         <td class="num-col col-hide-sm">${tasksLabel}</td>
       </tr>
     `;
@@ -713,6 +720,7 @@ function renderTable(rows) {
       const isOpen = state.expandedTableGroups.has(pName);
       const maxScore = Math.max(...g.rows.map((r) => r.score ?? -Infinity));
       const minCost = Math.min(...g.rows.map((r) => r.effectiveCost ?? Infinity));
+      const minAlt = Math.min(...g.rows.map((r) => altCost(r) ?? Infinity));
       const maxTasks = Math.max(...g.rows.map((r) => r.tasksPerMonth ?? -1));
       const hasUnmetered = g.rows.some((r) => r.unmetered);
       const hasEst = g.rows.some((r) => r.isPreliminary);
@@ -751,6 +759,7 @@ function renderTable(rows) {
           <td class="num-col col-hide-sm">${subText}${groupEst}</td>
           <td class="num-col col-hide-sm">—</td>
           <td class="num-col real-cell">${fmtUsd(Number.isFinite(minCost) ? minCost : null)}</td>
+          <td class="num-col col-hide-sm">${fmtUsd(Number.isFinite(minAlt) ? minAlt : null)}</td>
           <td class="num-col col-hide-sm">${tasksText}</td>
         </tr>
       `);
