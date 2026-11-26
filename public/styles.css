@@ -1872,6 +1872,15 @@ html.egg-undo.egg-reveal::after {
     padding: 0 6px;
     font-size: 10px;
   }
+  /* Keep the small look; extend the tap area to 32 × 32 with an invisible hit box. */
+  .plan-exp-btn {
+    position: relative;
+  }
+  .plan-exp-btn::after {
+    content: "";
+    position: absolute;
+    inset: -5px -3px;
+  }
   .head-checks {
     display: flex;
     flex-direction: column;

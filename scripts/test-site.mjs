@@ -10,7 +10,10 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 import { BILLING_PERIODS, isAnnualVariant } from "./billing-periods.mjs";
@@ -181,6 +184,15 @@ test("Intelligence Index uses the newest AA observation per model+effort", () =>
     }
   }
   if (fresh.variants.length) assert.ok(checked > 0, "No entries matched the refreshed variants");
+  // Meaningful only if some kept score differs from the stale one: those rows must not show the stale value.
+  const moved = fresh.variants.filter((v) => Math.abs(v.kept - v.dropped) >= 0.05);
+  assert.ok(moved.length >= 5, `Only ${moved.length} refreshed variants change the score; the freshness check has nothing to bite on`);
+  for (const v of moved) {
+    const [base, eff] = v.key.split("|");
+    for (const e of entries.filter((x) => x.baseModelId === base && (x.effort || "default") === eff && !x.effortEstimate)) {
+      assert.ok(Math.abs(e.intelligenceIndex - v.dropped) >= 0.04, `${e.id} shows the stale Fei score ${v.dropped}`);
+    }
+  }
   for (const e of entries) {
     if (e.intelligenceIndex == null || e.benchmarks?.intelligenceIndex == null) continue;
     assert.ok(Math.abs(e.intelligenceIndex - e.benchmarks.intelligenceIndex) <= 0.051, `${e.id}: intelligenceIndex ${e.intelligenceIndex} vs benchmarks ${e.benchmarks.intelligenceIndex}`);
@@ -312,19 +324,28 @@ test("All entries have valid harness/quotaWindow metadata and zero unclassified 
     console.warn(`WARN  Unclassified plans (will trigger [New Plan] issue in CI): ${unclassified.join(", ")}`);
   }
 
-  const findPlan = (re) => entries.find((e) => e.billing === "subscription" && re.test(e.plan));
-  const claude = findPlan(/^Claude\b/i);
-  assert.ok(claude && claude.openEndpoint === false && /^Claude (Pro|Max)\b/.test(claude.plan) ? claude.quotaWindows.join() === "5h,weekly" : true, "Claude classification mismatch");
-  const chatgpt = findPlan(/^ChatGPT\b/i);
-  assert.ok(chatgpt && chatgpt.openEndpoint === false && true, "ChatGPT classification mismatch");
-  const copilot = findPlan(/^GitHub Copilot\b/i);
-  assert.ok(copilot && copilot.openEndpoint === false && copilot.quotaWindows.join() === "monthly", "Copilot classification mismatch");
-  const glm = findPlan(/^GLM Coding\b/i);
-  assert.ok(glm && glm.openEndpoint === true && glm.quotaWindows.join() === "weekly,5h", "GLM Coding classification mismatch");
-  const plus = findPlan(/^ChatGPT Plus\b/i);
-  assert.ok(!plus || plus.quotaWindows.join() === "5h,weekly", "ChatGPT Plus must have 5h + weekly");
-  const pro = findPlan(/^ChatGPT Pro\b/i);
-  assert.ok(!pro || pro.quotaWindows.join() === "weekly", "ChatGPT Pro must be weekly only");
+  // Every row of a plan family carries the same windows; the primary window is one of them.
+  const plansOf = (re) => entries.filter((e) => e.billing === "subscription" && re.test(e.plan));
+  const expectPlans = (re, windows, openEndpoint, label) => {
+    const rows = plansOf(re);
+    assert.ok(rows.length > 0, `No ${label} rows`);
+    for (const e of rows) {
+      assert.equal(e.quotaWindows.join(), windows, `${e.id}: quotaWindows ${e.quotaWindows} (want ${windows})`);
+      assert.equal(e.openEndpoint, openEndpoint, `${e.id}: openEndpoint`);
+    }
+  };
+  expectPlans(/^Claude (Pro|Max)$/, "5h,weekly", false, "Claude Pro/Max");
+  expectPlans(/^ChatGPT Plus\b/, "5h,weekly", false, "ChatGPT Plus");
+  expectPlans(/^ChatGPT Pro\b/, "weekly", false, "ChatGPT Pro");
+  expectPlans(/^GitHub Copilot\b/, "monthly", false, "GitHub Copilot");
+  expectPlans(/^GLM Coding\b/, "weekly,5h", true, "GLM Coding");
+  const byPlan = new Map();
+  for (const e of entries) {
+    if (!["none", "payg"].includes(e.quotaWindow)) assert.ok(e.quotaWindows.includes(e.quotaWindow), `${e.id}: primary window ${e.quotaWindow} not in ${e.quotaWindows}`);
+    const prev = byPlan.get(e.plan);
+    assert.ok(prev == null || prev === e.quotaWindows.join(), `${e.plan}: rows disagree on quotaWindows (${prev} vs ${e.quotaWindows})`);
+    byPlan.set(e.plan, e.quotaWindows.join());
+  }
   const api = entries.find((e) => e.billing === "metered");
   assert.ok(api && api.openEndpoint === true && api.quotaWindow === "payg", "Metered API classification mismatch");
 });
@@ -1227,8 +1248,17 @@ test("Calibration ledger lines are well formed; workflow commits the ledger back
     run.add(l.id);
   }
   assert.ok(cal && Number.isInteger(cal.cases) && cal.minN === 15 && cal.minCoverage === 0.6, "stats.reliability.calibration missing");
-  assert.ok(/contents: write/.test(workflowYml) && /\[skip ci\]/.test(workflowYml) && /data\/reliability\/history\.jsonl/.test(workflowYml), "deploy.yml must commit the ledger with [skip ci]");
-  assert.ok(/continue-on-error: true[\s\S]{0,40}shell: bash[\s\S]{0,200}history\.jsonl/.test(workflowYml), "Ledger commit step must not block the deploy");
+  assert.ok(/^\s+contents: write$/m.test(workflowYml), "deploy.yml needs contents: write to push the ledger");
+  const step = workflowYml.split(/\n      - name: /).find((s) => /^Commit reliability history/.test(s)) || "";
+  assert.ok(step, "deploy.yml has no 'Commit reliability history' step");
+  assert.match(step, /^\s+if: github\.ref == 'refs\/heads\/main'$/m, "Ledger commit must run on main only");
+  assert.match(step, /^\s+continue-on-error: true$/m, "Ledger commit step must not block the deploy");
+  assert.match(step, /F=data\/reliability\/history\.jsonl/, "Ledger commit must add data/reliability/history.jsonl");
+  assert.match(step, /git -C \/tmp\/hist-wt add "\$F"/);
+  assert.match(step, /git -C \/tmp\/hist-wt commit [^\n]*\[skip ci\]/, "Ledger commit message must carry [skip ci]");
+  assert.match(step, /git -C \/tmp\/hist-wt push [^\n]*origin HEAD:main/, "Ledger commit must push to main");
+  const order = workflowYml.split(/\n      - name: /).map((s) => s.split("\n")[0]);
+  assert.ok(order.findIndex((n) => /^Commit reliability history/.test(n)) > order.findIndex((n) => /^Abort deploy/.test(n)), "Ledger commit must run after the test gate");
   console.log(`     Ledger: ${historyLines.length} lines, ${historyLines.filter((l) => l.t === "deploy").length} deploys; calibration cases ${cal.cases}`);
 });
 
@@ -1275,6 +1305,759 @@ test("Calibration ledger lines are well formed; workflow commits the ledger back
     });
   }
 }
+
+// ---- Behavioural tests: public/app.js runs in a VM against a stub DOM and the real dataset ----
+const HTML_IDS = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+class StubEl {
+  constructor(tag = "div", id = "") {
+    this.tagName = tag.toUpperCase();
+    this.id = id;
+    this.listeners = {};
+    this.value = "";
+    this.checked = false;
+    this.textContent = "";
+    this.innerHTML = "";
+    this.hidden = false;
+    this.open = false;
+    this.disabled = false;
+    this.style = {};
+    this.dataset = {};
+    this.attrs = {};
+    this.children = [];
+    const cls = new Set();
+    this.classList = {
+      add: (...c) => c.forEach((x) => cls.add(x)),
+      remove: (...c) => c.forEach((x) => cls.delete(x)),
+      toggle: (c, on) => ((on ?? !cls.has(c)) ? cls.add(c) : cls.delete(c)),
+      contains: (c) => cls.has(c),
+    };
+  }
+  addEventListener(t, f) {
+    (this.listeners[t] ||= []).push(f);
+  }
+  removeEventListener() {}
+  fire(type, props = {}) {
+    for (const f of this.listeners[type] || []) f({ type, target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...props });
+  }
+  closest() {
+    return new StubEl();
+  }
+  querySelector() {
+    return new StubEl();
+  }
+  querySelectorAll() {
+    return [];
+  }
+  setAttribute(k, v) {
+    this.attrs[k] = String(v);
+  }
+  getAttribute(k) {
+    return this.attrs[k] ?? null;
+  }
+  removeAttribute(k) {
+    delete this.attrs[k];
+  }
+  appendChild(c) {
+    this.children.push(c);
+    return c;
+  }
+  insertAdjacentHTML() {}
+  remove() {}
+  showModal() {
+    this.open = true;
+  }
+  close() {
+    this.open = false;
+  }
+  focus() {}
+}
+
+/** Runs public/app.js with ?search in a fresh VM. Data loading never resolves; pass data to set state.dataset. */
+function loadApp(search = "", { phone = false, data = null } = {}) {
+  const els = new Map();
+  const created = [];
+  const docListeners = {};
+  const document = {
+    documentElement: new StubEl("html"),
+    body: new StubEl("body"),
+    head: new StubEl("head"),
+    getElementById: (id) => {
+      if (!HTML_IDS.has(id)) return null;
+      if (!els.has(id)) els.set(id, new StubEl("div", id));
+      return els.get(id);
+    },
+    createElement: (tag) => {
+      const el = new StubEl(tag);
+      created.push(el);
+      return el;
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (t, f) => (docListeners[t] ||= []).push(f),
+  };
+  const location = { search: search ? `?${search.replace(/^\?/, "")}` : "", pathname: "/", hash: "", hostname: "test.invalid", reload() {} };
+  const mqs = new Map();
+  const g = {
+    document,
+    location,
+    console,
+    history: { replaceState: (_s, _t, url) => (location.search = new URL(url, "http://test.invalid").search) },
+    matchMedia: (q) => {
+      if (!mqs.has(q)) mqs.set(q, { matches: q === "(max-width: 600px)" ? phone : false, media: q, addEventListener() {}, removeEventListener() {} });
+      return mqs.get(q);
+    },
+    localStorage: { getItem: () => null, setItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {} },
+    fetch: () => new Promise(() => {}),
+    requestAnimationFrame: () => 0,
+    setTimeout: () => 0,
+    clearTimeout() {},
+    performance,
+    URL,
+    URLSearchParams,
+    Audio: class {
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    },
+    innerWidth: 1280,
+    innerHeight: 800,
+  };
+  g.window = g;
+  const ctx = vm.createContext(g);
+  vm.runInContext(appJs.replace(/\bimport\.meta\.url\b/g, JSON.stringify("http://localhost/app.js?v=test")), ctx, { filename: "public/app.js" });
+  const api = vm.runInContext(
+    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, relTooltip, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
+    ctx
+  );
+  const app = { ...api, $: document.getElementById, document, location, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
+  if (data) {
+    app.state.dataset = data;
+    app.render();
+  }
+  return app;
+}
+const appWithData = (search = "", opts = {}) => loadApp(search, { ...opts, data: dataset });
+const near = (a, b, tol = 1e-6) => a === b || Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
+const countOf = (s, re) => (s.match(re) || []).length;
+
+const API_OF = {
+  task: (e) => e.aaCostPerTaskUsd,
+  agent: (e) => e.codingAgent?.costPerTaskUsd,
+  cursor: (e) => e.cursorBench?.costPerTaskUsd,
+  turn: (e) => e.t3Turn?.costPerTurnUsd,
+  tokens: (e) => e.aaPricing?.blended3to1Per1M ?? e.aaPricing?.blended7to2to1Per1M ?? e.listBlendedUsdPerMtok,
+};
+
+test("App: each cost metric uses its own API cost, subsidy factor and σ; heading and column follow", () => {
+  const app = appWithData();
+  assert.deepEqual(Object.keys(app.COST_MODES).sort(), Object.keys(API_OF).sort());
+  for (const m of Object.keys(API_OF)) {
+    app.state.costMode = m;
+    const byIdR = new Map(app.getAllEntriesResolved().map((r) => [r.id, r]));
+    let priced = 0;
+    for (const e of entries) {
+      const r = byIdR.get(e.id);
+      assert.ok(r, `${e.id} not resolved`);
+      const api = API_OF[m](e) ?? null;
+      assert.equal(r.apiMetric, api, `${m}: ${e.id} apiMetric ${r.apiMetric} != ${api}`);
+      if (api > 0 && e.billing === "subscription" && !e.unmetered && e.subsidyMultiple > 0) {
+        const S = e.subsidyMultiple * billingView(e, "monthly").scale * (e.quotaMix?.[m]?.f ?? 1) * (e.clientFactor?.[m]?.f ?? 1);
+        assert.ok(near(r.effectiveCost, api / S), `${m}: ${e.id} real ${r.effectiveCost} != ${api} / ${S}`);
+        assert.ok(near(r.subsidy, S), `${m}: ${e.id} subsidy ${r.subsidy} != ${S}`);
+        priced++;
+      }
+      if (e.billing === "metered" && api > 0) assert.ok(near(r.effectiveCost, api), `${m}: API row ${e.id} must cost its list price`);
+      const rl = e.rel;
+      const sigma = Math.hypot(rl.s, rl.w?.[m] ?? 0, rl.c?.[m] ?? 0, rl.x?.[m] ?? 0);
+      assert.ok(near(r.sigma, sigma, 1e-9), `${m}: ${e.id} σ ${r.sigma} != ${sigma}`);
+    }
+    assert.ok(priced >= 50, `${m}: only ${priced} subscription rows priced`);
+    app.render();
+    assert.equal(app.$("chartHeading").textContent, app.COST_MODES[m].heading, `${m}: chart heading`);
+    assert.ok(app.$("tableHead").innerHTML.includes(`>Real $/${app.COST_MODES[m].unit}</th>`), `${m}: Real $/${app.COST_MODES[m].unit} column`);
+    assert.equal(app.$("maxCostLabel").textContent, app.COST_MODES[m].maxLabel, `${m}: max-cost label`);
+  }
+  // Per-mode subsidy factors (no row carries one while the correction and SDK step are off): inject them
+  const claude = entries.find((e) => e.plan === "Claude Max" && e.t3Turn?.costPerTurnUsd > 0 && e.aaCostPerTaskUsd > 0);
+  assert.ok(claude, "no Claude Max row with T3 data");
+  const probe = { ...claude, quotaMix: { task: { f: 0.8, lo: 0.7, hi: 0.9 } }, clientFactor: { turn: { f: 0.5, lo: 0.4, hi: 0.6 } } };
+  const synth = loadApp("", { data: { ...dataset, entries: [probe] } });
+  const at = (m) => {
+    synth.state.costMode = m;
+    return synth.getAllEntriesResolved()[0];
+  };
+  const S0 = claude.subsidyMultiple * billingView(claude, "monthly").scale;
+  assert.ok(near(at("task").effectiveCost, claude.aaCostPerTaskUsd / (S0 * 0.8)), "task mode must apply quotaMix.task");
+  assert.ok(near(at("turn").effectiveCost, claude.t3Turn.costPerTurnUsd / (S0 * 0.5)), "turn mode must apply clientFactor.turn only");
+  if (claude.codingAgent?.costPerTaskUsd > 0) assert.ok(near(at("agent").effectiveCost, claude.codingAgent.costPerTaskUsd / S0), "agent mode must not apply task / turn factors");
+});
+
+test("Auto-pair: pairedBench / pairedCost on every transition; custom benchmarks are kept", () => {
+  const app = loadApp();
+  const PAIR = { task: "intelligenceIndex", agent: "codingAgentIndex", cursor: "cursorBench" };
+  const COST_FOR = Object.fromEntries(Object.entries(PAIR).map(([c, b]) => [b, c]));
+  const costs = Object.keys(app.COST_MODES);
+  const benches = Object.keys(app.BENCHMARKS);
+  for (const b of ["intelligenceIndex", "codingAgentIndex", "cursorBench", "hle"]) assert.ok(benches.includes(b), `benchmark ${b} missing`);
+  // Rule: the other control follows only if it is at its default or still paired with the previous choice.
+  for (const prev of costs) for (const next of costs) for (const bench of benches) {
+    const want = PAIR[next] && (bench === "intelligenceIndex" || bench === PAIR[prev]) ? PAIR[next] : bench;
+    assert.equal(app.pairedBench(prev, next, bench), want, `cost ${prev} → ${next} with benchmark ${bench}`);
+  }
+  for (const prev of benches) for (const next of benches) for (const cost of costs) {
+    const want = COST_FOR[next] && (cost === "task" || cost === COST_FOR[prev]) ? COST_FOR[next] : cost;
+    assert.equal(app.pairedCost(prev, next, cost), want, `benchmark ${prev} → ${next} with cost ${cost}`);
+  }
+  // Hand-written cases: [prev cost, next cost, benchmark, expected benchmark]
+  for (const [p, n, b, want] of [
+    ["task", "agent", "intelligenceIndex", "codingAgentIndex"],
+    ["agent", "cursor", "codingAgentIndex", "cursorBench"],
+    ["cursor", "task", "cursorBench", "intelligenceIndex"],
+    ["agent", "task", "codingAgentIndex", "intelligenceIndex"],
+    ["task", "agent", "hle", "hle"],
+    ["agent", "cursor", "hle", "hle"],
+    ["task", "turn", "intelligenceIndex", "intelligenceIndex"],
+    ["agent", "tokens", "codingAgentIndex", "codingAgentIndex"],
+    ["task", "cursor", "codingAgentIndex", "codingAgentIndex"],
+  ]) assert.equal(app.pairedBench(p, n, b), want, `cost ${p} → ${n}, benchmark ${b}`);
+  // [prev benchmark, next benchmark, cost, expected cost]
+  for (const [p, n, c, want] of [
+    ["intelligenceIndex", "codingAgentIndex", "task", "agent"],
+    ["codingAgentIndex", "cursorBench", "agent", "cursor"],
+    ["cursorBench", "intelligenceIndex", "cursor", "task"],
+    ["codingAgentIndex", "hle", "agent", "agent"],
+    ["intelligenceIndex", "codingAgentIndex", "turn", "turn"],
+    ["intelligenceIndex", "cursorBench", "agent", "agent"],
+    ["hle", "codingAgentIndex", "task", "agent"],
+  ]) assert.equal(app.pairedCost(p, n, c), want, `benchmark ${p} → ${n}, cost ${c}`);
+
+  // The change handlers apply it
+  const ui = appWithData();
+  const pick = (id, value) => {
+    ui.$(id).value = value;
+    ui.$(id).fire("change");
+  };
+  pick("costMode", "agent");
+  assert.equal(ui.state.benchKey, "codingAgentIndex");
+  assert.equal(ui.$("benchSelect").value, "codingAgentIndex");
+  assert.equal(ui.state.minScore, ui.BENCHMARKS.codingAgentIndex.def, "paired benchmark resets its threshold");
+  pick("benchSelect", "hle");
+  assert.equal(ui.state.costMode, "agent", "hle has no paired cost");
+  pick("costMode", "cursor");
+  assert.equal(ui.state.benchKey, "hle", "a custom benchmark is never overwritten");
+  pick("benchSelect", "cursorBench");
+  pick("benchSelect", "intelligenceIndex");
+  assert.equal(ui.state.costMode, "task", "cost paired with the previous benchmark follows back to task");
+  assert.equal(ui.$("costMode").value, "task");
+  pick("benchSelect", "cursorBench");
+  assert.equal(ui.state.costMode, "cursor");
+  assert.equal(ui.state.maxCostIdx, 4, "paired cost resets Max cost");
+});
+
+test("Legacy URL params: bench implies mode, mode=task written when needed, est/noest/nointerp/extrap → conf", () => {
+  const st = (q) => loadApp(q).state;
+  assert.equal(st("bench=codingAgentIndex").costMode, "agent");
+  assert.equal(st("bench=cursorBench").costMode, "cursor");
+  assert.equal(st("bench=codingAgentIndex&mode=task").costMode, "task");
+  assert.equal(st("bench=cursorBench&mode=turn").costMode, "turn");
+  assert.equal(st("bench=hle").costMode, "task");
+  assert.equal(st("mode=bogus").costMode, "task");
+  // Every benchmark × cost metric survives a write → read round trip, and mode= appears only when needed
+  const app0 = loadApp();
+  for (const bench of ["intelligenceIndex", "codingAgentIndex", "cursorBench", "hle"]) {
+    for (const mode of Object.keys(app0.COST_MODES)) {
+      const a = loadApp();
+      a.state.benchKey = bench;
+      a.state.minScore = a.BENCHMARKS[bench].def;
+      a.state.costMode = mode;
+      a.syncUrlFromState();
+      const p = new URLSearchParams(a.location.search);
+      const implied = bench === "codingAgentIndex" ? "agent" : bench === "cursorBench" ? "cursor" : "task";
+      assert.equal(p.get("mode"), mode === implied ? null : mode, `bench=${bench} mode=${mode}: URL ${a.location.search}`);
+      const b = loadApp(a.location.search);
+      assert.equal(b.state.benchKey, bench, `round trip bench ${a.location.search}`);
+      assert.equal(b.state.costMode, mode, `round trip mode ${a.location.search}`);
+    }
+  }
+  // Min confidence: default Medium; legacy estimate params; conf= wins
+  for (const [q, want] of [
+    ["", "medium"],
+    ["conf=bogus", "medium"],
+    ["est=0", "high"],
+    ["est=h", "medium"],
+    ["est=hm", "low"],
+    ["est=hml", "speculative"],
+    ["nointerp=1", "high"],
+    ["extrap=1", "speculative"],
+    ["noest=1", "medium"],
+    ["extrap=1&noest=1", "medium"],
+    ["est=hml&noest=1", "medium"],
+    ["est=0&noest=1", "high"],
+    ["est=hm&conf=h", "high"],
+    ["conf=h", "high"],
+    ["conf=m", "medium"],
+    ["conf=l", "low"],
+    ["conf=s", "speculative"],
+  ]) assert.equal(st(q).minConf, want, `?${q} → minConf ${want}`);
+  // Legacy params are rewritten as conf= (and dropped at the default)
+  for (const [q, want] of [["est=hm", "?conf=l"], ["extrap=1", "?conf=s"], ["nointerp=1", "?conf=h"], ["est=h", ""], ["noest=1", ""]]) {
+    const a = loadApp(q);
+    a.syncUrlFromState();
+    assert.equal(a.location.search, want, `?${q} rewritten as ${a.location.search}`);
+  }
+});
+
+test("Reliability display: glyph after the model name, tooltip on the whole name, footer wording, chart follows Min confidence", () => {
+  const app = appWithData();
+  assert.equal(app.state.minConf, "medium", "Min confidence default must be Medium");
+  const checkNames = (htmlText, cls, where) => {
+    const names = [...htmlText.matchAll(new RegExp(`<div class="${cls}"( title="([^"]*)")?>([\\s\\S]*?)</div>`, "g"))];
+    assert.ok(names.length > 0, `${where}: no model names rendered`);
+    for (const [, hasTitle, title, inner] of names) {
+      const m = inner.match(/^(?:<a [^>]*>[^<]*<\/a>|[^<]+)<span class="tier-glyph rel-glyph rel-(\w+)" title="([^"]*)">([^<]+)<\/span>$/);
+      assert.ok(m, `${where}: glyph must follow the model name: ${inner}`);
+      assert.ok(hasTitle, `${where}: tooltip must be on the whole model name`);
+      assert.equal(m[3], app.LEVEL_GLYPH[m[1]], `${where}: glyph for ${m[1]}`);
+      assert.ok(title.startsWith(`${app.LEVEL_LABEL[m[1]]} confidence\n`), `${where}: tooltip must open with "${app.LEVEL_LABEL[m[1]]} confidence": ${title.slice(0, 60)}`);
+    }
+    return names.length;
+  };
+  const chart = app.$("barChart").innerHTML;
+  const nBars = checkNames(chart, "bar-model", "bar chart");
+  assert.equal(countOf(chart, /<span class="bar-val">[^<]*<\/span>/g), nBars, "cost cell must hold only the cost (no glyph)");
+  checkNames(app.$("rows").innerHTML, "model", "table");
+  assert.ok(!/rel-(low|speculative)/.test(chart + app.$("rows").innerHTML), "Low and Speculative rows must be hidden by default");
+
+  // Tooltip text
+  for (const mode of ["task", "turn"]) {
+    app.state.costMode = mode;
+    app.state.minConf = "speculative";
+    let banded = 0;
+    for (const r of app.getAllEntriesResolved()) {
+      const lines = app.relTooltip(r).split("\n");
+      assert.equal(lines[0], `${app.LEVEL_LABEL[r.level]} confidence`, `${r.id}: first tooltip line`);
+      if (Number.isFinite(r.relLo) && Number.isFinite(r.relHi)) {
+        banded++;
+        assert.equal(lines[1], `Real cost is likely ${app.fmtUsd(r.relLo)} to ${app.fmtUsd(r.relHi)} (80% chance)`, `${r.id}: band line`);
+        assert.match(lines[1], /^Real cost is likely \$[\d.,]+ to \$[\d.,]+ \(80% chance\)$/);
+      }
+      const factor = `×${Math.exp(1.2816 * r.sigma).toFixed(1)}`;
+      assert.ok(!lines.slice(0, Number.isFinite(r.relLo) ? 2 : 1).some((l) => l.includes("×")), `${r.id}: no ×factor in the header lines: ${JSON.stringify(lines.slice(0, 3))}`);
+      assert.ok(!lines.some((l) => /^\s*Range\b/.test(l) || l.includes(`· ${factor}`)), `${r.id}: old ${factor} / Range line in tooltip`);
+    }
+    assert.ok(banded > 100, `${mode}: only ${banded} tooltips carry the band line`);
+  }
+
+  // Footer: live count of rows hidden by Min confidence
+  app.state.costMode = "task";
+  const WORD = { high: "lower-confidence", medium: "low-confidence", low: "speculative" };
+  for (const level of ["high", "medium", "low", "speculative"]) {
+    app.state.minConf = level;
+    app.render();
+    const all = app.getAllEntriesResolved();
+    const hidden = app.getFilteredRows(all, "speculative").filter((r) => app.LEVEL_RANK[r.level] > app.LEVEL_RANK[level]).length;
+    if (level === "speculative") {
+      assert.equal(app.$("extrapFooter").hidden, true, "no footer when everything is shown");
+      continue;
+    }
+    assert.ok(hidden > 0, `${level}: expected hidden rows`);
+    assert.equal(app.$("extrapFooter").hidden, false, `${level}: footer must show`);
+    assert.equal(app.$("extrapFooterText").textContent, `${hidden} ${WORD[level]} rows hidden`, `${level}: footer text`);
+  }
+
+  // Bar chart follows Min confidence (one bar per row when both dedupe toggles are off)
+  app.state.cheapestPlanOnly = false;
+  app.state.cheapestEffortOnly = false;
+  for (const level of ["high", "medium", "low", "speculative"]) {
+    app.state.minConf = level;
+    app.render();
+    const rows = app.getFilteredRows(app.getAllEntriesResolved());
+    const html2 = app.$("barChart").innerHTML;
+    assert.equal(countOf(html2, /<div class="bar-row/g), rows.length, `${level}: bar count != filtered rows`);
+    const shown = new Set([...html2.matchAll(/rel-glyph rel-(\w+)/g)].map((m) => m[1]));
+    assert.deepEqual([...shown].sort(), [...new Set(rows.map((r) => r.level))].sort(), `${level}: chart levels`);
+  }
+});
+
+test("Methodology: sections, collapsed trust-level details, glyph table, plain language, renderMeta counts", () => {
+  const dlg = html.match(/<dialog id="methodDialog"[\s\S]*?<\/dialog>/)?.[0] || "";
+  assert.ok(dlg, "Missing #methodDialog");
+  const headings = [...dlg.matchAll(/class="settings-heading"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
+  for (const h of ["Real cost", "Cost metrics", "Reliability", "Subsidy sources", "Model data"]) assert.ok(headings.includes(h), `Methodology section "${h}" missing (have ${headings})`);
+  const details = dlg.match(/<details class="method-details"([^>]*)>\s*<summary>How the trust levels are calculated<\/summary>[\s\S]*?<\/details>/);
+  assert.ok(details, "Collapsed 'How the trust levels are calculated' section missing");
+  assert.ok(!/\bopen\b/.test(details[1]), "Trust-level details must start collapsed");
+  for (const href of ["github.com/Fei2411/real-api-pricing", "github.com/adamholter/priors", "openrouter.ai", "arcprize.org"]) assert.ok(dlg.includes(href), `Source link ${href} missing`);
+  // Metrics table lists every cost metric
+  const metrics = dlg.match(/<table class="method-table method-metrics">[\s\S]*?<\/table>/)?.[0] || "";
+  assert.equal(countOf(metrics, /<tr><td>/g), Object.keys(API_OF).length, "Cost metrics table must have one row per cost metric");
+  // Level table rows match the app's glyphs and labels, in order
+  const app = appWithData();
+  const levelsTable = dlg.match(/<table class="method-table method-levels">[\s\S]*?<\/table>/)?.[0] || "";
+  const rows = [...levelsTable.matchAll(/<tr><td class="tier-glyph">([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td id="relCount-(\w+)">/g)];
+  assert.deepEqual(rows.map((r) => r[4]), [...app.LEVELS], "Level table rows / relCount ids");
+  for (const [, glyph, label, , level] of rows) {
+    assert.equal(glyph, app.LEVEL_GLYPH[level], `Glyph for ${level}`);
+    assert.equal(label, app.LEVEL_LABEL[level], `Label for ${level}`);
+  }
+  const legend = html.match(/<p id="relLegend"[\s\S]*?<\/p>/)?.[0] || "";
+  assert.deepEqual([...legend.matchAll(/<span class="tier-glyph">([^<]+)<\/span>/g)].map((m) => m[1]), [...app.LEVELS].map((l) => app.LEVEL_GLYPH[l]), "Legend glyph order");
+  for (const l of ["low", "speculative"]) assert.match(rows.find((r) => r[4] === l)[3], /Hidden by default/, `${l} row must say Hidden by default`);
+  // Plain language: formulas and σ live only inside the collapsed details
+  const outside = dlg.replace(details[0], "");
+  for (const jargon of ["σ", "ln(", "e<sup>", "1/σ²", "quota-weight"]) assert.ok(!outside.includes(jargon), `Jargon "${jargon}" outside the collapsed details`);
+  assert.ok(outside.includes("What a piece of work actually costs you on a plan"), "Plain-language Real cost text missing");
+  assert.ok(outside.includes("50× means a $20 plan covers $1,000 of API usage"), "Subsidy example missing");
+  assert.ok(/<code>Real cost<\/code> = API price of the work ÷ plan subsidy/.test(outside), "Real cost formula missing");
+  // renderMeta fills the Rows column from stats.reliability.counts
+  app.renderMeta();
+  for (const l of app.LEVELS) assert.equal(app.$(`relCount-${l}`).textContent, relStats.counts[l].toLocaleString(), `relCount-${l}`);
+});
+
+// Minimal CSS reader: top-level and @media rules with their declarations (comments stripped).
+const cssRules = (() => {
+  const out = [];
+  const walk = (text, media) => {
+    let i = 0;
+    while (i < text.length) {
+      const open = text.indexOf("{", i);
+      if (open === -1) break;
+      const head = text.slice(i, open).trim();
+      let depth = 1;
+      let j = open + 1;
+      while (depth && j < text.length) {
+        if (text[j] === "{") depth++;
+        else if (text[j] === "}") depth--;
+        j++;
+      }
+      const body = text.slice(open + 1, j - 1);
+      if (head.startsWith("@media")) walk(body, head.replace(/^@media\s*/, ""));
+      else if (!head.startsWith("@")) {
+        const decls = {};
+        for (const d of body.split(";")) {
+          const k = d.indexOf(":");
+          if (k > 0) decls[d.slice(0, k).trim()] = d.slice(k + 1).trim();
+        }
+        out.push({ media, selectors: head.split(",").map((s) => s.trim().replace(/\s+/g, " ")), decls });
+      }
+      i = j;
+    }
+  };
+  walk(cssText.replace(/\/\*[\s\S]*?\*\//g, ""), null);
+  return out;
+})();
+/** Last value of prop for selector inside @media query (null = top level), as the cascade would apply it. */
+const cssDecl = (media, selector, prop) => {
+  let v;
+  for (const r of cssRules) if (r.media === media && r.selectors.includes(selector) && r.decls[prop] != null) v = r.decls[prop];
+  return v;
+};
+const PHONE = "(max-width: 600px)";
+const NARROW = "(max-width: 780px)";
+const px = (v) => (v == null ? NaN : parseFloat(v));
+
+test("Methodology CSS: wraps instead of overflowing (min-width 0, white-space rules, dialog width)", () => {
+  assert.equal(cssDecl(null, "#methodDialog", "width"), "min(1040px, calc(100vw - 28px))");
+  assert.equal(cssDecl(null, "#methodDialog .method-body > *", "min-width"), "0");
+  assert.equal(cssDecl(null, "#methodDialog .method-levels td:nth-child(3)", "white-space"), "normal");
+  assert.equal(cssDecl(null, "#methodDialog .method-metrics td:nth-child(2)", "white-space"), "normal");
+  assert.equal(cssDecl(null, ".method-table td:not(:first-child)", "white-space"), "nowrap");
+  assert.equal(cssDecl(PHONE, "#methodDialog .method-table td", "white-space"), "normal");
+  assert.equal(cssDecl(PHONE, "#methodDialog .method-table th", "white-space"), "normal");
+  assert.equal(cssDecl(PHONE, "#methodDialog .method-metrics td:first-child", "white-space"), "normal");
+  for (const r of cssRules) {
+    if (!r.selectors.some((s) => /method/.test(s))) continue;
+    for (const p of ["min-width", "width"]) {
+      const v = r.decls[p];
+      if (v && /^\d+(\.\d+)?px$/.test(v)) assert.ok(px(v) <= 320, `${r.selectors.join(", ")} { ${p}: ${v} } can overflow a phone`);
+    }
+  }
+});
+
+test("Mobile CSS: full-screen dialogs ≤600px, card rows, tap targets ≤780px, no grid overflow", () => {
+  for (const sel of [".dialog", "#methodDialog"]) {
+    assert.equal(cssDecl(PHONE, sel, "width"), "100vw", `${sel} width`);
+    assert.equal(cssDecl(PHONE, sel, "max-width"), "100vw", `${sel} max-width`);
+    assert.equal(cssDecl(PHONE, sel, "height"), "100dvh", `${sel} height`);
+    assert.equal(cssDecl(PHONE, sel, "max-height"), "100dvh", `${sel} max-height`);
+    assert.equal(cssDecl(PHONE, sel, "margin"), "0", `${sel} margin`);
+  }
+  assert.equal(cssDecl(PHONE, ".data-table thead", "display"), "none");
+  assert.equal(cssDecl(PHONE, ".data-table tbody td[data-label]::before", "content"), 'attr(data-label) " "');
+  assert.equal(cssDecl(PHONE, ".toolbar-sort", "display"), "inline-flex", "Sort select shows on phones");
+  assert.equal(cssDecl(null, ".toolbar-sort", "display"), "none", "Sort select hidden on wide screens");
+  for (const [sel, prop, min] of [
+    [".btn", "min-height", 40],
+    [".select", "min-height", 36],
+    [".search-input", "min-height", 36],
+    [".select", "font-size", 16],
+    [".search-input", "font-size", 16],
+    [".head-check", "min-height", 32], // floor: tightened by design to 32px; WCAG 2.5.8 minimum is 24px
+    [".settings-check", "min-height", 32], // floor: tightened by design to 32px; WCAG 2.5.8 minimum is 24px
+    [".toolbar-check", "min-height", 32], // floor: tightened by design to 32px; WCAG 2.5.8 minimum is 24px
+    ['input[type="checkbox"]', "width", 18],
+    ['input[type="range"]', "height", 40],
+    ["tr.group-row td", "height", 44],
+  ]) assert.ok(px(cssDecl(NARROW, sel, prop)) >= min, `${sel} { ${prop} } at ≤780px is ${cssDecl(NARROW, sel, prop)}, want ≥ ${min}px`);
+  // Plan expand button: tap area = box + invisible ::after hit box (negative inset), ≥ 32 × 32.
+  {
+    const inset = String(cssDecl(NARROW, ".plan-exp-btn::after", "inset") || "0").split(/\s+/).map((v) => -Math.min(0, px(v) || 0));
+    const [iv, ih] = [inset[0] || 0, inset[1] ?? inset[0] ?? 0];
+    const w = px(cssDecl(NARROW, ".plan-exp-btn", "min-width")) + 2 * ih;
+    const h = px(cssDecl(NARROW, ".plan-exp-btn", "min-height")) + 2 * iv;
+    assert.ok(w >= 32 && h >= 32, `.plan-exp-btn tap area at ≤780px is ${w}×${h}px, want ≥ 32×32`);
+    if (inset.some((v) => v > 0)) assert.equal(cssDecl(NARROW, ".plan-exp-btn", "position"), "relative", ".plan-exp-btn needs position: relative for its hit box");
+  }
+  assert.equal(cssDecl(NARROW, ".workspace", "grid-template-columns"), "minmax(0, 1fr)");
+  assert.equal(cssDecl(NARROW, ".workspace > *", "min-width"), "0");
+  let grids = 0;
+  for (const r of cssRules) {
+    const g = r.decls["grid-template-columns"];
+    if (!g || !r.selectors.some((s) => /^\.workspace\b/.test(s))) continue;
+    grids++;
+    assert.ok(!/(^|[\s(,])1fr/.test(g.replace(/minmax\(0, 1fr\)/g, "")), `${r.selectors.join(", ")} uses a bare 1fr track (${g}); use minmax(0, 1fr)`);
+  }
+  assert.ok(grids >= 1, "no .workspace grid rule found");
+});
+
+test("Phone table: every cell carries its column's data-label; Sort select and Show 50 more page the rows", () => {
+  for (const group of [false, true]) {
+    const app = appWithData("", { phone: true });
+    app.state.groupByPlan = group;
+    app.render();
+    if (group) {
+      const first = app.$("rows").innerHTML.match(/data-group="([^"]+)"/)[1];
+      app.state.expandedTableGroups.add(first.replace(/&amp;/g, "&"));
+      app.render();
+      assert.ok(/class="grouped-item/.test(app.$("rows").innerHTML), "expanded group rows missing");
+    }
+    const cols = [...app.$("tableHead").innerHTML.matchAll(/<th data-sort="([^"]+)" class="[^"]*">([^<]*)<\/th>/g)].map((m) => ({ key: m[1], label: m[2] }));
+    assert.ok(cols.length >= 9, `Too few columns: ${cols.length}`);
+    for (const tr of app.$("rows").innerHTML.split("</tr>").filter((t) => /<td/.test(t))) {
+      const tds = [...tr.matchAll(/<td\b([^>]*)>/g)].map((m) => m[1]);
+      const labelled = tds.filter((a) => /data-label="/.test(a)).map((a) => a.match(/data-label="([^"]*)"/)[1]);
+      for (const a of tds) assert.ok(/data-label="/.test(a) || /class="card-sub"/.test(a), `cell without data-label: <td${a}>`);
+      assert.deepEqual(labelled, cols.map((c) => c.label), `row cells must follow the columns in order (group=${group})`);
+    }
+    // Sort select mirrors the columns
+    const opts = [...app.$("tableSort").innerHTML.matchAll(/<option value="([^"]+)">([^<]*)<\/option>/g)].map((m) => m[1]);
+    assert.deepEqual(opts, cols.map((c) => c.key), "Sort options must equal the columns");
+    assert.equal(app.$("tableSort").value, app.state.sortKey);
+  }
+  const app = appWithData("", { phone: true });
+  app.$("tableSort").value = "score";
+  app.$("tableSort").fire("change");
+  assert.equal(app.state.sortKey, "score");
+  assert.equal(app.state.sortDir, "desc", "score sorts high → low");
+  assert.equal(app.$("tableSortDir").textContent, "▼");
+  app.$("tableSortDir").fire("click");
+  assert.equal(app.state.sortDir, "asc");
+  app.$("tableSort").value = "fee";
+  app.$("tableSort").fire("change");
+  assert.equal(app.state.sortDir, "asc", "fee sorts low → high");
+  // Show 50 more
+  const total = app.getFilteredRows(app.getAllEntriesResolved()).length;
+  assert.ok(total > 2 * app.TABLE_PAGE, `need > ${2 * app.TABLE_PAGE} rows, got ${total}`);
+  const shown = () => countOf(app.$("rows").innerHTML, /<tr[\s>]/g);
+  assert.equal(shown(), 50);
+  assert.equal(app.$("tableMore").hidden, false);
+  assert.equal(app.$("tableMoreCount").textContent, `50 / ${total.toLocaleString()}`);
+  app.$("tableMoreBtn").fire("click");
+  assert.equal(shown(), 100);
+  assert.equal(app.$("tableMoreCount").textContent, `100 / ${total.toLocaleString()}`);
+  app.$("tableSort").value = "subsidy";
+  app.$("tableSort").fire("change");
+  assert.equal(shown(), 50, "changing the sort returns to the first page");
+  const desk = appWithData();
+  assert.equal(countOf(desk.$("rows").innerHTML, /<tr[\s>]/g), total, "wide screens render every row");
+  assert.equal(desk.$("tableMore").hidden, true);
+});
+
+test("Hours/mo: column only in T3 turn mode; = fee ÷ real $/turn × share × min/turn ÷ 60", () => {
+  const app = appWithData();
+  for (const m of Object.keys(API_OF)) {
+    app.state.costMode = m;
+    app.render();
+    assert.equal(app.$("tableHead").innerHTML.includes(">Hours/mo</th>"), m === "turn", `${m}: Hours/mo column`);
+  }
+  app.state.costMode = "turn";
+  let n = 0;
+  for (const r of app.getAllEntriesResolved()) {
+    const min = r.t3Turn?.minutesPerTurn;
+    if (!(min > 0) || r.isApi) {
+      assert.equal(r.hoursPerMonth, null, `${r.id}: Hours/mo without minutes per turn`);
+      continue;
+    }
+    if (r.unmetered) {
+      assert.equal(r.hoursPerMonth, Infinity);
+      continue;
+    }
+    n++;
+    const turns = (r.priceUsd / r.effectiveCost) * (r.capShare ?? 1);
+    assert.ok(near(r.tasksPerMonth, turns), `${r.id}: turns/mo ${r.tasksPerMonth} != ${turns}`);
+    assert.ok(near(r.hoursPerMonth, (turns * min) / 60), `${r.id}: hours ${r.hoursPerMonth}`);
+  }
+  assert.ok(n >= 50, `only ${n} rows with Hours/mo`);
+  app.state.costMode = "task";
+  assert.ok(app.getAllEntriesResolved().every((r) => r.hoursPerMonth == null), "Hours/mo outside turn mode");
+});
+
+test("Billing: ?billing=yearly resolves yearly fees in the app and survives the URL round trip", () => {
+  const app = appWithData("billing=yearly");
+  assert.equal(app.state.billing, "yearly");
+  let n = 0;
+  for (const r of app.getAllEntriesResolved()) {
+    if (r.isApi || r.billingOnly || !(r.priceUsdYearly > 0)) continue;
+    n++;
+    assert.equal(r.priceUsd, r.priceUsdYearly, `${r.id}: yearly fee`);
+    assert.equal(r.feeYearly, true);
+  }
+  assert.ok(n > 0);
+  app.syncUrlFromState();
+  assert.equal(new URLSearchParams(app.location.search).get("billing"), "yearly");
+  assert.ok(app.$("rows").innerHTML.includes("/yr<"), "Yearly fee text in the table");
+});
+
+test("Usage-limit windows: filters No 5h / No weekly drop plans with those windows", () => {
+  const app = appWithData();
+  app.state.minConf = "speculative";
+  const base = app.getFilteredRows(app.getAllEntriesResolved());
+  app.state.no5h = true;
+  const no5h = app.getFilteredRows(app.getAllEntriesResolved());
+  assert.ok(no5h.length < base.length && no5h.every((r) => r.isApi || !r.quotaWindows.some((w) => w === "5h" || w === "daily")), "No 5h filter");
+  app.state.no5h = false;
+  app.state.noWeekly = true;
+  const noWk = app.getFilteredRows(app.getAllEntriesResolved());
+  assert.ok(noWk.length < base.length && noWk.every((r) => r.isApi || !r.quotaWindows.some((w) => w === "weekly" || w === "7d")), "No weekly filter");
+  assert.ok(base.some((r) => /^Claude (Pro|Max)$/.test(r.plan)) && !no5h.some((r) => /^Claude (Pro|Max)$/.test(r.plan)), "Claude Pro/Max have a 5h window");
+});
+
+test("Easter egg: Slopstrap loads only after Shift ×5 in a row", () => {
+  assert.ok(!/slopstrap|confetti/i.test(html), "index.html must not load Slopstrap or confetti up front");
+  for (const f of ["slopstrap.css", "site-slop.css", "slopstrap.js"]) assert.ok(fs.existsSync(path.join(ROOT, "public", "vendor", "slopstrap", f)), `public/vendor/slopstrap/${f} missing`);
+  assert.ok(fs.existsSync(path.join(ROOT, "public", "vendor", "canvas-confetti", "confetti.browser.js")), "confetti missing");
+  const app = loadApp();
+  const loaded = () => app.created.filter((el) => /slopstrap|confetti/.test(`${el.href || ""} ${el.src || ""}`));
+  assert.equal(loaded().length, 0, "nothing loaded at start-up");
+  for (let i = 0; i < 4; i++) app.keydown({ key: "Shift" });
+  app.keydown({ key: "a" });
+  for (let i = 0; i < 4; i++) app.keydown({ key: "Shift" });
+  app.keydown({ key: "Shift", repeat: true });
+  assert.equal(loaded().length, 0, "4 presses, an interruption or a key repeat must not trigger it");
+  app.keydown({ key: "Shift" });
+  const urls = loaded().map((el) => el.href || el.src).sort();
+  // Asset URLs carry app.js's deploy stamp (?v=…) so each deploy refetches them.
+  assert.deepEqual(urls, ["./vendor/canvas-confetti/confetti.browser.js", "./vendor/slopstrap/site-slop.css", "./vendor/slopstrap/slopstrap.css", "./vendor/slopstrap/slopstrap.js"].map((u) => `${u}?v=test`));
+});
+
+test("OG card: public/og.png is a 1200×630 PNG; og:* / twitter:* tags use absolute URLs", () => {
+  const png = fs.readFileSync(path.join(ROOT, "public", "og.png"));
+  assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "og.png is not a PNG");
+  assert.equal(png.subarray(12, 16).toString("latin1"), "IHDR");
+  assert.equal(png.readUInt32BE(16), 1200, "og.png width");
+  assert.equal(png.readUInt32BE(20), 630, "og.png height");
+  const meta = {};
+  for (const m of html.matchAll(/<meta (?:property|name)="((?:og|twitter):[^"]+)" content="([^"]*)"/g)) meta[m[1]] = m[2];
+  for (const k of ["og:type", "og:site_name", "og:title", "og:description", "og:url", "og:image", "og:image:width", "og:image:height", "og:image:alt", "twitter:card", "twitter:title", "twitter:description", "twitter:image"]) assert.ok(meta[k], `Missing <meta> ${k}`);
+  for (const k of ["og:url", "og:image", "twitter:image"]) assert.match(meta[k], /^https:\/\/[^/]+\//, `${k} must be an absolute https URL`);
+  assert.ok(meta["og:image"].startsWith(meta["og:url"]) && /\/og\.png$/.test(meta["og:image"]), "og:image must be og.png under og:url");
+  assert.equal(meta["twitter:image"], meta["og:image"]);
+  assert.equal(meta["twitter:card"], "summary_large_image");
+  assert.equal(Number(meta["og:image:width"]), png.readUInt32BE(16));
+  assert.equal(Number(meta["og:image:height"]), png.readUInt32BE(20));
+});
+
+test("Deploy: OG render step runs after the test gate, cannot block the deploy; og.png gets a cache-busting ?v=", () => {
+  const steps = workflowYml.split(/\n      - name: /).slice(1).map((s) => ({ name: s.split("\n")[0].trim(), body: s }));
+  const idx = (re) => steps.findIndex((s) => re.test(s.name));
+  const render = idx(/link-preview image/i);
+  assert.ok(render !== -1, "deploy.yml has no link-preview render step");
+  const r = steps[render].body;
+  assert.match(r, /scripts\/og\/render\.sh/);
+  assert.match(r, /continue-on-error: true/, "render step must not block the deploy");
+  assert.ok(render > idx(/Abort deploy/) && render < idx(/Upload public/), "render step must run after the test gate and before the upload");
+  const sh = fs.readFileSync(path.join(ROOT, "scripts", "og", "render.sh"), "utf8");
+  assert.ok(sh.includes('--window-size=1200,630 --screenshot="$ROOT/public/og.png"'), "render.sh must write a 1200×630 public/og.png");
+  assert.ok((fs.statSync(path.join(ROOT, "scripts", "og", "render.sh")).mode & 0o111) !== 0, "render.sh must be executable");
+  for (const f of ["card.html", "inject.html"]) assert.ok(fs.existsSync(path.join(ROOT, "scripts", "og", f)), `scripts/og/${f} missing`);
+  // Apply the stamp step's sed expression to index.html
+  const stampStep = steps[idx(/cache-busting/i)]?.body || "";
+  const sed = stampStep.match(/sed -i -E "s\|(\(\/og\\\.png\)[^|]*)\|\\1\?v=\$\{STAMP\}\|g" public\/index\.html/);
+  assert.ok(sed, "Stamp step must version /og.png in public/index.html");
+  const re = new RegExp(sed[1].replace(/\\"/g, '"'), "g");
+  const stamped = html.replace(re, "$1?v=2026010100");
+  assert.equal(countOf(stamped, /\/og\.png\?v=2026010100"/g), 2, "og:image and twitter:image both stamped");
+});
+
+test("Quota probe: --dry-run needs no credentials; plans pro | max | ultra | team; max_5x / max_20x aliases", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qp-test-"));
+  try {
+    // Empty PATH and HOME: no claude binary, no ~/.claude credentials, no API keys
+    const env = { PATH: path.join(tmp, "no-bin"), HOME: tmp, TMPDIR: tmp, XDG_CONFIG_HOME: path.join(tmp, "xdg") };
+    const subsDir = path.join(ROOT, "data", "quota-weights", "submissions");
+    const before = fs.readdirSync(subsDir).sort();
+    const probe = (args) => spawnSync(process.execPath, [path.join(ROOT, "scripts", "quota-probe.mjs"), ...args], { env, cwd: tmp, encoding: "utf8", timeout: 60000 });
+    const run = (plan, out) => probe(["run", "--dry-run", "--bar", "7d", "--class", "interactive", "--plan", plan, "--out", out]);
+    const readSub = (dir) => {
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl") && !f.endsWith(".raw.jsonl"));
+      assert.equal(files.length, 1, `expected one submission in ${dir}: ${files}`);
+      const lines = fs.readFileSync(path.join(dir, files[0]), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+      return { header: lines[0], rows: lines.slice(1) };
+    };
+    const prices = QW.loadPrices();
+    for (const [plan, want, price] of [["ultra", "ultra", 200], ["max_5x", "max", 100]]) {
+      const out = path.join(tmp, `out-${plan}`);
+      const r = run(plan, out);
+      assert.equal(r.status, 0, `dry run --plan ${plan} failed: ${r.stderr || r.stdout}`);
+      const sub = readSub(out);
+      assert.equal(sub.header.plan, want, `--plan ${plan} recorded as ${sub.header.plan}`);
+      assert.equal(sub.header.plan_price_usd, price);
+      assert.equal(sub.header.simulated, true, "dry-run file must be marked simulated");
+      assert.equal(sub.header.bar_under_test, "7d");
+      assert.equal(sub.header.client_class, "interactive");
+      assert.ok(QW.validateSubmission({ file: "dry", ...sub }, prices), "the fitter must reject dry-run files");
+      // The fitter normalises old plan names the same way
+      for (const [alias, norm] of [["max_5x", "max"], ["max_20x", "ultra"], ["ultra", "ultra"], ["team", "team"]]) {
+        const segs = QW.buildSegments([{ file: "dry", error: null, header: { ...sub.header, plan: alias, simulated: false }, rows: sub.rows }], prices);
+        assert.ok(segs.length > 0 && segs.every((s) => s.plan === norm && s.group.includes(`|${norm}|`)), `fitter plan ${alias} → ${norm}`);
+      }
+    }
+    const bad = run("max_10x", path.join(tmp, "out-bad"));
+    assert.notEqual(bad.status, 0, "an unknown plan must fail");
+    assert.match(bad.stderr + bad.stdout, /unknown plan max_10x/);
+    const help = probe(["help"]);
+    assert.match(help.stdout + help.stderr, /--plan\s+pro \| max \(default\) \| ultra \| team/);
+    assert.ok(!fs.existsSync(path.join(tmp, ".claude")) && !fs.existsSync(path.join(tmp, ".claude.json")), "dry run must not touch Claude credentials");
+    assert.deepEqual(fs.readdirSync(subsDir).sort(), before, "dry run wrote into data/quota-weights/submissions");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Agent SDK client step flag in refresh-data.mjs matches the dataset", () => {
+  const src = fs.readFileSync(path.join(ROOT, "scripts", "refresh-data.mjs"), "utf8");
+  const flag = src.match(/^const APPLY_SDK_CLIENT_MULTIPLIER = (true|false);$/m)?.[1];
+  assert.ok(flag, "APPLY_SDK_CLIENT_MULTIPLIER missing from scripts/refresh-data.mjs");
+  assert.equal(relStats.sdkClient.on, flag === "true", `flag ${flag} but stats.reliability.sdkClient.on ${relStats.sdkClient.on} (rerun refresh-data.mjs)`);
+  const app = appWithData();
+  app.state.costMode = "turn";
+  const withStep = app.getAllEntriesResolved().filter((r) => r.clientFactor);
+  if (flag === "false") assert.equal(withStep.length, 0, "SDK step applied while the flag is off");
+  else assert.ok(withStep.length > 0 && withStep.every((r) => near(r.subsidy, r.subsidyMultiple * (r.quotaMix?.turn?.f ?? 1) * r.clientFactor.turn.f)));
+});
+
+test("Fable 5.2 on Claude Max / Ultra does not reuse the Fable 5.1 multiplier", () => {
+  for (const plan of ["Claude Max", "Claude Ultra"]) {
+    const m = (id) => [...new Set(entries.filter((e) => e.plan === plan && e.baseModelId === id).map((e) => e.subsidyMultiple))];
+    const f52 = m("claude-fable-5-2");
+    const f51 = m("claude-fable-5-1");
+    assert.equal(f52.length, 1, `${plan}: Fable 5.2 multiples ${f52}`);
+    if (f51.length) assert.ok(Math.abs(f52[0] / f51[0] - 1) > 0.05, `${plan}: Fable 5.2 ${f52[0]}× equals Fable 5.1 ${f51[0]}×`);
+    assert.ok(!entries.some((e) => e.plan === plan && e.baseModelId === "claude-fable-5-2" && chains[e.rel.chain].steps.some((x) => x.k === "M4" || x.k === "M5")), `${plan}: Fable 5.2 still on a placeholder step`);
+  }
+});
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);
 if (failed > 0) {
