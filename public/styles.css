@@ -2140,3 +2140,9 @@ input[type="radio"]:focus-visible {
   color: var(--muted);
   cursor: help;
 }
+
+/* Drawer tables: hover lights every cell, including zebra cells and the sticky model column */
+.plan-matrix tbody tr:hover > td,
+.prov-table tbody tr:hover > td {
+  background-color: var(--row-hover);
+}

@@ -89,6 +89,7 @@ const state = {
   cheapestPlanOnly: true,
   cheapestEffortOnly: true,
   expandedPlans: new Set(),
+  openSources: new Set(), // plans whose "Where the subsidy numbers come from" is open (survives re-renders)
   sortKey: "effectiveCost",
   sortDir: "asc",
 };
@@ -712,7 +713,8 @@ function renderProvenance(planEntries, models) {
         )
         .join("")
     : "";
-  return `<details class="prov-details"><summary>Where the subsidy numbers come from</summary><table class="prov-table" aria-label="Subsidy sources">
+  const planKey = planEntries[0].plan || "";
+  return `<details class="prov-details" data-plan="${esc(planKey)}"${state.openSources.has(planKey) ? " open" : ""}><summary>Where the subsidy numbers come from</summary><table class="prov-table" aria-label="Subsidy sources">
     <thead><tr><th>Model</th><th class="prov-num">Subsidy</th><th>Source</th><th>Data date</th></tr></thead>
     <tbody>${rows}${creditRows}</tbody>
   </table></details>`;
@@ -1662,6 +1664,18 @@ $("billing").addEventListener("change", (e) => {
 
 // Two-option settings are radio pairs (segmented buttons on phones) over a hidden <select>,
 // so URLs, reset and the existing change handlers keep working on the select.
+// Remember open source tables across re-renders (theme switch, filter changes)
+$("barChart")?.addEventListener(
+  "toggle",
+  (e) => {
+    const d = e.target;
+    if (!d?.classList?.contains("prov-details")) return;
+    if (d.open) state.openSources.add(d.dataset.plan);
+    else state.openSources.delete(d.dataset.plan);
+  },
+  true
+);
+
 // "?" help tips: hover shows the title; a tap or click toggles the same text inline (phones have no hover)
 if (document.querySelectorAll) {
   for (const btn of document.querySelectorAll(".help-tip")) {

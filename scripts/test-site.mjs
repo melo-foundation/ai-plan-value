@@ -1999,8 +1999,15 @@ test("Plan drawer sources: a table with plain-language sources and a date column
   assert.ok(planEntries.length > 0, `no ${plan} rows`);
   const models = [...new Set(planEntries.map((e) => String(e.modelDisplay).replace(/\s*\(.*\)$/, "")))].map((baseName) => ({ baseName }));
   const html = app.renderProvenance(planEntries, models);
-  assert.ok(/<details class="prov-details"><summary>[^<]+<\/summary><table class="prov-table"/.test(html), "sources must render as a table, collapsed by default");
-  assert.ok(!/<details class="prov-details" open/.test(html), "sources collapsed by default");
+  assert.ok(/<details class="prov-details"[^>]*><summary>[^<]+<\/summary><table class="prov-table"/.test(html), "sources must render as a table, collapsed by default");
+  assert.ok(!/<details class="prov-details"[^>]* open/.test(html), "sources collapsed by default");
+  // Open state survives re-renders (theme switch, filter changes)
+  app.state.openSources.add(plan);
+  assert.ok(/<details class="prov-details"[^>]* open>/.test(app.renderProvenance(planEntries, models)), "an opened sources table stays open after re-render");
+  app.state.openSources.delete(plan);
+  // Hover lights every cell, including zebra cells and the sticky model column
+  assert.equal(cssDecl(null, ".prov-table tbody tr:hover > td", "background-color"), "var(--row-hover)");
+  assert.equal(cssDecl(null, ".plan-matrix tbody tr:hover > td", "background-color"), "var(--row-hover)");
   assert.deepEqual([...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]).slice(0, 4), ["Model", "Subsidy", "Source", "Data date"]);
   assert.ok(/class="prov-date">\d{4}-\d{2}-\d{2}</.test(html), "dates must sit in their own column");
   const visible = html.replace(/ title="[^"]*"/g, ""); // the page's own wording stays on hover only
