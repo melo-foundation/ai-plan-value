@@ -665,10 +665,8 @@ function renderProvenance(planEntries, models) {
   return `<div class="prov-list" aria-label="Subsidy sources">${lines}${creditLines}</div>`;
 }
 
-function renderBarChart(allRows, allResolved) {
-  const host = $("barChart");
-  const rows = allRows.filter((r) => passesConf(r, state.minConf));
-
+// The bars the chart shows for a set of rows: deduplicated by the cheapest-plan / cheapest-effort toggles, cheapest first.
+function chartBars(rows) {
   // Deduplicate bar chart according to cheapestPlanOnly & cheapestEffortOnly toggles:
   // - both checked (default): 1 bar per base model (cheapest plan + cheapest qualifying effort)
   // - cheapestPlanOnly only:  1 bar per (model, effort) variant (cheapest plan for each effort)
@@ -696,6 +694,12 @@ function renderBarChart(allRows, allResolved) {
   }
 
   bars.sort((a, b) => a.effectiveCost - b.effectiveCost || (b.score ?? 0) - (a.score ?? 0));
+  return bars;
+}
+
+function renderBarChart(allRows, allResolved) {
+  const host = $("barChart");
+  const bars = chartBars(allRows.filter((r) => passesConf(r, state.minConf)));
 
   if (!bars.length) {
     host.innerHTML = `<div class="empty">No plans match these limits.</div>`;
@@ -1377,7 +1381,9 @@ function render() {
   renderBarChart(rows, allResolved);
   renderTable(rows);
   // Banner: rows below the default (Medium) now on view. Footer: rows at the next level down, revealed one level per "Show".
-  const below = rows.filter((r) => LEVEL_RANK[r.level] > LEVEL_RANK.medium);
+  // Counted on the chart's bars (deduplicated), not the full table rows
+  const shownBars = chartBars(rows);
+  const below = shownBars.filter((r) => LEVEL_RANK[r.level] > LEVEL_RANK.medium);
   const lowShown = below.filter((r) => r.level === "low").length;
   const specShown = below.length - lowShown;
   $("extrapBanner").hidden = below.length === 0;
@@ -1385,7 +1391,8 @@ function render() {
     lowShown && specShown ? "low-confidence and speculative" : specShown ? "speculative" : "low-confidence"
   } ${below.length === 1 ? "row" : "rows"} shown`;
   const next = LEVELS[LEVEL_RANK[state.minConf] + 1];
-  const hidden = next ? getFilteredRows(allResolved, next).length - rows.length : 0;
+  // Bars that would appear (or replace a bar) at the next level down
+  const hidden = next ? chartBars(getFilteredRows(allResolved, next)).filter((r) => r.level === next).length : 0;
   $("extrapFooter").hidden = hidden <= 0;
   $("extrapFooterText").textContent = next
     ? `${hidden} ${{ medium: "medium-confidence", low: "low-confidence", speculative: "speculative" }[next]} ${hidden === 1 ? "row" : "rows"} hidden`

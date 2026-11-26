@@ -1537,7 +1537,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
   const ctx = vm.createContext(g);
   vm.runInContext(appJs.replace(/\bimport\.meta\.url\b/g, JSON.stringify("http://localhost/app.js?v=test")), ctx, { filename: "public/app.js" });
   const api = vm.runInContext(
-    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, relTooltip, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
+    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
     ctx
   );
   const app = { ...api, $: document.getElementById, document, location, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
@@ -1767,8 +1767,10 @@ test("Reliability display: glyph after the model name, tooltip on the whole name
     app.state.minConf = level;
     app.render();
     const all = app.getAllEntriesResolved();
-    const shownRows = app.getFilteredRows(all);
+    // Counts follow the chart's deduplicated bars, not the full table rows
+    const shownRows = app.chartBars(app.getFilteredRows(all));
     const below = shownRows.filter((r) => app.LEVEL_RANK[r.level] > app.LEVEL_RANK.medium);
+    assert.equal(app.$("barChart").innerHTML.split('<div class="bar-row').length - 1, shownRows.length, `${level}: chart bars != chartBars()`);
     assert.equal(app.$("extrapBanner").hidden, below.length === 0, `${level}: banner visibility`);
     if (below.length) assert.ok(app.$("extrapBannerText").textContent.startsWith(`${below.length} `), `${level}: banner counts every row below Medium`);
     if (level === "speculative") {
@@ -1776,10 +1778,13 @@ test("Reliability display: glyph after the model name, tooltip on the whole name
       continue;
     }
     const nextLevel = NEXT[level];
-    const hidden = app.getFilteredRows(all, nextLevel).length - shownRows.length;
-    assert.ok(hidden > 0, `${level}: expected hidden rows`);
+    const hidden = app.chartBars(app.getFilteredRows(all, nextLevel)).filter((r) => r.level === nextLevel).length;
+    if (hidden === 0) {
+      assert.equal(app.$("extrapFooter").hidden, true, `${level}: no footer when no chart bar would change`);
+      continue;
+    }
     assert.equal(app.$("extrapFooter").hidden, false, `${level}: footer must show`);
-    assert.equal(app.$("extrapFooterText").textContent, `${hidden} ${WORD[nextLevel]} rows hidden`, `${level}: footer text`);
+    assert.equal(app.$("extrapFooterText").textContent, `${hidden} ${WORD[nextLevel]} ${hidden === 1 ? "row" : "rows"} hidden`, `${level}: footer text`);
     // "Show" reveals exactly the next level
     app.$("enableExtrapBtn").fire("click");
     assert.equal(app.state.minConf, nextLevel, `${level}: Show must step to ${nextLevel}`);
