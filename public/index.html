@@ -16,6 +16,14 @@
           document.documentElement.style.setProperty("--egg-cover", c);
         }
       } catch {}
+      // ?blackout: apply the near-black theme before first paint
+      try {
+        if (new URLSearchParams(location.search).has("blackout")) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          document.documentElement.classList.add("blackout");
+          document.documentElement.style.setProperty("--outer-bg", "#010101");
+        }
+      } catch {}
     </script>
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="AI Plan Value" />

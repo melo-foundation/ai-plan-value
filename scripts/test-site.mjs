@@ -2271,18 +2271,26 @@ test("Range mode reserves room beside the bars so the range label never wraps un
   assert.ok(!app.$("barChart").classList.contains("range-view"), "no range-view in Point mode");
 });
 
-test("?bg=RRGGBB forces dark theme with that page background, keeps it in the URL, and saves nothing", () => {
-  const app = loadApp("?bg=010101", { data: dataset });
+test("?blackout gives a near-black dark theme, stays in the URL, and saves nothing", () => {
+  const app = loadApp("?blackout", { data: dataset });
   app.render();
   const root = app.document.documentElement;
   assert.equal(root.getAttribute("data-theme"), "dark");
+  assert.ok(root.classList.contains("blackout"));
   assert.equal(root.style.getPropertyValue("--outer-bg"), "#010101");
-  assert.equal(app.localStorage.getItem("ai-plan-value-theme"), null, "bg link must not change the saved theme");
+  assert.equal(app.localStorage.getItem("ai-plan-value-theme"), null, "blackout must not change the saved theme");
+  app.state.minScore = 50;
   app.syncUrlFromState();
-  assert.match(app.location.search, /bg=010101/);
-  const bad = loadApp("?bg=red;x", { data: dataset });
-  bad.render();
-  assert.equal(bad.document.documentElement.style.getPropertyValue("--outer-bg") || "", "", "non-hex values are ignored");
+  assert.match(app.location.search, /(\?|&)blackout(&|$)/);
+  for (const v of ["--shell-bg", "--panel-head-top", "--filter-bg", "--zebra", "--title-top"]) {
+    const hex = cssDecl(null, 'html.blackout[data-theme="dark"]', v) || "";
+    const n = parseInt(hex.slice(1), 16);
+    const lum = ((n >> 16) + ((n >> 8) & 255) + (n & 255)) / 3;
+    assert.ok(/^#[0-9a-f]{6}$/i.test(hex) && lum < 32, `${v} is near-black (${hex})`);
+  }
+  const plain = loadApp("", { data: dataset });
+  plain.render();
+  assert.ok(!plain.document.documentElement.classList.contains("blackout"));
 });
 
 test("Chart model names are never cut off with an ellipsis", () => {

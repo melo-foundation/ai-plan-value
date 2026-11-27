@@ -2158,3 +2158,32 @@ input[type="radio"]:focus-visible {
 .bar-chart.range-view {
   --bar-label-room: 175px;
 }
+
+/* ?blackout: near-black dark theme; --outer-bg (#010101) is set from app.js */
+html.blackout[data-theme="dark"] {
+  --shell-bg: #09090a;
+  --shell-border: #222226;
+  --title-top: #17171a;
+  --title-bot: #0c0c0e;
+  --title-fg: #f0f0f3;
+  --title-sub: #9a9aa3;
+  --panel-head-top: #151518;
+  --panel-head-bot: #0e0e10;
+  --panel-head-fg: #d6d6dc;
+  --panel-border: #232327;
+  --filter-bg: #0d0d0f;
+  --fg: #e8e8ec;
+  --muted: #8d8d97;
+  --zebra: #0e0e10;
+  --row-hover: #1b1b1f;
+  --cell-border: #1d1d21;
+  --th-top: #151518;
+  --th-bot: #0e0e10;
+  --btn-top: #1d1d21;
+  --btn-bot: #121215;
+  --btn-border: #34343a;
+  --btn-fg: #ececf0;
+  --btn-shine: rgba(255, 255, 255, 0.05);
+  --thumb-shine: rgba(255, 255, 255, 0.06);
+  --grid-line: #19191c;
+}

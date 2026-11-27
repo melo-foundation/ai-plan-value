@@ -1362,7 +1362,7 @@ function syncControlsFromState() {
 function syncUrlFromState() {
   try {
     const params = new URLSearchParams();
-    if (BG_PARAM) params.set("bg", BG_PARAM);
+    if (BLACKOUT) params.set("blackout", "");
     const meta = activeBenchMeta();
     if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
     if (state.rankMode === "top") params.set("top", String(state.topN));
@@ -1408,7 +1408,7 @@ function syncUrlFromState() {
       params.set("sort", `${state.sortKey}:${state.sortDir}`);
     }
 
-    const qs = params.toString();
+    const qs = params.toString().replace(/(^|&)blackout=(?=&|$)/, "$1blackout");
     const nextSearch = qs ? `?${qs}` : "";
     if (window.location.search !== nextSearch) {
       window.history.replaceState(
@@ -1477,21 +1477,24 @@ function renderMeta() {
   }
 }
 
-// ?bg=RRGGBB: dark theme with that page background, for one visit (not saved)
-const BG_PARAM = /^[0-9a-f]{6}$/i.test(new URLSearchParams(window.location.search).get("bg") || "")
-  ? new URLSearchParams(window.location.search).get("bg").toLowerCase()
-  : null;
+// ?blackout: near-black dark theme for this visit (not saved)
+const BLACKOUT = new URLSearchParams(window.location.search).has("blackout");
+const BLACKOUT_BG = "#010101";
 
 function applyTheme(theme, { save = true } = {}) {
   document.documentElement.setAttribute("data-theme", theme);
-  if (BG_PARAM) document.documentElement.style.setProperty("--outer-bg", theme === "dark" ? `#${BG_PARAM}` : "");
+  if (BLACKOUT) {
+    const on = theme === "dark";
+    document.documentElement.classList.toggle("blackout", on);
+    document.documentElement.style.setProperty("--outer-bg", on ? BLACKOUT_BG : "");
+  }
   $("themeLabel").textContent = theme === "dark" ? "Light" : "Dark";
   if (save) localStorage.setItem("ai-plan-value-theme", theme);
   if (state.dataset) render();
 }
 
 function initTheme() {
-  if (BG_PARAM) return applyTheme("dark", { save: false });
+  if (BLACKOUT) return applyTheme("dark", { save: false });
   const saved = localStorage.getItem("ai-plan-value-theme");
   const initial =
     saved === "dark" || saved === "light"
@@ -1882,7 +1885,7 @@ $("cheapestEffortOnly").addEventListener("change", (e) => {
 
 $("themeBtn").addEventListener("click", () => {
   const cur = document.documentElement.getAttribute("data-theme");
-  applyTheme(cur === "dark" ? "light" : "dark", { save: !BG_PARAM });
+  applyTheme(cur === "dark" ? "light" : "dark", { save: !BLACKOUT });
 });
 
 const dialog = $("methodDialog");
@@ -1965,7 +1968,7 @@ loadStarCount();
 
   // Undo: fade a cover in the normal page's background colour over the slop page, reload, then fade it back out.
   async function undoSlop() {
-    const color = document.documentElement.getAttribute("data-theme") === "dark" ? "#161b22" : "#dce3ec";
+    const color = getComputedStyle(document.body).backgroundColor || "#161b22";
     const cover = document.createElement("div");
     cover.style.cssText = `position:fixed;inset:0;z-index:10000;background:${color};opacity:0;transition:opacity 0.6s ease`;
     document.body.appendChild(cover);
