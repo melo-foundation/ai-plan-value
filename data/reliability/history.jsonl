@@ -131,3 +131,9 @@
 {"t":"deploy","d":"2026-11-26T15:47:40.920Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T15:56:45.154Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.1926,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-26T16:25:29.190Z","counts":{"high":898,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.2264,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
+{"d":"2026-11-27","id":"MiniMax M Plan Go (CN Annual)|minimax-m3-1-flash","v":5.6505,"s":0.5809,"lo":2.684,"hi":11.9,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-27","id":"MiniMax M Plan Explore (CN)|minimax-m3-1-flash","v":5.8168,"s":0.5809,"lo":2.763,"hi":12.25,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-27","id":"MiniMax M Plan Explore (CN Annual)|minimax-m3-1-flash","v":6.9802,"s":0.5809,"lo":3.315,"hi":14.7,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-27","id":"MiniMax M Plan Build (CN)|minimax-m3-1-flash","v":5.9036,"s":0.5809,"lo":2.804,"hi":12.43,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"d":"2026-11-27","id":"MiniMax M Plan Build (CN Annual)|minimax-m3-1-flash","v":7.0844,"s":0.5809,"lo":3.365,"hi":14.92,"k":["S6","promo","raw","T45","P1"],"x":1}
+{"t":"deploy","d":"2026-11-27T01:29:24.049Z","counts":{"high":902,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.2264,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
