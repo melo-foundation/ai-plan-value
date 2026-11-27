@@ -138,3 +138,4 @@
 {"d":"2026-11-27","id":"MiniMax M Plan Build (CN Annual)|minimax-m3-1-flash","v":7.0844,"s":0.5809,"lo":3.365,"hi":14.92,"k":["S6","promo","raw","T45","P1"],"x":1}
 {"t":"deploy","d":"2026-11-27T01:29:24.049Z","counts":{"high":902,"medium":1000,"low":646,"speculative":142},"quadFails":2,"t3":{"codex":0.6786,"antigravity-cli":0.2264,"claude-code":0.1639,"opencode":0.1791},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-27T08:35:58.869Z","counts":{"high":909,"medium":1006,"low":648,"speculative":142},"quadFails":2,"t3":{"codex":0.6827,"antigravity-cli":0.2812,"claude-code":0.1742,"opencode":0.1771},"t3Sigma":0.153}
+{"t":"deploy","d":"2026-11-27T08:39:08.856Z","counts":{"high":909,"medium":1006,"low":648,"speculative":142},"quadFails":2,"t3":{"codex":0.6827,"antigravity-cli":0.2812,"claude-code":0.1742,"opencode":0.1771},"t3Sigma":0.153}
