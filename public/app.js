@@ -1362,6 +1362,7 @@ function syncControlsFromState() {
 function syncUrlFromState() {
   try {
     const params = new URLSearchParams();
+    if (BG_PARAM) params.set("bg", BG_PARAM);
     const meta = activeBenchMeta();
     if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
     if (state.rankMode === "top") params.set("top", String(state.topN));
@@ -1476,14 +1477,21 @@ function renderMeta() {
   }
 }
 
-function applyTheme(theme) {
+// ?bg=RRGGBB: dark theme with that page background, for one visit (not saved)
+const BG_PARAM = /^[0-9a-f]{6}$/i.test(new URLSearchParams(window.location.search).get("bg") || "")
+  ? new URLSearchParams(window.location.search).get("bg").toLowerCase()
+  : null;
+
+function applyTheme(theme, { save = true } = {}) {
   document.documentElement.setAttribute("data-theme", theme);
+  if (BG_PARAM) document.documentElement.style.setProperty("--outer-bg", theme === "dark" ? `#${BG_PARAM}` : "");
   $("themeLabel").textContent = theme === "dark" ? "Light" : "Dark";
-  localStorage.setItem("ai-plan-value-theme", theme);
+  if (save) localStorage.setItem("ai-plan-value-theme", theme);
   if (state.dataset) render();
 }
 
 function initTheme() {
+  if (BG_PARAM) return applyTheme("dark", { save: false });
   const saved = localStorage.getItem("ai-plan-value-theme");
   const initial =
     saved === "dark" || saved === "light"
@@ -1874,7 +1882,7 @@ $("cheapestEffortOnly").addEventListener("change", (e) => {
 
 $("themeBtn").addEventListener("click", () => {
   const cur = document.documentElement.getAttribute("data-theme");
-  applyTheme(cur === "dark" ? "light" : "dark");
+  applyTheme(cur === "dark" ? "light" : "dark", { save: !BG_PARAM });
 });
 
 const dialog = $("methodDialog");

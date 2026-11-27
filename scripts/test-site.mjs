@@ -1681,7 +1681,8 @@ class StubEl {
     this.hidden = false;
     this.open = false;
     this.disabled = false;
-    this.style = {};
+    const props = {};
+    this.style = { setProperty: (k, v) => { props[k] = v; }, getPropertyValue: (k) => props[k] ?? "" };
     this.dataset = {};
     this.attrs = {};
     this.children = [];
@@ -1772,7 +1773,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
       if (!mqs.has(q)) mqs.set(q, { matches: q === "(max-width: 600px)" ? phone : false, media: q, addEventListener() {}, removeEventListener() {} });
       return mqs.get(q);
     },
-    localStorage: { getItem: () => null, setItem() {} },
+    localStorage: (() => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; })(),
     sessionStorage: { getItem: () => null, setItem() {} },
     fetch: () => new Promise(() => {}),
     requestAnimationFrame: () => 0,
@@ -1797,7 +1798,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
     "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, plainSource, renderProvenance, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
     ctx
   );
-  const app = { ...api, $: document.getElementById, document, location, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
+  const app = { ...api, $: document.getElementById, document, location, localStorage: g.localStorage, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
   if (data) {
     app.state.dataset = data;
     app.render();
@@ -2268,6 +2269,20 @@ test("Range mode reserves room beside the bars so the range label never wraps un
   app.state.costView = "point";
   app.render();
   assert.ok(!app.$("barChart").classList.contains("range-view"), "no range-view in Point mode");
+});
+
+test("?bg=RRGGBB forces dark theme with that page background, keeps it in the URL, and saves nothing", () => {
+  const app = loadApp("?bg=010101", { data: dataset });
+  app.render();
+  const root = app.document.documentElement;
+  assert.equal(root.getAttribute("data-theme"), "dark");
+  assert.equal(root.style.getPropertyValue("--outer-bg"), "#010101");
+  assert.equal(app.localStorage.getItem("ai-plan-value-theme"), null, "bg link must not change the saved theme");
+  app.syncUrlFromState();
+  assert.match(app.location.search, /bg=010101/);
+  const bad = loadApp("?bg=red;x", { data: dataset });
+  bad.render();
+  assert.equal(bad.document.documentElement.style.getPropertyValue("--outer-bg") || "", "", "non-hex values are ignored");
 });
 
 test("Chart model names are never cut off with an ellipsis", () => {
