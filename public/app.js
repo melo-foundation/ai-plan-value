@@ -1362,7 +1362,7 @@ function syncControlsFromState() {
 function syncUrlFromState() {
   try {
     const params = new URLSearchParams();
-    if (BLACKOUT) params.set("blackout", "");
+    if (BLACKOUT) params.set(BLACKOUT, "");
     const meta = activeBenchMeta();
     if (state.benchKey !== "intelligenceIndex") params.set("bench", state.benchKey);
     if (state.rankMode === "top") params.set("top", String(state.topN));
@@ -1408,7 +1408,7 @@ function syncUrlFromState() {
       params.set("sort", `${state.sortKey}:${state.sortDir}`);
     }
 
-    const qs = params.toString().replace(/(^|&)blackout=(?=&|$)/, "$1blackout");
+    const qs = params.toString().replace(/(^|&)((?:ultra)?blackout)=(?=&|$)/, "$1$2");
     const nextSearch = qs ? `?${qs}` : "";
     if (window.location.search !== nextSearch) {
       window.history.replaceState(
@@ -1477,15 +1477,19 @@ function renderMeta() {
   }
 }
 
-// ?blackout: near-black dark theme for this visit (not saved)
-const BLACKOUT = new URLSearchParams(window.location.search).has("blackout");
-const BLACKOUT_BG = "#010101";
+// ?blackout: near-black dark theme; ?ultrablackout: pure black and white, no gradients. For this visit only (not saved)
+const BLACKOUT = (() => {
+  const p = new URLSearchParams(window.location.search);
+  return p.has("ultrablackout") ? "ultrablackout" : p.has("blackout") ? "blackout" : null;
+})();
+const BLACKOUT_BG = BLACKOUT === "ultrablackout" ? "#000000" : "#010101";
 
 function applyTheme(theme, { save = true } = {}) {
   document.documentElement.setAttribute("data-theme", theme);
   if (BLACKOUT) {
     const on = theme === "dark";
     document.documentElement.classList.toggle("blackout", on);
+    document.documentElement.classList.toggle("ultrablackout", on && BLACKOUT === "ultrablackout");
     document.documentElement.style.setProperty("--outer-bg", on ? BLACKOUT_BG : "");
   }
   $("themeLabel").textContent = theme === "dark" ? "Light" : "Dark";

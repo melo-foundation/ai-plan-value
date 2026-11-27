@@ -2187,3 +2187,66 @@ html.blackout[data-theme="dark"] {
   --thumb-shine: rgba(255, 255, 255, 0.06);
   --grid-line: #19191c;
 }
+
+/* ?ultrablackout: pure black and white, no gradients, shadows or tints */
+html.ultrablackout[data-theme="dark"] {
+  --outer-bg: #000;
+  --shell-bg: #000;
+  --shell-border: #fff;
+  --title-top: #000;
+  --title-bot: #000;
+  --title-fg: #fff;
+  --title-sub: #fff;
+  --panel-head-top: #000;
+  --panel-head-bot: #000;
+  --panel-head-fg: #fff;
+  --panel-border: #fff;
+  --filter-bg: #000;
+  --fg: #fff;
+  --muted: #fff;
+  --zebra: #000;
+  --row-hover: #000;
+  --cell-border: #fff;
+  --th-top: #000;
+  --th-bot: #000;
+  --btn-top: #000;
+  --btn-bot: #000;
+  --btn-border: #fff;
+  --btn-fg: #fff;
+  --btn-shine: transparent;
+  --thumb-shine: transparent;
+  --link: #fff;
+  --grid-line: #fff;
+}
+html.ultrablackout[data-theme="dark"] *,
+html.ultrablackout[data-theme="dark"] *::before,
+html.ultrablackout[data-theme="dark"] *::after {
+  background-image: none !important;
+  background-color: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  outline-color: #fff !important;
+  accent-color: #fff;
+  opacity: 1;
+}
+html.ultrablackout[data-theme="dark"] .bar-fill,
+html.ultrablackout[data-theme="dark"] input[type="radio"]:checked::before,
+html.ultrablackout[data-theme="dark"] .radio-opt input:checked + span {
+  background-color: #fff !important;
+  color: #000 !important;
+}
+/* Vendor thumb selectors in separate rules: one unknown selector drops a whole list */
+html.ultrablackout[data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
+  background-color: #fff !important;
+}
+html.ultrablackout[data-theme="dark"] input[type="range"]::-moz-range-thumb {
+  background-color: #fff !important;
+}
+html.ultrablackout[data-theme="dark"] tr:hover > td {
+  text-decoration: underline;
+}
+html.ultrablackout[data-theme="dark"] input[type="checkbox"]:checked {
+  background: #000 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.2 4.8 8.9 9.8 3.1' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E") center / 11px 11px no-repeat !important;
+}

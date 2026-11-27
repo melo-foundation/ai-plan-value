@@ -2293,6 +2293,24 @@ test("?blackout gives a near-black dark theme, stays in the URL, and saves nothi
   assert.ok(!plain.document.documentElement.classList.contains("blackout"));
 });
 
+test("?ultrablackout is pure black and white with gradients and shadows removed", () => {
+  const app = loadApp("?ultrablackout", { data: dataset });
+  app.render();
+  const root = app.document.documentElement;
+  assert.equal(root.getAttribute("data-theme"), "dark");
+  assert.ok(root.classList.contains("ultrablackout"));
+  assert.equal(root.style.getPropertyValue("--outer-bg"), "#000000");
+  app.syncUrlFromState();
+  assert.match(app.location.search, /(\?|&)ultrablackout(&|$)/);
+  const sel = 'html.ultrablackout[data-theme="dark"] *';
+  assert.match(cssDecl(null, sel, "background-image") || "", /^none/);
+  assert.match(cssDecl(null, sel, "box-shadow") || "", /^none/);
+  for (const v of ["--shell-bg", "--panel-head-top", "--btn-top", "--zebra", "--fg", "--muted", "--link"]) {
+    const hex = (cssDecl(null, 'html.ultrablackout[data-theme="dark"]', v) || "").toLowerCase();
+    assert.ok(["#000", "#fff", "transparent"].includes(hex), `${v} is pure black or white (${hex})`);
+  }
+});
+
 test("Chart model names are never cut off with an ellipsis", () => {
   for (const r of cssRules) {
     if (!r.selectors.some((x) => /^\.bar-model$/.test(x))) continue;

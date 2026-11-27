@@ -16,12 +16,15 @@
           document.documentElement.style.setProperty("--egg-cover", c);
         }
       } catch {}
-      // ?blackout: apply the near-black theme before first paint
+      // ?blackout / ?ultrablackout: apply the theme before first paint
       try {
-        if (new URLSearchParams(location.search).has("blackout")) {
+        const q = new URLSearchParams(location.search);
+        const ultra = q.has("ultrablackout");
+        if (ultra || q.has("blackout")) {
           document.documentElement.setAttribute("data-theme", "dark");
           document.documentElement.classList.add("blackout");
-          document.documentElement.style.setProperty("--outer-bg", "#010101");
+          if (ultra) document.documentElement.classList.add("ultrablackout");
+          document.documentElement.style.setProperty("--outer-bg", ultra ? "#000000" : "#010101");
         }
       } catch {}
     </script>
