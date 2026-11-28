@@ -2800,6 +2800,87 @@ test("kits: quota-measurement issue form has name and body", () => {
   for (const id of ["plan", "harness", "model", "effort", "result", "unusual"]) assert.match(y, new RegExp(`^\\s+id:\\s*${id}\\s*$`, "m"), `no field ${id}`);
 });
 
+// ---- kits/NEEDED.md (scripts/measurement-needs.mjs) ----
+const MN = await import("./measurement-needs.mjs");
+const NEEDED_FILE = path.join(ROOT, "kits", "NEEDED.md");
+const neededRows = (md) =>
+  md
+    .split("\n")
+    .filter((l) => /^\| \d+ \|/.test(l))
+    .map((l) => {
+      const c = l.split(/(?<!\\)\|/).slice(1, -1).map((x) => x.trim().replace(/\\\|/g, "|"));
+      return { rank: +c[0], plan: c[1], harness: c[2], why: c[3], first: c[4], kit: c[5] };
+    });
+
+test("Most needed: generator is deterministic and kits/NEEDED.md is current", () => {
+  const a = MN.renderNeeded(dataset);
+  const b = MN.renderNeeded(structuredClone(dataset));
+  assert.equal(a, b, "two runs differ");
+  const shuffled = structuredClone(dataset);
+  shuffled.entries.reverse();
+  shuffled.stats.reliability.consistency.reverse();
+  assert.equal(MN.renderNeeded(shuffled), a, "output depends on entry order");
+  assert.ok(fs.existsSync(NEEDED_FILE), "kits/NEEDED.md missing (node scripts/measurement-needs.mjs)");
+  assert.equal(fs.readFileSync(NEEDED_FILE, "utf8"), a, "kits/NEEDED.md is stale (node scripts/measurement-needs.mjs)");
+  const rows = neededRows(a);
+  assert.ok(rows.length >= 10, `only ${rows.length} plans listed`);
+  rows.forEach((r, i) => assert.equal(r.rank, i + 1, "ranks are not 1..n"));
+  assert.equal(new Set(rows.map((r) => r.plan)).size, rows.length, "a plan is listed twice");
+  for (const r of rows) assert.ok(r.why && r.first && r.kit, `empty cell on ${r.plan}`);
+});
+
+test("Most needed: every plan with a disagreement fail is listed with its model", () => {
+  const rows = neededRows(fs.readFileSync(NEEDED_FILE, "utf8"));
+  const byPlan = new Map(rows.map((r) => [r.plan, r]));
+  const fails = (dataset.stats.reliability.consistency || []).filter((c) => c.verdict === "fail");
+  const chainOf = new Map(Object.entries(dataset.stats.chains).map(([k, v]) => [k, v.entity]));
+  for (const c of fails) {
+    const e = entries.find((x) => MN.isDefaultVisible(x) && chainOf.get(x.rel?.chain) === c.flagged);
+    const plan = MN.planGroup(e ? e.plan : c.q || c.p);
+    const r = byPlan.get(plan);
+    assert.ok(r, `${plan} (flagged ${c.flagged}) missing from kits/NEEDED.md`);
+    assert.match(r.why, /sources disagree/, `${plan}: no "sources disagree"`);
+  }
+});
+
+test("Most needed: plans with a kit link to it; the rest say No kit yet", () => {
+  const rows = neededRows(fs.readFileSync(NEEDED_FILE, "utf8"));
+  let linked = 0;
+  for (const r of rows) {
+    const f = MN.familyOf(r.plan);
+    if (f?.kit) {
+      linked++;
+      assert.equal(r.kit, `[Kit: ${f.kit.name}](${f.kit.href})`, `${r.plan}: kit cell ${r.kit}`);
+      assert.ok(fs.existsSync(path.join(ROOT, "kits", f.kit.href)), `${f.kit.href} does not exist`);
+    } else assert.match(r.kit, /^No kit yet/, `${r.plan}: kit cell ${r.kit}`);
+  }
+  assert.ok(rows.some((r) => r.plan === "ChatGPT Plus" && /Kit: Codex/.test(r.kit)), "ChatGPT Plus row has no Codex kit link");
+  assert.ok(rows.some((r) => /^Claude /.test(r.plan) && /Kit: Claude Code/.test(r.kit)), "no Claude row links the Claude Code kit");
+  assert.ok(linked > 0);
+  const idx = fs.readFileSync(path.join(ROOT, "kits", "README.md"), "utf8");
+  assert.match(idx, /\[Most needed\]\(NEEDED\.md\)/, "kits/README.md has no Most needed link");
+  assert.match(idx, /\(METHODS\.md\)/, "kits/README.md has no METHODS.md link");
+});
+
+test("Most needed: plain wording, no personal paths, names or emails", () => {
+  for (const rel of ["kits/NEEDED.md", "kits/METHODS.md", "kits/README.md", "scripts/measurement-needs.mjs"]) {
+    const t = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    const bad = t.match(/\/home\/[a-z]|\/Users\/[A-Za-z]|meowous3|claude-quota-weights|[\w.+-]+@[\w-]+\.[\w.]+/i);
+    assert.ok(!bad || /noreply/.test(bad[0]), `${rel} contains ${bad?.[0]}`);
+  }
+  const md = fs.readFileSync(NEEDED_FILE, "utf8");
+  const table = neededRows(md).map((r) => r.why).join("\n");
+  assert.ok(!/σ|\bpp\b|\b(S[1-7]|P[12]|X1|T45|T90)\b|sigma/i.test(table), "What's wrong uses σ, pp or step codes");
+});
+
+test("Most needed: refresh writes kits/NEEDED.md and CI commits it with the ledger", () => {
+  const src = fs.readFileSync(path.join(ROOT, "scripts", "refresh-data.mjs"), "utf8");
+  assert.match(src, /writeNeeded\(payload\)/, "refresh-data.mjs does not call writeNeeded");
+  const step = workflowYml.split(/\n      - name: /).find((s) => /^Commit reliability history/.test(s)) || "";
+  assert.match(step, /N=kits\/NEEDED\.md/, "commit step does not name kits/NEEDED.md");
+  assert.match(step, /git -C \/tmp\/hist-wt add "\$N"/, "commit step does not add kits/NEEDED.md");
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);
 if (failed > 0) {
   process.exit(1);

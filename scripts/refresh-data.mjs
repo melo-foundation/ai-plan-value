@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import * as REL from "./reliability.mjs";
 import { applyBillingPeriods } from "./billing-periods.mjs";
 import { applyIncludedCredits } from "./included-credits.mjs";
+import { writeNeeded, NEEDED_PATH } from "./measurement-needs.mjs";
 
 // Claude quota token weighting (docs/QUOTA-WEIGHTS.md): a Claude first-party subsidy is rescaled from
 // the sample's token mix to each cost metric's mix only when every quota-weight cell the row uses
@@ -5317,6 +5318,13 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   log(
     `Wrote ${OUTPUT_PATH} (${payload.stats.totalEntries} entries across ${payload.stats.uniqueVariants} effort variants / ${payload.stats.uniqueModels} base models)`
   );
+  // kits/NEEDED.md: plans ranked by need for a quota measurement. A failure here never fails the refresh.
+  try {
+    writeNeeded(payload);
+    log(`Wrote ${NEEDED_PATH}`);
+  } catch (err) {
+    log(`kits/NEEDED.md not written: ${err?.message || err}`);
+  }
   return payload;
 }
 
