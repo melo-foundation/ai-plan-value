@@ -1,0 +1,36 @@
+{
+  "kit": "harness",
+  "name": "Harness quota kit",
+  "readme": "kits/harness/README.md",
+  "command": "node kits/harness/scripts/harness-quota.mjs",
+  "harnesses": [
+    {
+      "id": "gemini",
+      "harness": "Gemini CLI",
+      "plans": ["Google AI Pro", "Google AI Ultra 5x", "Google AI Ultra 20x"],
+      "planTest": "^Google AI\\b",
+      "defaultModel": "gemini-3.8-flash",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "undocumented",
+      "unit": "% of the model's daily requests",
+      "window": "daily",
+      "windowsPerMonth": 30,
+      "tokens": "per call (telemetry file); per task (JSON output) as fallback"
+    },
+    {
+      "id": "grok",
+      "harness": "Grok Build",
+      "plans": ["SuperGrok Lite", "SuperGrok", "SuperGrok Plus", "SuperGrok Heavy", "X Plus", "X Ultra", "SuperGrok Lite, legacy", "SuperGrok, legacy", "SuperGrok Plus, legacy", "SuperGrok Heavy, legacy"],
+      "planTest": "^(SuperGrok|X (Plus|Ultra))\\b",
+      "defaultModel": "grok-4.7",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "undocumented",
+      "unit": "% of the weekly usage pool",
+      "window": "weekly",
+      "windowsPerMonth": 4,
+      "tokens": "per task (JSON output)"
+    }
+  ]
+}
