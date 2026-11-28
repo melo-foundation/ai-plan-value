@@ -110,7 +110,7 @@ async function cmdCheck(a) {
     if (!ad.meter.auto) warn.push(`${ad.name} has no automatic meter`);
     else if (v) {
       try {
-        const r = await ad.meter.auto.read({ bin, model: s.model, dir: os.tmpdir(), timeoutMs: 90000 });
+        const r = await ad.meter.auto.read({ bin, model: s.model, dir: os.tmpdir(), timeoutMs: 90000, window: s.window, a });
         log(`meter reading ${r.pct}%${r.resetsAt ? ` · resets ${new Date(r.resetsAt * 1000).toLocaleString()}` : ""}${r.plan ? ` · plan ${r.plan}` : ""}`);
         if (s.plan && r.plan && r.plan !== s.plan) warn.push(`meter reports ${r.plan}, not ${s.plan}`);
       } catch (e) {
@@ -288,7 +288,7 @@ async function cmdRun(a) {
     let r = null;
     if (mode === "auto") {
       try {
-        r = await ad.meter.auto.read({ bin, model, dir: workRoot, timeoutMs: meterTimeoutMs });
+        r = await ad.meter.auto.read({ bin, model, dir: workRoot, timeoutMs: meterTimeoutMs, window, a });
       } catch (e) {
         log(`auto meter failed: ${redact(e.message)}; switching to manual`);
         mode = "manual";
@@ -518,6 +518,8 @@ run options
   --bin               harness binary
   --site              combined.json (default public/data/combined.json)
   --gemini-sandbox    docker | podman | sandbox-exec (Gemini CLI)
+  --qwen-sandbox      docker | podman | sandbox-exec (Qwen Code)
+  --bl                bl binary for the Qwen Code automatic meter
   --force             start with other harness processes open or preflight warnings, or reuse a tag
   --dry-run           print the commands; no calls
 `;

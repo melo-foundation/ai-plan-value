@@ -1,4 +1,4 @@
-# Harness quota kit (Gemini CLI, Grok Build)
+# Harness quota kit (Gemini CLI, Grok Build, Factory Droid, Kimi Code, Qwen Code, Mistral Vibe)
 
 Measures the API dollars behind each percentage point of a subscription's usage meter by running the vendor's coding CLI on the Codex kit's fixed workload. It also gives the plan's monthly API value and subsidy multiple.
 
@@ -29,6 +29,23 @@ Measures the API dollars behind each percentage point of a subscription's usage 
 | Sandbox | `--sandbox` with `GEMINI_SANDBOX` = `docker`, `podman` or `sandbox-exec` (macOS), `--approval-mode yolo` | `--sandbox strict`, `--permission-mode bypassPermissions` |
 | Typical run (unverified) | 1–3 h, +25 pp of one day | 1–3 h, +10 pp of one week |
 
+| | Factory Droid | Kimi Code | Qwen Code | Mistral Vibe |
+|---|---|---|---|---|
+| `--harness` | `factory` | `kimi` | `qwen` | `mistral` |
+| Plans (`--plan`) | `Droid Pro`, `Droid Max` | `Kimi Plus`, `Kimi Pro`, `Kimi Max`, `Kimi Ultra`, `Kimi Moderato`, `Kimi Allegretto`, `Kimi Allegro`, and the `, legacy` variants | `阿里云百炼 Token Plan Lite (¥39)`, `… Essential (¥79)`, `… Standard (¥139)`, `… Pro (¥312)`, `Qwen Token Plan Standard` | `Mistral Vibe Pro` |
+| Install | `curl -fsSL https://app.factory.ai/cli \| sh`, plus `bubblewrap` on Linux | `curl -fsSL https://code.kimi.com/kimi-code/install.sh \| bash` or `npm install -g @moonshot-ai/kimi-code` | `npm install -g @qwen-code/qwen-code@latest` (Node 22+), plus Docker or Podman on Linux | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` |
+| Login | run `droid`, sign in in the browser (or `/login`) | `kimi login` | run `qwen`, `/auth` > Alibaba ModelStudio > Token Plan, paste the Token Plan key; `Qwen Token Plan Standard` = ModelStudio Singapore unverified | run `vibe`, sign in in the browser (or `vibe --setup`) |
+| Command | `node kits/harness/scripts/harness-quota.mjs run --harness factory --plan "Droid Pro"` | `node kits/harness/scripts/harness-quota.mjs run --harness kimi --plan "Kimi Pro"` | `node kits/harness/scripts/harness-quota.mjs run --harness qwen --plan "阿里云百炼 Token Plan Standard (¥139)"` | `node kits/harness/scripts/harness-quota.mjs run --harness mistral --plan "Mistral Vibe Pro"` |
+| Headless | `droid exec` | `kimi -p` | `qwen -p` | `vibe -p` |
+| Model (`--model`) | `claude-opus-5-5` (default) | `kimi-k3` (default; sent as `kimi-code/kimi-k3`, unverified) | `qwen4-max` (default), `qwen3.8-max`, `glm-5.3`, `deepseek-v4.1-flash-1017` | `mistral-large-4-0` (default), `mistral-medium-3.5` |
+| Effort (`--effort`) | `none`, `minimal`, `low`, `medium` (default), `high`, `xhigh`, `max`; per model | none | none | `default` (no `--thinking`), `off`, `low`, `medium`, `high`, `xhigh`, `max` |
+| Meter | % of the 7-day Standard Credits window (credits × model multiplier); the subsidy uses 7-day × 4; `--window 30d` × 1, `5h` none | % of the monthly total; legacy plans `--window weekly`, × 5 | % of the monthly Token Plan quota; `--window weekly` × 4, `5h` none | % of the monthly Vibe budget |
+| Meter mode | manual only | manual (default); `--auto-meter` calls the undocumented `GET api.kimi.com/coding/v1/usages` with `$KIMI_CODE_API_KEY`, else the CLI's stored access token while it is fresh | manual (default); `--auto-meter` runs `bl usage token-plan --output json` (field names undocumented) | manual (default); `--auto-meter` calls the undocumented `GET api.mistral.ai/v1/billing/budget` with `$MISTRAL_API_KEY` |
+| Where to read it (manual) | `/limits` in an interactive `droid` session: the 7-day % (screen format unverified) | `/usage` in an interactive `kimi` session: Monthly limit | [Bailian console](https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan) > Token Plan: the monthly % | [console](https://console.mistral.ai) > Code > CLI > View organization usage, or the usage gauge in the `vibe` footer (menu path unverified) |
+| Tokens | per task from `-o json` (`input_tokens` read as uncached, unverified); the requested model is recorded | per call from `~/.kimi-code/sessions/*/<session>/agents/*/wire.jsonl` | per call from the telemetry file; per task from `--output-format json` when the file is missing (always missing with Docker or Podman, unverified) | per task from `--output-dir` `export.json`; the requested model is recorded |
+| Sandbox | `--settings` file with `sandbox.enabled: true`, `mode: "whole-process"`; `--auto medium` | none: writes are not confined to the task folder; `-p` runs with `auto` permission | `--sandbox` with `QWEN_SANDBOX` = `docker`, `podman` or `sandbox-exec` (macOS), `--approval-mode yolo` | none on the host; `--approval-policy accept-edits` approves file edits inside the task folder and denies everything that asks (shell commands, paths outside) |
+| Typical run (unverified) | 1–3 h, +10 pp of one week | 1–3 h, +2 pp of one month | 1–3 h, +2 pp of one month | 1–3 h, +5 pp of one month |
+
 ## 1. Set up
 
 Clone the repo and run every command from its root:
@@ -41,6 +58,8 @@ Check the setup; it must end with `ok`:
     node kits/harness/scripts/harness-quota.mjs check --harness gemini --plan "Google AI Pro"
 
 Add `--auto-meter` to `check` to test the automatic meter; it makes no model call.
+
+Qwen Code automatic meter: `npm install -g bailian-cli`, then `bl auth login --console` with the account that holds the plan.
 
 Run the kit's tests:
 
@@ -75,7 +94,7 @@ The kit asks for the meter before the run, after 5 minutes idle, after every 5 t
 | `skip` | no reading this time |
 | `stop` | end the run here |
 
-Gemini CLI: open `gemini` in a second terminal when asked, type `/stats model`, then exit it.
+Gemini CLI: open `gemini` in a second terminal when asked, type `/stats model`, then exit it. Factory Droid and Kimi Code: the same with `droid` and `/limits`, `kimi` and `/usage`.
 
 ### Automatic readings
 
@@ -107,6 +126,11 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 | `check`: `close the processes listed above` | close them and run `check` again |
 | `check`: `no sandbox for Gemini CLI` | install Docker or Podman, or pass `--gemini-sandbox docker\|podman\|sandbox-exec` |
 | `check`: `bubblewrap (bwrap) not found` | install `bubblewrap` |
+| `check`: `no sandbox for Qwen Code` | install Docker or Podman, or pass `--qwen-sandbox docker\|podman\|sandbox-exec` |
+| `has no automatic meter` (Factory Droid) | run without `--auto-meter` |
+| `auto meter failed: Kimi /usages HTTP 401`, `access token expired` | run `kimi` once, or export `KIMI_CODE_API_KEY` |
+| `auto meter failed: bl … exited`, `hasQuotaData is false` | run `bl auth login --console` with the account that holds the plan, or pass `--bl <path>` |
+| `auto meter failed: MISTRAL_API_KEY is not set`, `HTTP 403` | export `MISTRAL_API_KEY` with a key that has `see_org_inference_usage`, or type the readings |
 | `meter at N%: +T pp would pass 85%` | run after the reset, or pass a smaller `--target-pp` |
 | `auto meter failed: …` | type the readings by hand; send the message with your result |
 | `run <tag> exists` | pick another `--tag` |
@@ -123,23 +147,25 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 
 | Option | Values | Default |
 |---|---|---|
-| `--harness` | `gemini`, `grok` | none |
+| `--harness` | `gemini`, `grok`, `factory`, `kimi`, `qwen`, `mistral` | none |
 | `--plan` | a plan from the table | none |
 | `--model` | harness model id | per harness |
-| `--effort` | Grok Build: see the table | `medium` |
+| `--effort` | Grok Build, Factory Droid, Mistral Vibe: see the tables | `medium`; Mistral `default` |
 | `--auto-meter` | on / off | off |
 | `--every` | tasks between manual readings | 5 |
-| `--target-pp` | meter points to use | Gemini 25, Grok 10 |
+| `--target-pp` | meter points to use | Gemini 25, Grok 10, Factory 10, Kimi 2, Qwen 2, Mistral 5 |
 | `--max-pct` | meter % to stop at | 85 |
-| `--window` | Gemini `daily`; Grok `weekly`, `monthly` | Gemini `daily`, Grok `weekly` |
+| `--window` | Gemini `daily`; Grok `weekly`, `monthly`; Factory `7d`, `30d`, `5h`; Kimi and Qwen `monthly`, `weekly`, `5h`; Mistral `monthly` | Gemini `daily`, Grok `weekly`, Factory `7d`, others `monthly` |
 | `--idle-min` | minutes | 5 |
 | `--task-timeout-min` | minutes | 25 |
 | `--max-tasks` | tasks | 200 |
 | `--meter-timeout-s` | seconds per automatic reading | 90 |
 | `--arm` | `A` (coding tasks), `B` (low-cache prompts) | `A` |
 | `--tag` | letters, digits, `.` `_` `-` | `<date>-<harness>-<arm>` |
-| `--bin` | path | `gemini`, `grok` |
+| `--bin` | path | `gemini`, `grok`, `droid`, `kimi`, `qwen`, `vibe` |
 | `--gemini-sandbox` | `docker`, `podman`, `sandbox-exec` | Docker, then Podman; `sandbox-exec` on macOS |
+| `--qwen-sandbox` | `docker`, `podman`, `sandbox-exec` | Docker, then Podman; `sandbox-exec` on macOS |
+| `--bl` | path to `bl` (Qwen Code automatic meter) | `bl` |
 | `--site` | path to `combined.json` | `public/data/combined.json` |
 | `--force` | start with other harness processes or preflight warnings, or reuse a tag | off |
 | `--dry-run` | print commands only | off |
