@@ -241,7 +241,7 @@ data/quota-weights/
   index.csv                      generated
   fit.json, fit.md               generated
 scripts/fit-quota-weights.mjs    --write, --simulate, --cell <key>, --loso
-scripts/quota-probe.mjs          runs the arms and writes a session file (see §8 Q3)
+kits/claude-code/scripts/quota-probe.mjs          runs the arms and writes a session file (see §8 Q3)
 docs/QUOTA-WEIGHTS.md            generated header + static protocol
 .github/ISSUE_TEMPLATE/quota-weights.yml
 ```
@@ -263,8 +263,8 @@ Weights are quota cost ÷ API list price. Fresh input = 1.
 
 Requirements: a Pro, Max, Ultra or Team plan; Claude Code ≥ 2.1.300; Node ≥ 20; the account idle on every other device.
 
-1. `node scripts/quota-probe.mjs probe` prints plan, both bars and reset times.
-2. `node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive`
+1. `node kits/claude-code/scripts/quota-probe.mjs probe` prints plan, both bars and reset times.
+2. `node kits/claude-code/scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive`
 3. Commit the file it writes under `data/quota-weights/sessions/anthropic/` and open a pull request, or attach it to a "Quota weights" issue.
 
 Values: 3 arms × 3 points on the weekly bar (about 10% of a week); 5 arms × 5 points on the 5h bar (about 30% of a window). Stops at 85% (5h) or 95% (weekly).
@@ -449,7 +449,7 @@ Switch-on sequence: weekly × interactive sessions arrive → fit → gate → s
 
 1. **Run the weekly × interactive protocol on your own subscription this week?** Recommended: yes. It is the fastest way to turn §0.3 from a guess into a number, and it is one of the two accounts G1 needs. Cost: about 10% of a week on Opus 5.5.
 2. **Model the client-label multiplier on the site?** Recommended: yes, as its own step, separate from mix. T3 Code drives Claude through the Agent SDK (`sdk-ts`); Fei's subsidies are taken as TUI usage (not verified per sample). A subsidy ÷ 2.1 (range 1.3–2.9 across six reports, five of them controlled, all on the 5h bar) for SDK-driven metrics on Claude plans is the current evidence; the weekly bar needs its own run (the `sdk` class of §1.3 gives it). Needs your decision because it moves Claude × T3 rows more than anything in this document.
-3. **Ship `scripts/quota-probe.mjs`?** Recommended: yes. Without a harness, submissions will differ in anchoring and controls and most will be unanchored (±17% per session instead of ±4%). Alternative: contribute a kind mode to kler/claude-usage-ab and depend on it.
+3. **Ship `kits/claude-code/scripts/quota-probe.mjs`?** Recommended: yes. Without a harness, submissions will differ in anchoring and controls and most will be unanchored (±17% per session instead of ±4%). Alternative: contribute a kind mode to kler/claude-usage-ab and depend on it.
 4. **Accept label-emulated sessions (`CLAUDE_CODE_ENTRYPOINT` set by hand)?** Recommended: store them, exclude them from validated fits. Setting the label changes how the account is metered; a real TUI session driven through tmux measures the same thing without that.
 5. **Accept a logging proxy on `ANTHROPIC_BASE_URL` as a meter source?** Recommended: accept, not require. The status line and `rate_limit_event` give the same whole-percent resolution since April 2026.
 6. **Which σ while off: symmetric or one-sided?** Recommended: one-sided toward higher real cost for Opus 5.5 and Sonnet 5.5, symmetric for Fable 5.2.

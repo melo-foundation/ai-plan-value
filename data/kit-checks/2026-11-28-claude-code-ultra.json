@@ -3,7 +3,7 @@
   "kit": "claude-code",
   "adapter": "claude-code",
   "date": "2026-11-28",
-  "command": "node scripts/quota-probe.mjs probe --ping",
+  "command": "node kits/claude-code/scripts/quota-probe.mjs probe --ping",
   "toolVersion": "Claude Code 2.1.332",
   "plan": "Claude Ultra",
   "result": "works",

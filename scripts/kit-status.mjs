@@ -66,7 +66,7 @@ function harnessIds() {
 
 /** kits/README.md Harness cell → [{ kit, id, label }]. */
 export function itemsForIndexHarness(cell, status) {
-  const c = cell.trim();
+  const c = cell.trim().replace(/^\[([^\]]+)\]\([^)]*\)$/, "$1");
   if (c === "Claude Code") return Object.keys(status.kits["claude-code"].adapters).map((id) => ({ kit: "claude-code", id, label: CLAUDE_LABELS[id] || id }));
   if (c === "Codex CLI") return Object.keys(status.kits.codex.adapters).map((id) => ({ kit: "codex", id, label: CODEX_LABELS[id] || id }));
   if (/^API key\b/.test(c)) return Object.keys(status.kits["api-plan"].adapters).map((id) => ({ kit: "api-plan", id, label: id }));

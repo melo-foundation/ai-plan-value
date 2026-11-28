@@ -3,7 +3,7 @@
   "kits": {
     "claude-code": {
       "name": "Claude Code",
-      "readme": "docs/QUOTA-WEIGHTS.md",
+      "readme": "kits/claude-code/README.md",
       "adapters": {
         "pro": {
           "status": "untested",

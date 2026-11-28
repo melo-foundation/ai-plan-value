@@ -14,7 +14,7 @@
  *
  * Model (§3.1): points_s = γ_g × Σ_k w_k × usd_sk + ε_s, w_input = 1, w_k ≥ 0, one γ per group
  * (account × plan × bar × client class × model × ISO week). Weights are shared inside a cell.
- * Zero dependencies (Node ≥ 20). Also imported by scripts/quota-probe.mjs and scripts/test-site.mjs.
+ * Zero dependencies (Node ≥ 20). Also imported by kits/claude-code/scripts/quota-probe.mjs and scripts/test-site.mjs.
  */
 
 import fs from "node:fs";

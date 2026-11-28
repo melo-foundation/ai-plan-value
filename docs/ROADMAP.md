@@ -6,7 +6,7 @@ Planned work, in order. Design notes live in `docs/design/`.
 
 Measure how Claude's subscription quota counts each token kind, so the Claude mix correction can be validated and Claude Max/Pro rows can rise from Low.
 
-- [x] Build `scripts/quota-probe.mjs`. It runs the protocol arms (`input`, `output`, `read`, `write1h`, `write5m`) in Claude Code, reads the meter on ticks (status line or `rate_limit_event`; `/usage` with `--meter manual`), and writes `quota-weights.session/1` JSONL.
+- [x] Build `kits/claude-code/scripts/quota-probe.mjs`. It runs the protocol arms (`input`, `output`, `read`, `write1h`, `write5m`) in Claude Code, reads the meter on ticks (status line or `rate_limit_event`; `/usage` with `--meter manual`), and writes `quota-weights.session/1` JSONL.
 - [ ] Record on our own subscription:
   - weekly bar, interactive client
   - 5h bar, interactive client

@@ -1,13 +1,13 @@
 ---
 name: Quota weights submission
-about: Submit a per-token-kind quota measurement from scripts/quota-probe.mjs
+about: Submit a per-token-kind quota measurement from kits/claude-code/scripts/quota-probe.mjs
 title: "[quota-weights] <plan> · <model> · <bar> · <client class>"
 labels: quota-weights
 ---
 
 <!-- Protocol and format: docs/QUOTA-WEIGHTS.md -->
 
-**Session file** (attach the `.jsonl` from `scripts/quota-probe.mjs`, or link it):
+**Session file** (attach the `.jsonl` from `kits/claude-code/scripts/quota-probe.mjs`, or link it):
 
 **Raw bundle** (attach the `.raw.jsonl`, or link a gist):
 
@@ -19,7 +19,7 @@ labels: quota-weights
 | Client class | <!-- interactive (tmux / guided) / sdk --> |
 | Meter | <!-- statusline / rate_limit_event / manual / oauth --> |
 | Claude Code version | <!-- claude --version --> |
-| Probe command | <!-- the full `node scripts/quota-probe.mjs run …` line --> |
+| Probe command | <!-- the full `node kits/claude-code/scripts/quota-probe.mjs run …` line --> |
 
 Output of `node scripts/fit-quota-weights.mjs --cell anthropic/<model>/<bar>/<class>`:
 

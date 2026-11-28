@@ -2590,7 +2590,7 @@ test("Quota probe: --dry-run needs no credentials; plans pro | max | ultra | tea
     const env = { PATH: path.join(tmp, "no-bin"), HOME: tmp, TMPDIR: tmp, XDG_CONFIG_HOME: path.join(tmp, "xdg") };
     const subsDir = path.join(ROOT, "data", "quota-weights", "submissions");
     const before = fs.readdirSync(subsDir).sort();
-    const probe = (args) => spawnSync(process.execPath, [path.join(ROOT, "scripts", "quota-probe.mjs"), ...args], { env, cwd: tmp, encoding: "utf8", timeout: 60000 });
+    const probe = (args) => spawnSync(process.execPath, [path.join(ROOT, "kits", "claude-code", "scripts", "quota-probe.mjs"), ...args], { env, cwd: tmp, encoding: "utf8", timeout: 60000 });
     const run = (plan, out) => probe(["run", "--dry-run", "--bar", "7d", "--class", "interactive", "--plan", plan, "--out", out]);
     const readSub = (dir) => {
       const files = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl") && !f.endsWith(".raw.jsonl"));
@@ -2955,8 +2955,8 @@ test("kit status: README Status cells match kits/status.json (node scripts/kit-s
   assert.equal(all["kits/api-plan/README.md"].filled, Object.keys(KIT_STATUS.kits["api-plan"].adapters).length, "a provider without a Status cell");
   assert.equal(all["kits/codex/README.md"].filled, Object.keys(KIT_STATUS.kits.codex.adapters).length, "a Codex plan without a Status cell");
   const idx = fs.readFileSync(path.join(ROOT, "kits", "README.md"), "utf8");
-  assert.match(idx, /\| Claude Code \| .* \| Tested: Ultra \(2026-11-28\)\. Untested: Pro, Max, Team \|/);
-  assert.match(idx, /\| Codex CLI \| .* \| Tested: Plus \(2026-11-27\)\. Untested: Pro 10x, Pro 20x, Pro 500 \|/);
+  assert.match(idx, /\| \[Claude Code\]\([^)]*\) \| .* \| Tested: Ultra \(2026-11-28\)\. Untested: Pro, Max, Team \|/);
+  assert.match(idx, /\| \[Codex CLI\]\([^)]*\) \| .* \| Tested: Plus \(2026-11-27\)\. Untested: Pro 10x, Pro 20x, Pro 500 \|/);
   // a flipped status changes the cell
   const flipped = structuredClone(KIT_STATUS);
   flipped.kits.harness.adapters.grok = { status: "tested", date: "2026-12-01", evidence: "x" };

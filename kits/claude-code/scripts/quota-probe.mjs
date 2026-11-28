@@ -4,7 +4,7 @@
  * Claude Code on your own subscription and writes a quota-weights.session/1 (anchored meter) or
  * quota-weights.segments/1 (polled / typed meter) file into data/quota-weights/submissions/.
  *
- * Spec: docs/design/quota-weight-methodology.md §1.2–§1.5, §2. Usage: docs/QUOTA-WEIGHTS.md.
+ * Spec: docs/design/quota-weight-methodology.md §1.2–§1.5, §2. Usage: kits/claude-code/README.md.
  *
  *   node scripts/quota-probe.mjs probe [--ping]
  *   node scripts/quota-probe.mjs run --model claude-opus-5-5 --bar 7d --class interactive --plan max [options]
@@ -33,7 +33,7 @@ import crypto from "node:crypto";
 import readline from "node:readline";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import * as QW from "./fit-quota-weights.mjs";
+import * as QW from "../../../scripts/fit-quota-weights.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const PROBE_VERSION = "1.0.0";
