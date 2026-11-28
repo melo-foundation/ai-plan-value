@@ -2764,6 +2764,42 @@ test("Methodology names our ChatGPT Plus measurement and links the kit", () => {
   );
 });
 
+const KITS_DIR = path.join(ROOT, "kits");
+
+test("kits: README index and Codex README exist", () => {
+  for (const rel of ["kits/README.md", "kits/codex/README.md"]) assert.ok(fs.existsSync(path.join(ROOT, rel)), `${rel} missing`);
+});
+
+test("kits: no personal paths, account names or private repo names", () => {
+  const BAD = /\/home\/meow|meowous3|claude-quota-weights/i;
+  const walk = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
+      const p = path.join(dir, d.name);
+      if (d.isDirectory()) return d.name === "results" ? [] : walk(p);
+      return [p];
+    });
+  for (const f of walk(KITS_DIR)) {
+    const m = fs.readFileSync(f, "utf8").match(BAD);
+    assert.ok(!m, `${path.relative(ROOT, f)} contains ${m?.[0]}`);
+  }
+});
+
+test("kits: the Methodology kit link points at a folder in this repo", () => {
+  const m = html.match(/href="https:\/\/github\.com\/melo-foundation\/ai-plan-value\/tree\/main\/([^"]+)"/);
+  assert.ok(m, "no tree/main link in index.html");
+  const dir = path.join(ROOT, m[1]);
+  assert.ok(fs.existsSync(dir) && fs.statSync(dir).isDirectory(), `${m[1]} is not a folder`);
+});
+
+test("kits: quota-measurement issue form has name and body", () => {
+  const p = path.join(ROOT, ".github", "ISSUE_TEMPLATE", "quota-measurement.yml");
+  assert.ok(fs.existsSync(p), "quota-measurement.yml missing");
+  const y = fs.readFileSync(p, "utf8");
+  assert.match(y, /^name:\s*\S/m, "no name:");
+  assert.match(y, /^body:\s*$/m, "no body:");
+  for (const id of ["plan", "harness", "model", "effort", "result", "unusual"]) assert.match(y, new RegExp(`^\\s+id:\\s*${id}\\s*$`, "m"), `no field ${id}`);
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);
 if (failed > 0) {
   process.exit(1);

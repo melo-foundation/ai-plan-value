@@ -1,0 +1,56 @@
+name: Quota measurement
+description: Send a result file from a subsidy measuring kit (kits/README.md)
+title: "[quota-measurement] <plan> · <harness> · <model>"
+labels: ["quota-measurement"]
+body:
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Plan
+      options:
+        - ChatGPT Plus
+        - ChatGPT Pro
+        - Claude Pro
+        - Claude Max
+        - Claude Ultra
+        - Claude Team
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options:
+        - Claude Code
+        - Codex
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: gpt-6.2-sol
+    validations:
+      required: true
+  - type: input
+    id: effort
+    attributes:
+      label: Reasoning effort
+      placeholder: medium
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result file
+      description: Paste the JSON or attach the file.
+    validations:
+      required: true
+  - type: textarea
+    id: unusual
+    attributes:
+      label: Anything unusual during the run
+    validations:
+      required: false

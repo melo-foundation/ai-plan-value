@@ -1,0 +1,66 @@
+{
+  "source": "AI Plan Value public/data/combined.json, entries[].aaPricing (Artificial Analysis: price1mInputTokens → inputPer1M, cacheHitPrice → cacheHitPer1M, price1mOutputTokens → outputPer1M)",
+  "asOf": "2026-11-26",
+  "fetchedAt": "2026-11-26T08:28:17.753Z",
+  "siteGeneratedAt": "2026-11-26T08:28:17.753Z",
+  "unit": "USD per 1M tokens",
+  "convention": "input_tokens includes cached_input_tokens (priced at cachedInput); uncached = input − cached (priced at input); output_tokens includes reasoning (priced at output)",
+  "models": {
+    "gpt-6.2-sol": {
+      "input": 2,
+      "cachedInput": 0.1,
+      "output": 10,
+      "asOf": "2026-11-26",
+      "baseModelId": "gpt-6-2-sol"
+    },
+    "gpt-6.1-sol": {
+      "input": 2,
+      "cachedInput": 0.1,
+      "output": 10,
+      "asOf": "2026-11-26",
+      "baseModelId": "gpt-6-1-sol"
+    },
+    "gpt-6.2-astra": {
+      "input": 8,
+      "cachedInput": 0.4,
+      "output": 40,
+      "asOf": "2026-11-26",
+      "baseModelId": "gpt-6-2-astra"
+    }
+  },
+  "site": {
+    "gpt-6.2-sol": {
+      "id": "priors-assumed::chatgpt-plus::gpt-6-2-sol",
+      "subsidy": 14.9326,
+      "level": "medium",
+      "sigma": 0.3162,
+      "dataDate": "2026-11-17",
+      "chain": [
+        "= GPT-6.1 Sol (same pool, rate card)",
+        "GPT-6.1 Sol Plus: 2 accounts, 31 pp, 2026-11-09"
+      ]
+    },
+    "gpt-6.1-sol": {
+      "id": "chatgpt_plus::gpt-6.1-sol",
+      "subsidy": 14.9326,
+      "level": "high",
+      "sigma": 0.1,
+      "dataDate": "2026-11-09",
+      "chain": [
+        "2 accounts, 31 pp, 2026-11-09"
+      ]
+    },
+    "gpt-6.2-astra": {
+      "id": "priors-assumed::chatgpt-plus::gpt-6-2-astra",
+      "subsidy": 6.2646,
+      "level": "medium",
+      "sigma": 0.364,
+      "dataDate": "2026-11-17",
+      "chain": [
+        "= GPT-6 Astra (same pool, rate card)",
+        "GPT-6 Astra Plus: 2 accounts, 26 pp, 2026-09-11"
+      ]
+    },
+    "definition": "subsidyMultiple = monthlyTokens × listBlendedUsdPerMtok ÷ priceUsd; Fei2411 monthly = weekly pool × 4"
+  }
+}
