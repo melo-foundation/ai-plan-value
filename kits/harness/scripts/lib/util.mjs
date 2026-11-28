@@ -99,6 +99,7 @@ export const SECRET_RES = [
   /\bya29\.[\w-]+/, // Google OAuth access token
   /\b1\/\/[\w-]{20,}/, // Google refresh token
   /\b(?:sk|xai)-[A-Za-z0-9_-]{16,}/,
+  /\bcog_[A-Za-z0-9_-]{8,}/, // Devin API key / PAT
   /[\w.+-]+@[\w-]+\.[\w.-]+/, // email
 ];
 

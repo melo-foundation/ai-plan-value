@@ -2868,7 +2868,8 @@ test("Most needed: plans with a kit link to it; the rest say No kit yet", () => 
       const m = /^\[Kit: [^\]]+\]\(([^)]+)\)$/.exec(r.kit);
       assert.ok(m, `${r.plan}: kit cell ${r.kit}`);
       assert.ok(fs.existsSync(path.join(ROOT, "kits", m[1])), `${m[1]} does not exist`);
-    } else assert.match(r.kit, /^No kit yet/, `${r.plan}: kit cell ${r.kit}`);
+    } else if (f?.notNeeded) assert.match(r.kit, /^Not needed/, `${r.plan}: kit cell ${r.kit}`);
+    else assert.match(r.kit, /^No kit yet/, `${r.plan}: kit cell ${r.kit}`);
   }
   assert.ok(rows.some((r) => r.plan === "ChatGPT Plus" && /Kit: Codex/.test(r.kit)), "ChatGPT Plus row has no Codex kit link");
   assert.ok(rows.some((r) => /^Claude /.test(r.plan) && /Kit: Claude Code/.test(r.kit)), "no Claude row links the Claude Code kit");

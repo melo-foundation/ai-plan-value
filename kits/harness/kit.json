@@ -87,6 +87,57 @@
       "window": "monthly",
       "windowsPerMonth": 1,
       "tokens": "per task (export.json)"
+    },
+    {
+      "id": "muse",
+      "harness": "Muse Code",
+      "plans": [
+        { "plan": "Muse Code Everyday Usage", "usd": 5, "notOnSite": true, "source": "https://dev.meta.ai/products/muse-code/" },
+        { "plan": "Muse Code High Usage", "usd": 15, "notOnSite": true, "source": "https://dev.meta.ai/products/muse-code/" },
+        { "plan": "Muse Code Power Usage", "usd": 50, "notOnSite": true, "source": "https://dev.meta.ai/products/muse-code/" },
+        { "plan": "Muse Code Maximum Usage", "usd": 200, "notOnSite": true, "source": "https://dev.meta.ai/products/muse-code/" }
+      ],
+      "planTest": "^Muse Code\\b",
+      "defaultModel": "muse-spark-1.3",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "undocumented",
+      "unit": "% of the weekly allowance",
+      "window": "weekly",
+      "windowsPerMonth": 4,
+      "inputs": ["contributor"],
+      "tokens": "per call or per task (muse exec --json; field names unverified)"
+    },
+    {
+      "id": "cursor",
+      "harness": "Cursor CLI",
+      "plans": ["Cursor Pro", "Cursor Pro+", "Cursor Ultra"],
+      "planTest": "^Cursor (Pro\\+?|Ultra)$",
+      "defaultModel": "grok-4.6",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": null,
+      "unit": "% of the plan's monthly included usage ($ used ÷ --included-usd)",
+      "window": "monthly",
+      "windowsPerMonth": 1,
+      "inputs": ["included-usd"],
+      "tokens": "per task (JSON output usage; undocumented)"
+    },
+    {
+      "id": "devin",
+      "harness": "Devin",
+      "plans": ["Devin Pro", "Devin Max"],
+      "planTest": "^Devin (Pro|Max)$",
+      "defaultModel": "claude-sonnet-5.5",
+      "mode": "cloud",
+      "meter": "manual",
+      "autoMeter": null,
+      "unit": "% of the plan's daily (Pro) or weekly quota",
+      "window": "weekly",
+      "windowsPerMonth": 4,
+      "inputs": ["acu-usd"],
+      "costUnit": "acu",
+      "tokens": "none (ACUs per session)"
     }
   ]
 }

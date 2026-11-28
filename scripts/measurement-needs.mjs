@@ -59,7 +59,7 @@ export const FAMILIES = [
   { id: "cursor", test: (p) => /^Cursor\b/.test(p), kit: null },
   { id: "devin", test: (p) => /^Devin\b/.test(p), kit: null },
   { id: "droid", test: (p) => /^Droid\b/.test(p), kit: null },
-  { id: "command-code", test: (p) => /^Command Code\b/.test(p), kit: null },
+  { id: "command-code", test: (p) => /^Command Code\b/.test(p), kit: null, notNeeded: "sold as $ at API prices" },
   { id: "kilo", test: (p) => /^Kilo Pass\b/.test(p), kit: null },
   { id: "kimi", test: (p) => /^Kimi\b/.test(p), kit: API_KIT.manual },
   { id: "glm", test: (p) => /^GLM Coding\b/.test(p), kit: API_KIT.automatic },
@@ -69,7 +69,7 @@ export const FAMILIES = [
   { id: "ollama", test: (p) => /^Ollama\b/.test(p), kit: API_KIT.automatic },
   { id: "mistral", test: (p) => /^Mistral Vibe\b/.test(p), kit: null },
   { id: "deeprelay", test: (p) => /^DeepRelay\b/.test(p), kit: API_KIT.automatic },
-  { id: "opencode", test: (p) => /^OpenCode Go\b/.test(p), kit: null },
+  { id: "opencode", test: (p) => /^OpenCode Go\b/.test(p), kit: null, notNeeded: "sold as $ at API prices" },
   { id: "bailian", test: (p) => /阿里云百炼|^Qwen Token Plan\b/.test(p), kit: API_KIT.automatic },
   { id: "step", test: (p) => /^Step Plan\b/.test(p), kit: API_KIT.manual },
   { id: "token-plans", test: (p) => /Token Plan/.test(p), kit: null },
@@ -107,6 +107,7 @@ export function kitText(plan) {
   if (f?.kit) return `[Kit: ${f.kit.name}](${f.kit.href})`;
   const r = KIT_REGISTRY.find((x) => x.re.test(plan));
   if (r) return `[Kit: ${r.name}${r.manual ? ", meter typed by hand" : ""}](${r.href})`;
+  if (f?.notNeeded) return `Not needed (${f.notNeeded})`;
   return f?.note ? `No kit yet (${f.note})` : "No kit yet";
 }
 

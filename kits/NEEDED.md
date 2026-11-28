@@ -17,7 +17,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 9 | ChatGPT Pro 20x | Codex / Web | sources disagree on GPT-6 Astra; 2 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 gateway panel, Sept); GPT-6 Astra: 1 screenshot, Sept; 3 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 10 | MiniMax M Plan Build (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
 | 11 | MiniMax M Plan Explore (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
-| 12 | Cursor Pro+ | Cursor IDE | borrowed from Grok 4.6 on Cursor Ultra (1 account, Sept); older than 60 days | Grok 4.6 | No kit yet |
+| 12 | Cursor Pro+ | Cursor IDE | borrowed from Grok 4.6 on Cursor Ultra (1 account, Sept); older than 60 days | Grok 4.6 | [Kit: Cursor CLI, meter typed by hand](harness/README.md) |
 | 13 | Kimi Max | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 14 | Kimi Plus | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 15 | Kimi Pro | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
@@ -27,8 +27,8 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | [Kit: Factory Droid, meter typed by hand](harness/README.md) |
 | 20 | Cursor Ultra (Fast) | Cursor IDE | 1 screenshot, Sept; low confidence; older than 60 days | Grok 4.6 | No kit yet |
 | 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
-| 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | No kit yet |
-| 23 | Devin Max | Devin Agent | 6 of 11 models borrowed; Claude Opus 5.5 from Gemini 4 Carbon (1 account, Nov); 6 of 11 models low confidence | Claude Opus 5.5 | No kit yet |
+| 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | Not needed (sold as $ at API prices) |
+| 23 | Devin Max | Devin Agent | 6 of 11 models borrowed; Claude Opus 5.5 from Gemini 4 Carbon (1 account, Nov); 6 of 11 models low confidence | Claude Opus 5.5 | [Kit: Devin, meter typed by hand](harness/README.md) |
 | 24 | Claude Team Premium | Claude Code / Web | 1 gateway panel, Oct; low confidence | Claude Opus 5.5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 25 | Cursor Ultra (Other Models) | Cursor IDE | 1 tweet, Oct; low confidence | Claude Opus 5.5 | No kit yet |
 | 26 | X Plus | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
@@ -37,8 +37,8 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 29 | Google AI Ultra 5x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
 | 30 | Ollama Max | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 31 | Ollama Pro | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
-| 32 | OpenCode Go | OpenCode / API | no measurement, official quota table only; 1 of 19 models low confidence | Claude Haiku 5.5 | No kit yet |
-| 33 | Command Code Max 10× | Command Code CLI | no measurement, official quota table only | Muse Wonder | No kit yet |
+| 32 | OpenCode Go | OpenCode / API | no measurement, official quota table only; 1 of 19 models low confidence | Claude Haiku 5.5 | Not needed (sold as $ at API prices) |
+| 33 | Command Code Max 10× | Command Code CLI | no measurement, official quota table only | Muse Wonder | Not needed (sold as $ at API prices) |
 | 34 | MiniMax M Plan Go (CN) | Any CLI / API | 1 screenshot, Oct; low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
 | 35 | 阿里云百炼 Token Plan Essential (¥79) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 36 | 阿里云百炼 Token Plan Pro (¥312) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
@@ -63,13 +63,13 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 55 | MiniMax Token Plan Ultra (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 56 | ChatGPT Plus | Codex / Web | 1 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 account, July); GPT-6 Astra: 2 accounts, Sept; 1 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 57 | SuperGrok | Grok Web / App | Grok 4.7: 1 account, Sept; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
-| 58 | Cursor Pro | Cursor IDE | 1 account, Aug; older than 60 days | Grok 4.6 | No kit yet |
-| 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | No kit yet |
+| 58 | Cursor Pro | Cursor IDE | 1 account, Aug; older than 60 days | Grok 4.6 | [Kit: Cursor CLI, meter typed by hand](harness/README.md) |
+| 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | [Kit: Cursor CLI, meter typed by hand](harness/README.md) |
 | 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | [Kit: API plans (automatic)](api-plan/README.md) |
 | 61 | ChatGPT Pro 500 | Codex / Web | GPT-6 Astra: Priors, Sept; 1 of 8 models low confidence; 4 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 62 | Mistral Vibe Pro | Le Chat / Vibe | DeepSeek V4.1 Flash 1017: Priors, 1 user, Nov; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: Mistral Vibe, meter typed by hand](harness/README.md) |
-| 63 | Devin Pro | Devin Agent | Claude Haiku 5.5: 1 account, Oct; 1 of 5 models low confidence | Claude Haiku 5.5 | No kit yet |
-| 64 | OpenCode Go Plus | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | No kit yet |
-| 65 | OpenCode Go Teams | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | No kit yet |
+| 63 | Devin Pro | Devin Agent | Claude Haiku 5.5: 1 account, Oct; 1 of 5 models low confidence | Claude Haiku 5.5 | [Kit: Devin, meter typed by hand](harness/README.md) |
+| 64 | OpenCode Go Plus | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | Not needed (sold as $ at API prices) |
+| 65 | OpenCode Go Teams | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | Not needed (sold as $ at API prices) |
 
 Known from the price, no measurement needed: GitHub Copilot Max, GitHub Copilot Pro, GitHub Copilot Pro+, Ollama Team.

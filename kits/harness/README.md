@@ -1,4 +1,4 @@
-# Harness quota kit (Gemini CLI, Grok Build, Factory Droid, Kimi Code, Qwen Code, Mistral Vibe)
+# Harness quota kit (Gemini CLI, Grok Build, Factory Droid, Kimi Code, Qwen Code, Mistral Vibe, Muse Code, Cursor, Devin)
 
 Measures the API dollars behind each percentage point of a subscription's usage meter by running the vendor's coding CLI on the Codex kit's fixed workload. It also gives the plan's monthly API value and subsidy multiple.
 
@@ -46,6 +46,25 @@ Measures the API dollars behind each percentage point of a subscription's usage 
 | Sandbox | `--settings` file with `sandbox.enabled: true`, `mode: "whole-process"`; `--auto medium` | none: writes are not confined to the task folder; `-p` runs with `auto` permission | `--sandbox` with `QWEN_SANDBOX` = `docker`, `podman` or `sandbox-exec` (macOS), `--approval-mode yolo` | none on the host; `--approval-policy accept-edits` approves file edits inside the task folder and denies everything that asks (shell commands, paths outside) |
 | Typical run (unverified) | 1–3 h, +10 pp of one week | 1–3 h, +2 pp of one month | 1–3 h, +2 pp of one month | 1–3 h, +5 pp of one month |
 
+| | Muse Code | Cursor CLI | Devin |
+|---|---|---|---|
+| Plans (`--plan`) | `Muse Code Everyday Usage` ($5), `Muse Code High Usage` ($15), `Muse Code Power Usage` ($50), `Muse Code Maximum Usage` ($200); not on the site yet, fees from `kit.json` | `Cursor Pro`, `Cursor Pro+`, `Cursor Ultra` | `Devin Pro`, `Devin Max` |
+| Install | `curl -fsSL https://dev.meta.ai/install.sh \| bash` | `curl https://cursor.com/install -fsS \| bash` | nothing (paste mode); `--devin-api`: a personal access token (`cog_…`, Settings > Devin API > PATs) in `DEVIN_API_KEY` and the organization id (`org-…`) in `DEVIN_ORG_ID`; tokens and org ids on individual Pro / Max accounts unverified |
+| Login | run `muse`, sign in with the Meta Model API account that holds the subscription; unset `META_API_KEY` | `agent login`; unset `CURSOR_API_KEY` | [app.devin.ai](https://app.devin.ai) |
+| Command | `node kits/harness/scripts/harness-quota.mjs run --harness muse --plan "Muse Code Power Usage" --contributor on` | `node kits/harness/scripts/harness-quota.mjs run --harness cursor --plan "Cursor Pro+" --included-usd <$>` | `node kits/harness/scripts/harness-quota.mjs run --harness devin --plan "Devin Max" --acu-usd <$>` |
+| Required input | `--contributor on\|off`, matching Contributor mode in `/settings` | `--included-usd`: the plan's included usage in $ on the dashboard (dashboard format unverified) | none; `--acu-usd` ($ per ACU) for the $ lines |
+| Model (`--model`) | `muse-spark-1.3` (default); `muse exec --list-models` lists the rest | `grok-4.6` (default; CLI model id unverified); `agent --list-models` lists the rest | `claude-sonnet-5.5` (default), the model the account's sessions use; label for the site comparison only |
+| Effort (`--effort`) | `minimal`, `low`, `medium`, `high` (default), `xhigh`, `max`, `ultra` | none | none |
+| Meter | % of the weekly allowance; the subsidy uses weekly × 4 | $ of the month's included usage, converted to % of `--included-usd`; the subsidy uses monthly × 1 and leaves out usage past the included $ | % of the daily quota (Pro, × 30) or weekly quota (Max, × 4); `--window weekly` on Pro |
+| Meter mode | manual (default); `--auto-meter` runs `muse usage --json` (command documented; JSON fields taken from a third-party tool, unverified) | manual only | manual only |
+| Where to read it (manual) | `muse usage`: the weekly % (screen format unverified) | [cursor.com/dashboard/spending](https://cursor.com/dashboard/spending): included usage used, $, then the on-demand line, $ (labels unverified) | [app.devin.ai/settings/usage](https://app.devin.ai/settings/usage): the daily (Pro) or weekly (Max) % (screen format unverified) |
+| Tokens | per call or per task from `muse exec --json` (field names unverified) | per task from the `usage` object of `--output-format json` (undocumented; reported on the Cursor forum) | none |
+| Cost per task | API $ from tokens | API $ from tokens | ACUs per session: typed by hand (paste mode) or `acus_consumed` from the v3 API (`--devin-api`) |
+| Sandbox | default sandbox (writes to the task folder and temp only), `--disable-approval`, `--trust-workspace` (unverified) | `--sandbox enabled`, `--force`, `--trust`, `--workspace <task folder>` | Devin's cloud machine |
+| Typical run (unverified) | 1–3 h, +10 pp of one week | 1–3 h, +10 pp of one month | 2–5 h, +10 pp of one day (Pro) or week (Max) |
+
+Devin result: ACUs per task, ACUs per 1% of the quota, monthly ACUs, and $ at `--acu-usd`. It reports no API-$ subsidy.
+
 ## 1. Set up
 
 Clone the repo and run every command from its root:
@@ -83,6 +102,8 @@ Run the command from the table, with a tag:
 
 Gemini CLI: run inside one day.
 
+Cursor CLI: close the Cursor editor too. Muse Code: no image or 3D generation on the account. Devin: no other sessions, Devin CLI or Devin Desktop on the account.
+
 ### Manual readings
 
 The kit asks for the meter before the run, after 5 minutes idle, after every 5 tasks, at the end and after 5 more idle minutes.
@@ -95,6 +116,26 @@ The kit asks for the meter before the run, after 5 minutes idle, after every 5 t
 | `stop` | end the run here |
 
 Gemini CLI: open `gemini` in a second terminal when asked, type `/stats model`, then exit it. Factory Droid and Kimi Code: the same with `droid` and `/limits`, `kimi` and `/usage`.
+
+Muse Code: run `muse usage` in a second terminal when asked and type the weekly %.
+
+Cursor CLI: the kit asks twice per reading. Type the dashboard's included usage used, in $ (`12.34`), then the on-demand line, in $ (`0` if none).
+
+### Devin tasks
+
+Paste mode (default): the kit prints each task between `==== task … ====` lines.
+
+1. Open a new Devin session and paste everything between the lines.
+2. When the session stops, type its ACUs at `the session's ACUs used:`.
+
+| Type | Means |
+|---|---|
+| `2.5`, `2.5 ACUs` | the session's ACUs |
+| `fail 2.5` | the task failed; its ACUs |
+| `skip` | no ACU reading for this task |
+| `stop` | end the run here |
+
+`--devin-api`: the kit starts each session itself, waits for it to stop and reads its ACUs. Set `DEVIN_API_KEY` and `DEVIN_ORG_ID` first.
 
 ### Automatic readings
 
@@ -117,6 +158,17 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 | `subsidy` | monthly API value ÷ the plan's monthly fee |
 | `measured ÷ site` | your multiple ÷ the site's multiple for the plan and model |
 | `verdict` | `clean`, `check` (warnings) or `contaminated` (errors) |
+
+Devin:
+
+| Line | Value |
+|---|---|
+| `ACUs … per task` | mean ACUs per session |
+| `daily` / `weekly … ACU/pp (95% lo–hi)` | ACUs per 1% of the quota |
+| `monthly ACUs` | 100 × ACU/pp × 30 (daily) or × 4 (weekly) |
+| `at $x/ACU` | $ per task, $ per month and multiple of the fee at `--acu-usd` |
+
+The result file records `--contributor`, `--included-usd` and `--acu-usd` under `inputs`. `planNotOnSite: true` marks a fee taken from `kit.json`.
 
 ## When it fails
 
@@ -142,6 +194,13 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 | `model_mismatch` | send the result as is |
 | `plan_mismatch` | rerun with the `--plan` the meter reports |
 | `on_demand` | turn off on-demand credits; rerun after the reset |
+| `Muse Code needs --contributor on \| off` | pass the contributor mode set in Muse Code `/settings` |
+| `META_API_KEY is set`, `CURSOR_API_KEY is set` | unset it and log in with the plan's account |
+| `Subscription quota exhausted` in Muse Code `stderr` | the 5-hour allowance ran out: rerun after its reset with a new `--tag` |
+| `Cursor CLI needs --included-usd <number>` | pass the plan's included usage in $ from the dashboard |
+| Devin: `set DEVIN_API_KEY (cog_…) and DEVIN_ORG_ID` | set both, or drop `--devin-api` |
+| Devin: `HTTP 401`, `HTTP 403` | create a new token with session access, or drop `--devin-api` |
+| `no_acus`, `acus_missing` | type each session's ACUs; rerun with a new `--tag` |
 
 ## Options
 
@@ -169,6 +228,15 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 | `--site` | path to `combined.json` | `public/data/combined.json` |
 | `--force` | start with other harness processes or preflight warnings, or reuse a tag | off |
 | `--dry-run` | print commands only | off |
+| `--harness` (more) | `muse`, `cursor`, `devin` | none |
+| `--effort` (Muse Code) | see the table | `high` |
+| `--target-pp` (Muse Code, Cursor CLI, Devin) | meter points to use | 10 |
+| `--window` (Muse Code, Cursor CLI, Devin) | Muse Code `weekly`; Cursor CLI `monthly`; Devin `daily`, `weekly` | Muse Code `weekly`, Cursor CLI `monthly`, Devin Pro `daily`, Devin Max `weekly` |
+| `--bin` (Muse Code, Cursor CLI) | path | `muse`, `agent` (older installs: `cursor-agent`) |
+| `--contributor` | Muse Code: `on`, `off` | none (required) |
+| `--included-usd` | Cursor CLI: $ | none (required) |
+| `--devin-api` | Devin: on / off | off |
+| `--acu-usd` | Devin: $ per ACU | none |
 
 ## Send your result
 

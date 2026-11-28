@@ -47,6 +47,24 @@ export function priceTasks(tasks, price, expectedModel, sameModel = (a, b) => a 
 }
 
 /**
+ * Cloud harnesses with no token counts (costUnit "acu"): cumulative ACUs after each task stand in
+ * for cumulative API $, so the fit gives ACUs per meter point.
+ */
+export function acuTasks(tasks) {
+  const cum = [0];
+  let total = 0;
+  let read = 0;
+  for (const t of tasks) {
+    if (Number.isFinite(t.acus)) {
+      total += t.acus;
+      read++;
+    }
+    cum.push(total);
+  }
+  return { cum, total, read };
+}
+
+/**
  * analyse({ manifest, price, fee, site, sameModel }) → result object (rounded, no ids or paths).
  *   price: { input, cachedInput, output, asOf, source }; fee: { usd, source } | null;
  *   site: { value, id, … } | null (site subsidyMultiple for plan + model).
@@ -54,13 +72,19 @@ export function priceTasks(tasks, price, expectedModel, sameModel = (a, b) => a 
 export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
   const flags = [];
   const flag = (code, severity, detail) => flags.push({ code, severity, detail });
+  const acuMode = m.costUnit === "acu";
   const priced = priceTasks(m.tasks || [], price, m.model, sameModel);
-  const readings = (m.readings || []).map((r) => ({ ts: Date.parse(r.ts), pct: r.pct, usd: priced.cum[Math.min(r.tasksDone, priced.cum.length - 1)], resetsAt: r.resetsAt ?? null, mode: r.mode }));
+  const acu = acuMode ? acuTasks(m.tasks || []) : null;
+  const cum = acuMode ? acu.cum : priced.cum;
+  const readings = (m.readings || []).map((r) => ({ ts: Date.parse(r.ts), pct: r.pct, usd: cum[Math.min(r.tasksDone, cum.length - 1)], resetsAt: r.resetsAt ?? null, mode: r.mode }));
 
-  if (!priced.calls) flag("no_calls", "error", "no model calls recorded");
+  if (acuMode) {
+    if (!acu.read) flag("no_acus", "error", "no ACU readings recorded");
+    else if (acu.read < (m.tasks || []).length) flag("acus_missing", "warning", `${(m.tasks || []).length - acu.read} of ${(m.tasks || []).length} tasks have no ACU reading`);
+  } else if (!priced.calls) flag("no_calls", "error", "no model calls recorded");
   const wrong = Object.entries(priced.byModel).filter(([, v]) => !v.matches);
   if (wrong.length) flag("model_mismatch", "error", `${wrong.reduce((s, [, v]) => s + v.calls, 0)} of ${priced.calls} calls not on ${m.model}: ${wrong.map(([k]) => k).join(", ")}`);
-  if (priced.perTaskOnly) flag("tokens_per_task", "info", `${priced.perTaskOnly} of ${(m.tasks || []).length} tasks have token totals per task, not per call`);
+  if (priced.perTaskOnly && !acuMode) flag("tokens_per_task", "info", `${priced.perTaskOnly} of ${(m.tasks || []).length} tasks have token totals per task, not per call`);
   if (priced.incomplete) flag("usage_incomplete", "warning", `${priced.incomplete} tasks report incomplete token usage`);
   const failed = (m.tasks || []).filter((t) => t.exit !== 0).length;
   if (failed) flag("task_failures", "warning", `${failed} of ${(m.tasks || []).length} tasks did not exit 0`);
@@ -89,7 +113,7 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
 
   let subsidy = null;
   const perMonth = m.meter?.windowsPerMonth;
-  if (win.usable && perMonth && fee?.usd) {
+  if (win.usable && perMonth && fee?.usd && !acuMode) {
     const b = win.usdPerPp;
     const monthly = (x) => 100 * x * perMonth;
     subsidy = {
@@ -105,6 +129,27 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
     }
   }
 
+  let acuResult = null;
+  if (acuMode) {
+    const nTasks = (m.tasks || []).length;
+    const usdPerAcu = Number.isFinite(m.inputs?.["acu-usd"]) ? m.inputs["acu-usd"] : null;
+    const b = win.usable ? win.usdPerPp : null;
+    const monthly = (x) => 100 * x * (perMonth || 0);
+    acuResult = {
+      definition: `ACUs per task from the session; ACU/pp from the meter fit; monthly ACUs = 100 × ${m.meter?.window} ACU/pp × ${perMonth}; $ = ACUs × --acu-usd`,
+      total: acu.total,
+      perTask: acu.read ? acu.total / acu.read : null,
+      perPp: b ? { est: b.est, ci95: b.ci95 } : null,
+      monthlyAcus: b && perMonth ? { est: monthly(b.est), ci95: b.ci95 ? b.ci95.map(monthly) : null } : null,
+      usdPerAcu,
+      usdPerTask: usdPerAcu != null && acu.read ? (usdPerAcu * acu.total) / acu.read : null,
+      monthlyUsd: usdPerAcu != null && b && perMonth ? { est: usdPerAcu * monthly(b.est), ci95: b.ci95 ? b.ci95.map((x) => usdPerAcu * monthly(x)) : null } : null,
+      multiple: usdPerAcu != null && b && perMonth && fee?.usd ? (usdPerAcu * monthly(b.est)) / fee.usd : null,
+      tasksWithAcus: acu.read,
+      tasks: nTasks,
+    };
+  }
+
   const sev = new Set(flags.map((f) => f.severity));
   const ts = (m.tasks || []).flatMap((t) => [Date.parse(t.startedAt), Date.parse(t.endedAt)]).filter(Number.isFinite);
   const result = {
@@ -118,6 +163,9 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
     model: m.model,
     siteModelId: m.siteModelId,
     effort: m.effort ?? null,
+    inputs: m.inputs ?? {},
+    costUnit: m.costUnit ?? "api-usd",
+    planNotOnSite: fee?.notOnSite === true,
     arm: m.arm,
     workload: m.workload,
     meter: { mode: m.meter?.switchedToManualAt ? "manual" : m.meter?.mode, requested: m.meter?.mode, autoRoute: m.meter?.autoRoute ?? null, unit: m.meter?.unit, window: m.meter?.window, windowsPerMonth: perMonth, note: m.meter?.note ?? null },
@@ -140,6 +188,7 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
     readings: readings.map((r) => ({ ts: new Date(r.ts).toISOString(), pct: r.pct, usd: r.usd, mode: r.mode })),
     fit: win,
     subsidy,
+    acu: acuResult,
     idle,
     flags,
   };

@@ -10,6 +10,12 @@
 | ChatGPT Plus, Pro 10x / 20x / 500 | Codex CLI | [kits/codex/README.md](codex/README.md) | Plus: 12% of the weekly limit (run A) + 8% (run B); Pro: 3–4% (A) + 3% (B) |
 | Google AI (Pro, Ultra 5x / 20x) | Gemini CLI | [kits/harness/README.md](harness/README.md) | meter typed by hand from the Gemini app; `--auto-meter` reads it automatically |
 | SuperGrok (Lite, Plus, Heavy), X Plus / Ultra | Grok Build | [kits/harness/README.md](harness/README.md) | meter typed by hand from grok.com Settings > Usage; `--auto-meter` reads it automatically |
+| Factory Droid (Pro, Max) | Droid | [kits/harness/README.md](harness/README.md) | meter typed by hand from `/limits` |
+| Mistral Vibe Pro | Mistral Vibe | [kits/harness/README.md](harness/README.md) | meter typed by hand; `--auto-meter` optional |
+| Kimi, 百炼 / Qwen Token Plan | Kimi Code, Qwen Code | [kits/harness/README.md](harness/README.md) | meter typed by hand; `--auto-meter` optional |
+| Cursor (Pro, Pro+, Ultra) | Cursor CLI | [kits/harness/README.md](harness/README.md) | included-usage $ typed by hand from the dashboard |
+| Devin (Pro, Max) | Devin | [kits/harness/README.md](harness/README.md) | ACUs per task; quota typed by hand |
+| Muse Code (not on the site yet) | Muse Code | [kits/harness/README.md](harness/README.md) | meter typed by hand from `muse usage`; `--auto-meter` optional |
 | Kimi, GLM Coding, MiniMax, 百炼 / Qwen Token Plan, DeepRelay, Ollama Cloud, Step Plan, MiMo Token Plan | API key, no harness | [kits/api-plan/README.md](api-plan/README.md) | 1% of the monthly pool; GLM 5% of the weekly limit; MiniMax 3% of the weekly limit |
 
 Published results: [data/quota-measurements/](../data/quota-measurements/).
@@ -18,7 +24,6 @@ Send results by opening a [Quota measurement](https://github.com/melo-foundation
 
 ## Next kits
 
-1. Harness adapters: Factory Droid, Kimi Code, Qwen Code, Muse Code, Mistral Vibe, Cursor, Devin.
 2. Grok kit for SuperGrok and X plans.
 3. Gemini CLI kit for Google AI Pro and Ultra.
 4. Factory Droid kit.

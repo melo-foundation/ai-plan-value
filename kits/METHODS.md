@@ -41,7 +41,7 @@ Kit approach:
 | 1 | Built: [Codex](codex/README.md) for every ChatGPT plan | Plus, Pro 10x, 20x, 500 | automatic |
 | 2 | Built: [API plans](api-plan/README.md), fixed workload over an OpenAI- or Anthropic-compatible endpoint | Kimi, MiniMax, GLM Coding, 百炼 / Qwen, DeepRelay, Ollama, Step, MiMo | automatic (GLM, MiniMax, 百炼, DeepRelay, Ollama, MiMo); manual (Kimi, Step) |
 | 3 | Built: [harness kit](harness/README.md), Grok Build and Gemini CLI adapters | SuperGrok, X Plus / Ultra; Google AI Pro, Ultra 5x / 20x | meter typed by hand; `--auto-meter` optional |
-| 4 | Harness adapters: Factory Droid, Kimi Code, Qwen Code, Muse Code, Mistral Vibe, Cursor, Devin | Droid, Kimi, Qwen, Muse Code, Mistral Vibe, Cursor, Devin | meter typed by hand unless the tool exposes it |
+| 4 | Built: [harness kit](harness/README.md) adapters for Factory Droid, Kimi Code, Qwen Code, Muse Code, Mistral Vibe, Cursor, Devin | Droid, Kimi, Qwen, Muse Code, Mistral Vibe, Cursor, Devin | meter typed by hand unless the tool exposes it |
 
 Run the existing [Claude Code kit](../docs/QUOTA-WEIGHTS.md) on Claude Max, Ultra and Pro with Claude Opus 5 first.
 
