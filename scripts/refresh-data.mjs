@@ -4444,14 +4444,10 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const LN13 = Math.log(1.3);
   const LN16 = Math.log(1.6);
   const consistency = [];
-  const penalties = new Map(); // entry -> { sigma, line }
-  const penalize = (cells, D, line) => {
-    const pick = [...cells].sort((a, b) => b._chain.s - a._chain.s || String(REL.lastDate(a.dataDate)).localeCompare(String(REL.lastDate(b.dataDate))))[0];
-    const sig = Math.abs(D) / 2;
-    const prev = penalties.get(pick);
-    if (!prev || prev.sigma < sig) penalties.set(pick, { sigma: sig, line });
-    return pick.id;
-  };
+  // Cross-plan checks rest on an assumption (same model ratio on every plan of a family), so a fail changes no range.
+  // It is recorded with the least certain cell as the one worth measuring next (docs/RELIABILITY.md § Disagreements).
+  const measureNext = (cells) =>
+    [...cells].sort((a, b) => b._chain.s - a._chain.s || String(REL.lastDate(a.dataDate)).localeCompare(String(REL.lastDate(b.dataDate))))[0].id;
   for (const fam of CONSISTENCY_FAMILIES) {
     const cells = new Map();
     for (const e of entries) if (fam.plans.includes(e.plan) && e.subsidyMultiple > 0 && !e.unmetered && !e.isOffPeak) cells.set(`${e.plan}|${e.modelId}`, e);
@@ -4469,7 +4465,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         const verdict = Math.abs(D) <= LN13 ? "pass" : Math.abs(D) > LN16 || z > 2 ? "fail" : "warn";
         const rec = { type: "quad", family: fam.name, a, b, p, q, D: REL.r4(D), ratio: REL.r4(Math.exp(Math.abs(D))), z: REL.r4(z), verdict, flagged: null };
         if (verdict === "fail") {
-          rec.flagged = penalize(quad, D, `inconsistent ×${Math.exp(Math.abs(D)).toFixed(2)} (${REL.shortModel(quad[0].modelDisplay)} / ${REL.shortModel(quad[1].modelDisplay)}, ${REL.shortPlan(p)} vs ${REL.shortPlan(q)})`);
+          rec.flagged = measureNext(quad);
         }
         consistency.push(rec);
       }
@@ -4483,13 +4479,12 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
         const verdict = Math.abs(D) <= LN13 ? "pass" : "fail";
         const rec = { type: "pool", family: fam.name, a: x.modelId, b: y.modelId, p, D: REL.r4(D), ratio: REL.r4(Math.exp(Math.abs(D))), verdict, flagged: null };
         if (verdict === "fail") {
-          rec.flagged = penalize([x, y], D, `inconsistent ×${Math.exp(Math.abs(D)).toFixed(2)} (${REL.shortModel(x.modelDisplay)} vs ${REL.shortModel(y.modelDisplay)}, same pool)`);
+          rec.flagged = measureNext([x, y]);
         }
         consistency.push(rec);
       }
     }
   }
-  for (const [e, pen] of penalties) REL.addPenalty(e._chain, pen.sigma, pen.line);
 
   // ---- Carryover rows ----
   function makeCarryEntry({ planName, targetSlug, anchor, origin, estimateType, subsidy, chain, rule, sourceNote, decisionNote }) {
@@ -5169,7 +5164,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     `Reliability levels (AA task, Intelligence Index): ${JSON.stringify(levelCounts)}; Claude mix correction: ${quotaRowsApplied} rows applied, rows by cell status ${JSON.stringify(quotaRowStatus)}, cells ${JSON.stringify(quotaCellCounts)}${FORCE_CLAUDE_MIX_CORRECTION_OFF ? " (forced off)" : ""}`
   );
   const consFails = consistency.filter((x) => x.verdict === "fail");
-  if (consFails.length) log(`Consistency fails: ${consFails.map((x) => `${x.type}:${x.family}:${x.a}/${x.b}:${x.p}${x.q ? `/${x.q}` : ""} ×${x.ratio}`).join("; ")}`);
+  if (consFails.length) log(`Disagreements worth measuring (no range change): ${consFails.map((x) => `${x.type}:${x.family}:${x.a}/${x.b}:${x.p}${x.q ? `/${x.q}` : ""} ×${x.ratio}`).join("; ")}`);
   const feiDerivedRows = feiRows.filter((r) => r.data_date_kind === "derived");
   const unresolved = feiDerivedRows.filter((r) => feiCtx.memo.get(r.id)?.flags.includes("unresolved")).map((r) => r.id);
   const reliabilityStats = {

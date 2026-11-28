@@ -67,7 +67,7 @@ Add-ons: integer % reading over Δ pp `0.41/Δ`; promo period 0.2; attribution i
 | M4 | Successor assumed equal | 0.7 |
 | M5 | Model with its own weight or cap valued by another model's multiple | > 0.7 |
 | token | Token-denominated pool, list-price blend ratio | 0 |
-| inconsistent | Failed cross-plan quad or same-pool check | + \|D\| / 2 |
+| inconsistent | Fei and Priors disagree on the same plan × model | + \|D\| / 2 |
 
 ### W. Token mix
 
@@ -155,10 +155,25 @@ Files: `data/quota-measurements/*.json` (schema `ai-plan-value.quota-measurement
 
 | Check | Rule | Action |
 |---|---|---|
-| T-quad | Plan families (Claude, ChatGPT, Google AI, Kimi, SuperGrok, Cursor); quads with ≥ 3 measured cells; D = ln[S(a,p)/S(b,p)] − ln[S(a,q)/S(b,q)] | \|D\| ≤ ln 1.3 pass; > ln 1.6 or z > 2 fail: the largest-σ cell gets \|D\|/2 and flag `inconsistent` |
-| T-pool | Measured Gemini models on one Google plan; Opus / Sonnet on one Claude plan | > ×1.3: higher-σ cell gets \|D\|/2 and flag `inconsistent` |
+| T-quad | Plan families (Claude, ChatGPT, Google AI, Kimi, SuperGrok, Cursor); quads with ≥ 3 measured cells; D = ln[S(a,p)/S(b,p)] − ln[S(a,q)/S(b,q)] | \|D\| ≤ ln 1.3 pass; > ln 1.6 or z > 2 fail: listed under Disagreements; no σ change |
+| T-pool | Measured Gemini models on one Google plan; Opus / Sonnet on one Claude plan | > ×1.3 fail: listed under Disagreements; no σ change |
 
 Results: `stats.reliability.consistency`.
+
+
+### Disagreements worth measuring
+
+Failed T-quad and T-pool checks change no range and show nothing on the site. Each build lists them in the log line `Disagreements worth measuring` and in `stats.reliability.consistency` (`verdict: "fail"`, `flagged` = the least certain cell). To clear one, measure the flagged cell.
+
+As of 2026-11-28:
+
+| Check | Gap | Measure next |
+|---|---|---|
+| Claude Opus 5 / Opus 5.5, Pro vs Max | ×2.07 | Claude Max, Opus 5 |
+| Claude Opus 5 / Opus 5.5, Pro vs Ultra | ×1.78 | Claude Ultra, Opus 5 |
+| Claude Opus 5 vs Opus 5.5, same pool on Pro | ×1.55 | Claude Pro, Opus 5 |
+| ChatGPT GPT-6.2 Sol / GPT-6 Astra, Plus vs Pro 20x | ×1.63 | ChatGPT Pro 20x, GPT-6 Astra |
+| Google Gemini 3.8 Flash vs Gemini 4 Neon, same pool on Pro | ×1.49 | Google AI Pro, Gemini 3.8 Flash |
 
 ## Calibration
 
@@ -324,7 +339,7 @@ The bar chart and the table both show rows at or above the Min confidence settin
 
 ## Tests
 
-`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad is not allow-listed; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record; a subscription row lacks `includedCreditsStatus`; a listed credit lacks a URL or check date; Claude Max ≠ $100 or Claude Ultra ≠ $200 API credits; a subsidy changes with `includedCredits`; a plan has no included-credits record; an `unknown` record lacks a valid `reason` or `tried` date; a `listed` or `official` record lacks a URL or check date; the page-watch baseline is malformed or misses a table URL; the watch step is missing, not scheduled-only, before the tests or without `continue-on-error`; the page diff misreports readable / changed / stopped.
+`node scripts/test-site.mjs` fails when: an entry lacks `rel`; Σ step σ² ≠ rel.s²; a derived subsidy is above its anchor's level or a row above its upstream grade; an M4/M5 row is not Speculative; an expired promotion or pre-change row is listed; a failed quad or pool check has no cell to measure or still changes a range; the Priors `plans: []` records are missing; Neon is not pooled; Kimi K3.1 Pro ≠ K3 × 0.667; Fable readings are inconsistent; the Claude mix correction does not match the flag; `t3Harness` has < 5 Codex or Claude Code pairs; > 5% of Fei derived rows are unresolved; a subscription row lacks `priceUsdMonthly`; a yearly price exceeds the monthly one; a plan × model shows twice in Monthly or Yearly; the yearly subsidy ≠ subsidy × monthly ÷ yearly; a plan has no billing record; a subscription row lacks `includedCreditsStatus`; a listed credit lacks a URL or check date; Claude Max ≠ $100 or Claude Ultra ≠ $200 API credits; a subsidy changes with `includedCredits`; a plan has no included-credits record; an `unknown` record lacks a valid `reason` or `tried` date; a `listed` or `official` record lacks a URL or check date; the page-watch baseline is malformed or misses a table URL; the watch step is missing, not scheduled-only, before the tests or without `continue-on-error`; the page diff misreports readable / changed / stopped.
 
 Tests that need history print `SKIP` until the ledger has the data:
 

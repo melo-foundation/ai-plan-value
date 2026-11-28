@@ -851,30 +851,19 @@ test("Expired promotions and stale quota rows are absent", () => {
   }
 });
 
-test("Cross-plan consistency quads: fails are flagged and allow-listed", () => {
+test("Cross-plan disagreements are recorded with a cell to measure and change no range", () => {
   const cons = relStats.consistency || [];
-  const quads = cons.filter((x) => x.type === "quad");
-  assert.ok(quads.length >= 5, `Expected informative quads, got ${quads.length}`);
-  // Known pending Fei2411 case: Opus 5 vs Opus 5.5 multiples move ×1.8–2.1 across Claude plans
-  // (Fei notes it on claude_pro::claude-opus-5 as 张力 … 待裁定).
-  // Our ChatGPT Plus GPT-6.2 Sol measurement (data/quota-measurements) sits below the Priors-derived Pro values,
-  // so Sol/Astra quads across Plus and Pro move until Pro is measured too.
-  const ALLOW = [/^Claude:claude-opus-5\/claude-opus-5-5:/, /^ChatGPT:gpt-6-2-sol\/[^:]+:ChatGPT Plus\/ChatGPT Pro/];
+  assert.ok(cons.filter((x) => x.type === "quad").length >= 5, "expected informative quads");
   for (const q of cons) {
     if (q.verdict !== "fail") continue;
-    const flagged = entries.find((e) => baseOf(e.id) === q.flagged);
-    assert.ok(flagged, `Fail without a flagged cell: ${JSON.stringify(q)}`);
-    assert.ok(chains[flagged.rel.chain].flags.includes("inconsistent"), `${q.flagged} not flagged inconsistent`);
-    if (q.type === "quad") {
-      const key = `${q.family}:${q.a}/${q.b}:${q.p}/${q.q}`;
-      assert.ok(ALLOW.some((re) => re.test(key)), `Consistency fail not allow-listed: ${key} ×${q.ratio}`);
-    }
+    assert.ok(entries.some((e) => baseOf(e.id) === q.flagged), `Fail without a cell to measure: ${JSON.stringify(q)}`);
   }
-  for (const q of quads) {
-    if (Math.abs(q.D) > Math.log(1.6)) assert.equal(q.verdict, "fail", `|D| > ln 1.6 not failed: ${JSON.stringify(q)}`);
+  for (const e of entries) {
+    const lines = chains[e.rel?.chain]?.lines || [];
+    assert.ok(!lines.some((l) => /^inconsistent ×/.test(l)), `${e.id} still carries a cross-plan penalty`);
   }
-  const warns = cons.filter((x) => x.verdict === "warn");
-  console.log(`     Quads: ${quads.length} informative, ${quads.filter((x) => x.verdict === "fail").length} fail, ${warns.length} warn; pool checks: ${cons.filter((x) => x.type === "pool").length}`);
+  const doc = fs.readFileSync(new URL("../docs/RELIABILITY.md", import.meta.url), "utf8");
+  assert.match(doc, /### Disagreements worth measuring/);
 });
 
 test("Priors records with plans: [] are parsed (ratio, readings, sameAs, paid); free tiers are not plans", () => {
@@ -2313,17 +2302,18 @@ test("?ultrablackout is pure black and white with gradients and shadows removed"
   }
 });
 
-test("Cross-plan disagreement lines are kept in the data but never shown on the site", () => {
+test("Source-disagreement lines are never shown on the site", () => {
   const app = appWithData();
   app.render();
-  const flagged = entries.filter((e) => (chains[e.rel?.chain]?.lines || []).some((l) => l.startsWith("inconsistent")));
-  assert.ok(flagged.length > 0, "expected at least one flagged row in the data");
-  for (const e of flagged.slice(0, 20)) {
-    const row = app.getAllEntriesResolved().find((r) => r.id === e.id);
-    if (!row) continue;
-    const text = app.relTooltip(row) + " " + JSON.stringify(app.subsidySources ? app.subsidySources(row) : []);
-    assert.ok(!/inconsistent|disagrees/i.test(text), `${e.id} shows the disagreement tag: ${text}`);
-  }
+  const fake = { ...app.getAllEntriesResolved()[0] };
+  const chainId = Object.keys(chains)[0];
+  const saved = chains[chainId].lines;
+  app.state.dataset.stats.chains[chainId].lines = ["2 accounts, 26 pp, 2026-09-11", "inconsistent ×1.63 (A / B, Plus vs Pro)", "disagrees with Priors 12.0×"];
+  fake.rel = { ...fake.rel, chain: chainId };
+  const text = app.subsidySources(fake).join(" | ");
+  app.state.dataset.stats.chains[chainId].lines = saved;
+  assert.ok(!/inconsistent|disagrees/i.test(text), text);
+  assert.match(text, /2 accounts/);
 });
 
 test("Chart model names are never cut off with an ellipsis", () => {

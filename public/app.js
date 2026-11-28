@@ -292,8 +292,8 @@ function subsidySources(r) {
   if (mix) sub.push(`Adjusted ×${mix.f.toFixed(2)} for how Claude's limit counts cached tokens (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   const client = r.clientFactor?.[state.costMode];
   if (client) sub.push(`Adjusted ÷${(1 / client.f).toFixed(1)}: T3 Code's SDK client uses the limit faster (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
-  // Cross-plan disagreement lines stay in the data (they list what to measure next) but are not shown.
-  sub.push(...(chain?.lines || []).filter((l) => !l.startsWith("inconsistent")).map(plainSource));
+  // Source-disagreement lines stay in the data (their extra uncertainty is in the range) but are not shown.
+  sub.push(...(chain?.lines || []).filter((l) => !/^(inconsistent|disagrees with)/.test(l)).map(plainSource));
   return sub;
 }
 
