@@ -121,6 +121,57 @@ To analyse a run again:
 | `verdict` | `clean`, `check` (warnings) or `contaminated` (errors) |
 | compare `verdict` | `price-proportional`, `not price-proportional` or `inconclusive` |
 
+## Token weights
+
+Measures the meter's weight for uncached input, cached input, visible output and reasoning, each relative to its API price (uncached input = 1), on the 5-hour and weekly windows.
+
+Start with the weekly limit below 70% and the 5-hour limit below 20%. Run the four arms one after another:
+
+    node kits/codex/scripts/codex-quota.mjs run --arm cache --tag plus-cache1
+    node kits/codex/scripts/codex-quota.mjs run --arm input --tag plus-input1
+    node kits/codex/scripts/codex-quota.mjs run --arm output --tag plus-output1
+    node kits/codex/scripts/codex-quota.mjs run --arm reasoning --tag plus-reasoning1
+
+Fit them, with your A and B runs as holdouts:
+
+    node kits/codex/scripts/codex-quota.mjs weights --runs plus-cache1,plus-input1,plus-output1,plus-reasoning1,plus-A1,plus-B1
+
+Runs kept in another folder: add `--runs-dir <folder holding <tag>/manifest.json>`. The result is `kits/codex/results/weights-<plan>-<model>.json`.
+
+Plus, GPT-6.2 Sol, defaults:
+
+| Arm | Calls | Effort | Tasks at a time | Uses | Takes | API value spent |
+|---|---|---|---|---|---|---|
+| `cache` | one ≈ 40k-token first message per stream, then `codex exec resume` with a one-word question | low | 2 | +3% of the weekly limit, about +18% of the 5-hour limit | about 25 min | about $2 |
+| `input` | a unique ≈ 30k-token prompt, one-word answer | low | 1 | same | about 10 min | about $2 |
+| `output` | a short prompt for 400 numbered lines | low | 3 | same | about 15 min | about $2 |
+| `reasoning` | a short puzzle, number-only answer | high | 3 | same | about 20 min | about $2 |
+
+All four: +12% of the weekly limit. Add 14 min of idle checks to each arm. An arm stops at 2 h once the meter has moved 3 points. `run --arm <arm> --dry-run` prints the commands and the expected time.
+
+With `--window 5h` an arm targets +6% of the 5-hour limit (about +1% of the weekly limit) instead; `weights` then fits the 5-hour window only.
+
+| Line | Value |
+|---|---|
+| `<window> · … $x/pp at weight 1` | API $ per 1% of the window at API prices |
+| `cached input 2.95 (95% lo–hi)` | meter weight ÷ API price |
+| `holdout plus-A1 predicted ÷ measured` | the run's meter use predicted from the weights ÷ measured; 1 inside the interval passes |
+| `at API prices` | the same ratio with every weight 1 |
+| `5h ÷ weekly` | weight on the 5-hour window ÷ weight on the weekly window; `same weights` when every interval contains 1 |
+
+| Message or flag | Do |
+|---|---|
+| `cached N% of input: below 80%` (cache arm) | press `Ctrl-C`, rerun with `--cache-mode fresh` and a new `--tag` |
+| `cache_low` | same |
+| `run <tag> not found` | pass `--runs-dir <folder holding <tag>/manifest.json>` |
+| `run_short`, `window_unusable` | rerun that arm with `--target-pp 4` and a new `--tag` |
+| `arm_impure`, `holdout_miss`, `windows_differ`, `weight_unidentified` | send the result as is |
+| `run_contaminated` | rerun that arm with a new `--tag` |
+
+To read rollouts straight from the sessions folder:
+
+    node kits/codex/scripts/codex-quota.mjs analyse --dir ~/.codex/sessions --root ~/.cache/codex-quota-runs/plus-A1 --plan plus
+
 ## When it fails
 
 | Message or flag | Do |
@@ -150,15 +201,17 @@ To analyse a run again:
 
 | Option | Values | Default |
 |---|---|---|
-| `--arm` | `A`, `B` | none |
+| `--arm` | `A`, `B`, `cache`, `input`, `output`, `reasoning` | none |
+| `--window` | `weekly`, `5h` | `weekly` |
+| `--cache-mode` | `resume`, `fresh` | `resume` |
 | `--plan` | `plus`, `pro-10x`, `pro-20x`, `pro-500` | from `plan_type`; required on Pro |
 | `--model` | `gpt-6.2-sol`, `gpt-6.1-sol`, `gpt-6.2-astra`, `gpt-6-astra` | `gpt-6.2-sol` |
 | `--tag` | letters, digits, `.` `_` `-` | `<date>-<arm>` |
-| `--target-pp` | % of the weekly limit | per plan: see Values; at most A 12, B 8 |
-| `--max-hours` | hours; applies once weekly has moved 3 points | A 3, B 2 |
-| `--parallel` | tasks at a time, 1–6 | per plan: see Values |
+| `--target-pp` | % of the `--window` limit | per plan: see Values; at most A 12, B 8; token-weight arms 3 (weekly) or 6 (5h) |
+| `--max-hours` | hours; applies once the window has moved 3 points | A 3, B 2, token-weight arms 2 |
+| `--parallel` | tasks at a time, 1–6 | per plan: see Values and Token weights |
 | `--max-weekly` | weekly % to stop at | 85 |
-| `--effort` | `low`, `medium`, `high`, `xhigh`, `max` | `medium` |
+| `--effort` | `low`, `medium`, `high`, `xhigh`, `max` | `medium`; `cache`, `input`, `output`: `low`; `reasoning`: `high` |
 | `--idle-min` | minutes | 5 |
 | `--settle-min` | minutes | 2 |
 | `--task-timeout-min` | minutes | 25 |
@@ -166,7 +219,9 @@ To analyse a run again:
 | `--force` | start with other Codex processes open, or reuse a tag | off |
 | `--dry-run` | print commands only | off |
 
-`analyse` also takes `--dir <folder of rollout-*.jsonl>` or `--from <ISO> --to <ISO>`, with `--root <dir>`, `--plan`, `--model`, `--effort`, `--out <file>`.
+`analyse` also takes `--dir <folder of rollout-*.jsonl, searched recursively>` or `--from <ISO> --to <ISO>`, with `--root <dir>`, `--plan`, `--model`, `--effort`, `--out <file>`.
+
+`weights` takes `--runs <tags or folders>`, `--holdout <tags>` (default: every run that is not a token-weight arm), `--runs-dir <folders>`, `--sessions-dir <folder>` (default `~/.codex/sessions`), `--plan`, `--model`, `--boot` (400), `--seed` (1), `--out <file>`.
 
 Refresh `kits/codex/prices.json` from the site data:
 
@@ -175,3 +230,5 @@ Refresh `kits/codex/prices.json` from the site data:
 ## Send your result
 
 Open a [Quota measurement](https://github.com/melo-foundation/ai-plan-value/issues/new?template=quota-measurement.yml) issue and attach both result files and the compare file, e.g. `kits/codex/results/plus-A1.json`, `plus-B1.json` and `compare-plus-A1-vs-plus-B1.json`.
+
+After a token-weight fit, also attach `kits/codex/results/weights-<plan>-<model>.json`.

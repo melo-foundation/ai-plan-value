@@ -34,6 +34,17 @@ Kit approach:
 | Tencent Token Plan | console Token Plan page | no API found | tokens per month (Lite 35M) | unverified | monthly; 5h unverified | unverified | not needed where the token allowance is published; otherwise semi-manual | [Token Plan](https://cloud.tencent.com/act/pro/tokenplan) |
 | Muse Code (Meta) | `muse usage` (unverified; no official doc found) | unverified | prompts per 5h (official plan text) | unverified | 5h | unverified | semi-manual until `muse usage` output is seen | [Muse Code](https://dev.meta.ai/products/muse-code/), [real-api-pricing issue 99](https://github.com/Fei2411/real-api-pricing/issues/99) |
 
+## Token weights
+
+Meter weight of each token type ÷ its API price, from arms that each isolate one type, fitted jointly with one scale.
+
+| Kit | Token types | Windows | Command |
+|---|---|---|---|
+| [Claude Code](../docs/QUOTA-WEIGHTS.md) | input, output, cache read, 5m write, 1h write | 5h, 7d | `scripts/fit-quota-weights.mjs` |
+| [Codex](codex/README.md#token-weights) | uncached input, cached input, visible output, reasoning | 5h, weekly | `run --arm cache\|input\|output\|reasoning`, then `weights` |
+| [API plans](api-plan/README.md#token-weights) | uncached input, cached input, cache write (Anthropic API), visible output, reasoning (OpenAI-style API) | every window the meter reports | `run --arm cache\|input\|output\|reasoning\|write`, then `weights`; automatic meters only |
+| [Harness](harness/README.md) | none | none | none |
+
 ## Build order
 
 | # | Kit | Plans | Approach |

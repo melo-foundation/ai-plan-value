@@ -6,8 +6,9 @@
  *
  *   node kits/codex/scripts/codex-quota.mjs smoke [--plan <plan>] [--model <slug>]
  *   node kits/codex/scripts/codex-quota.mjs check [--plan <plan>]
- *   node kits/codex/scripts/codex-quota.mjs run --arm A|B [--plan <plan>] [--model <slug>] [--tag <tag>] [--target-pp N] [--dry-run] [options]
+ *   node kits/codex/scripts/codex-quota.mjs run --arm A|B|cache|input|output|reasoning [--plan <plan>] [--model <slug>] [--tag <tag>] [--target-pp N] [--dry-run] [options]
  *   node kits/codex/scripts/codex-quota.mjs analyse --run <tag> | --dir <folder> | --from <ISO> --to <ISO> [options]
+ *   node kits/codex/scripts/codex-quota.mjs weights --runs <tag>,<tag>,… [--runs-dir <folder>] [options]
  *   node kits/codex/scripts/codex-quota.mjs compare <result-a.json> <result-b.json>
  *   node kits/codex/scripts/codex-quota.mjs prices [--site <combined.json>] [--models a,b]
  *
@@ -29,9 +30,11 @@ import * as RF from "./rollout-fit.mjs";
 import { TASKS_A, taskB, WORKLOAD_VERSION, workloadHash, B_ROWS } from "../workload/tasks.mjs";
 import { PLANS, PLAN_IDS, DEFAULT_PLAN_ID, planById, planFee, resolvePlan } from "./plans.mjs";
 import * as Smoke from "../../lib/smoke.mjs";
+import { WEIGHT_ARMS, ARM_WORKLOAD_VERSION, armWorkloadHash, armPrompt, cacheFirst, cacheFresh } from "../workload/arms.mjs";
+import * as WT from "./weights.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
-const KIT_VERSION = "1.1.0";
+const KIT_VERSION = "1.2.0";
 const KIT_DIR = path.resolve(path.dirname(__filename), "..");
 const REPO_ROOT = path.resolve(KIT_DIR, "..", "..");
 const DEFAULT_SITE = path.join(REPO_ROOT, "public", "data", "combined.json");
@@ -52,10 +55,27 @@ const siteBaseId = (slug) => slug.replace(/\./g, "-");
 // weekly meter has made MIN_STEPS steps. usdPerHour: API $ one task stream spends per hour on
 // DEFAULT_MODEL, from the 2026-11-27 Plus runs (A $7.43 in about 2 h, B $4.00 in about 1.25 h);
 // only used to size the default target and parallel streams before the run.
+// Weight arms (workload/arms.mjs): one token type each, 3 weekly pp by default (or 6 pp of the 5h
+// meter with --window 5h); usdPerHour per stream is an estimate at API prices from the prompt sizes
+// (cache ≈ 45k cached tokens in ≈ 7 s, input ≈ 30k uncached in ≈ 15 s, output ≈ 6k tokens in
+// ≈ 70 s, reasoning ≈ 7k reasoning tokens in ≈ 120 s).
 export const ARMS = {
   A: { targetPp: 12, maxHours: 3, usdPerHour: 3.7, effort: "medium", sandbox: "workspace-write", label: "coding tasks, medium effort" },
   B: { targetPp: 8, maxHours: 2, usdPerHour: 3.2, effort: "medium", sandbox: "read-only", label: "low-cache prompts, medium effort" },
+  cache: { targetPp: 3, targetPp5h: 6, maxHours: 2, usdPerHour: 2.6, parallel: 2, effort: "low", sandbox: "read-only", label: "cached input: one long prefix resent", weights: true },
+  input: { targetPp: 3, targetPp5h: 6, maxHours: 2, usdPerHour: 15, parallel: 1, effort: "low", sandbox: "read-only", label: "uncached input: unique long prompts", weights: true },
+  output: { targetPp: 3, targetPp5h: 6, maxHours: 2, usdPerHour: 3.2, parallel: 3, effort: "low", sandbox: "read-only", label: "visible output: long answers, low effort", weights: true },
+  reasoning: { targetPp: 3, targetPp5h: 6, maxHours: 2, usdPerHour: 2.1, parallel: 3, effort: "high", sandbox: "read-only", label: "reasoning: short puzzles, high effort", weights: true },
 };
+/** 5h pp per weekly pp on Plus with GPT-6.2 Sol (2026-11-27 runs); only sizes --window 5h runs. */
+export const FIVE_H_PER_WEEKLY = 6;
+/** --arm value → ARMS key (A, B upper case; weight arms lower case). */
+export const armKey = (x) => {
+  const s = String(x ?? "");
+  if (ARMS[s.toUpperCase()] && !ARMS[s.toUpperCase()].weights) return s.toUpperCase();
+  return ARMS[s.toLowerCase()]?.weights ? s.toLowerCase() : null;
+};
+const CACHE_TURNS_PER_SESSION = 200;
 export const MAX_PARALLEL = 6;
 const READING_LOOKBACK_MS = 8 * 86400000;
 const FIVE_H_PAUSE_PCT = 95;
@@ -126,8 +146,10 @@ export function siteRefFor(prices, model, planName = "ChatGPT Plus") {
  * MAX_PARALLEL), the target pp (arm target, cut to what fits in maxHours, at least MIN_STEPS), and
  * the expected hours and API $. Explicit targetPp / parallel / maxHours are kept as given.
  */
-export function pacing({ arm, plan, model, prices, targetPp = null, parallel = null, maxHours = null }) {
+export function pacing({ arm, plan, model, prices, targetPp = null, parallel = null, maxHours = null, window = "weekly" }) {
   const cfg = ARMS[arm];
+  const perWeekly = window === "5h" ? FIVE_H_PER_WEEKLY : 1;
+  const armTarget = window === "5h" ? cfg.targetPp5h ?? cfg.targetPp * FIVE_H_PER_WEEKLY : cfg.targetPp;
   const fee = planFee(plan);
   const ref = siteRefFor(prices, model, plan.name);
   const usdPerPp = ref && fee ? (ref.subsidy * fee) / (100 * RF.WEEKS_PER_MONTH) : null;
@@ -136,14 +158,14 @@ export function pacing({ arm, plan, model, prices, targetPp = null, parallel = n
   const scale = base && m ? (m.input + m.output) / (base.input + base.output) : 1;
   const usdPerHour = cfg.usdPerHour * scale;
   const hours = maxHours ?? cfg.maxHours;
-  const ppPerHour = usdPerPp ? usdPerHour / usdPerPp : null;
+  const ppPerHour = usdPerPp ? (usdPerHour / usdPerPp) * perWeekly : null;
   let par = parallel;
   if (par == null) {
-    par = 1;
+    par = cfg.parallel ?? 1;
     if (ppPerHour) while (par < MAX_PARALLEL && par * ppPerHour * hours < RF.MIN_STEPS) par++;
   }
   let target = targetPp;
-  if (target == null) target = ppPerHour ? Math.max(RF.MIN_STEPS, Math.min(cfg.targetPp, Math.floor(par * ppPerHour * hours))) : cfg.targetPp;
+  if (target == null) target = ppPerHour ? Math.max(RF.MIN_STEPS, Math.min(armTarget, Math.floor(par * ppPerHour * hours))) : armTarget;
   let estHours = null;
   let estPp = null;
   if (ppPerHour) {
@@ -157,7 +179,8 @@ export function pacing({ arm, plan, model, prices, targetPp = null, parallel = n
     parallel: par,
     targetPp: target,
     maxHours: hours,
-    est: estHours != null ? { hours: RF.round(estHours, 2), pp: RF.round(estPp, 2), usd: RF.round(estPp * usdPerPp, 2) } : null,
+    window,
+    est: estHours != null ? { hours: RF.round(estHours, 2), pp: RF.round(estPp, 2), usd: RF.round((estPp / perWeekly) * usdPerPp, 2) } : null,
   };
 }
 
@@ -351,12 +374,23 @@ function codexArgs({ dir, sandbox, model, effort, lastFile }) {
   return args;
 }
 
+/**
+ * `codex exec resume <session> -` with the run's model and effort; resume takes no -s / -C, so the
+ * sandbox goes in as config and the child starts in the session's folder.
+ */
+export function resumeArgs({ sessionId, model, effort, lastFile }) {
+  const args = ["exec", "resume", "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules", "-m", model, "-c", `model_reasoning_effort="${effort}"`, "-c", `web_search="disabled"`, "-c", `sandbox_mode="read-only"`, "--json"];
+  if (lastFile) args.push("-o", lastFile);
+  args.push(sessionId, "-");
+  return args;
+}
+
 const activeChildren = new Set();
 let interrupted = 0;
 
-function runCodex(bin, args, prompt, { timeoutMs, logFile }) {
+function runCodex(bin, args, prompt, { timeoutMs, logFile, cwd = undefined }) {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], cwd });
     activeChildren.add(child);
     const out = fs.createWriteStream(logFile);
     let stderr = "";
@@ -419,9 +453,13 @@ function saveManifest(dir, m) {
 }
 
 async function cmdRun(a) {
-  const arm = String(a.arm || "").toUpperCase();
-  if (!ARMS[arm]) fail("--arm A or --arm B");
+  const arm = armKey(a.arm);
+  if (!arm) fail(`--arm ${Object.keys(ARMS).join(" | ")}`);
   const cfg = ARMS[arm];
+  const targetWindow = a.window == null ? "weekly" : String(a.window);
+  if (!["weekly", "5h"].includes(targetWindow)) fail("--window weekly | 5h");
+  const cacheMode = a["cache-mode"] == null ? "resume" : String(a["cache-mode"]);
+  if (!["resume", "fresh"].includes(cacheMode)) fail("--cache-mode resume | fresh");
   const effort = a.effort || cfg.effort;
   const model = a.model || DEFAULT_MODEL;
   if (model === true || !MODEL_SLUG.test(model)) fail("--model <slug>, e.g. gpt-6.2-astra");
@@ -433,13 +471,19 @@ async function cmdRun(a) {
   if (asked.parallel != null && !(Number.isInteger(asked.parallel) && asked.parallel >= 1 && asked.parallel <= MAX_PARALLEL)) fail(`--parallel 1 to ${MAX_PARALLEL}`);
   if (asked.targetPp != null && !(asked.targetPp > 0)) fail("--target-pp: a number above 0");
   if (asked.maxHours != null && !(asked.maxHours > 0)) fail("--max-hours: a number above 0");
-  const bin = a.codex || "codex";
+  // a path is made absolute: resumed calls start in the stream's folder
+  const bin = typeof a.codex === "string" ? (a.codex.includes("/") ? path.resolve(a.codex) : a.codex) : "codex";
   const tag = a.tag || `${new Date().toISOString().slice(0, 10)}-${arm}`;
   if (!/^[\w.-]+$/.test(tag)) fail("--tag: letters, digits, . _ - only");
   const runDir = path.join(RUNS_DIR, tag);
   const workRoot = path.join(WORK_BASE, tag);
   const dry = !!a["dry-run"];
   const taskAt = (n) => {
+    if (cfg.weights) {
+      const id = `${arm}-${String(n + 1).padStart(4, "0")}`;
+      if (arm === "cache") return { id, n, prompt: cacheMode === "fresh" ? cacheFresh(tag, n) : armPrompt("cache", tag, n), files: {}, round: 1 };
+      return { id, n, prompt: armPrompt(arm, tag, n), files: {}, round: 1 };
+    }
     if (arm === "A") {
       const base = TASKS_A[n % TASKS_A.length];
       const round = Math.floor(n / TASKS_A.length) + 1;
@@ -467,10 +511,10 @@ async function cmdRun(a) {
     fail(err.message);
   }
   if (planFee(plan) == null) fail(`${plan.name}: no monthly fee in scripts/billing-periods.mjs`);
-  let pace = pacing({ arm, plan, model, prices, ...asked });
+  let pace = pacing({ arm, plan, model, prices, ...asked, window: targetWindow });
   const paceLine = (p) =>
     `plan       ${plan.name} · $${planFee(plan)}/month · ${p.usdPerPp ? `site $${p.usdPerPp.toFixed(2)}/weekly pp` : "no site value"}\n` +
-    `pacing     target +${p.targetPp} pp weekly · stop at ${p.maxHours} h with ${RF.MIN_STEPS}+ steps · ${p.parallel} parallel${p.est ? ` · expected ${p.est.hours} h, +${p.est.pp} pp, API $${p.est.usd}` : ""}`;
+    `pacing     target +${p.targetPp} pp ${targetWindow} · stop at ${p.maxHours} h with ${RF.MIN_STEPS}+ steps · ${p.parallel} parallel${p.est ? ` · expected ${p.est.hours} h, +${p.est.pp} pp, API $${p.est.usd}` : ""}`;
 
   if (dry) {
     log(`dry run · arm ${arm} (${cfg.label}) · tag ${tag} · stop at weekly ${maxWeekly}% · model ${model} · effort ${effort}`);
@@ -478,9 +522,25 @@ async function cmdRun(a) {
     log(`prices     ${model} $${price.input} / $${price.cachedInput} / $${price.output} per 1M (input / cached / output), as of ${price.asOf ?? prices.asOf}`);
     log(`work dir   ${workRoot}`);
     log(`run dir    ${runDir}`);
-    log(`workload   v${WORKLOAD_VERSION} ${workloadHash()}${arm === "B" ? ` · ${B_ROWS} CSV rows per prompt` : ` · ${TASKS_A.length} tasks, repeated in rounds until the target`}`);
+    if (cfg.weights) log(`workload   arms v${ARM_WORKLOAD_VERSION} ${armWorkloadHash()} · ${cfg.label}${arm === "cache" ? ` · ${cacheMode}` : ""}`);
+    else log(`workload   v${WORKLOAD_VERSION} ${workloadHash()}${arm === "B" ? ` · ${B_ROWS} CSV rows per prompt` : ` · ${TASKS_A.length} tasks, repeated in rounds until the target`}`);
     log(`\nidle check (before and after): ping, ${settleMin} min, ping, ${idleMin} min, ping`);
     log(`  echo ${sq(PING)} | ${bin} ${pingArgs(path.join(workRoot, "ping")).map(sq).join(" ")}`);
+    if (arm === "cache" && cacheMode === "resume") {
+      const dir = path.join(workRoot, "stream-1");
+      const first = cacheFirst(tag);
+      log(`\nstream 1, first call · prompt ${first.length} chars`);
+      log(`  ${bin} ${codexArgs({ dir, sandbox: cfg.sandbox, model, effort, lastFile: path.join(runDir, "logs", "stream-1-0.last.txt") }).map(sq).join(" ")}  < prompt`);
+      log(`  prompt: … ${first.slice(-80).replace(/\n/g, " ")}`);
+      for (let n = 0; n < 2; n++) {
+        const t = taskAt(n);
+        log(`\ncall ${t.id} · in ${dir} · prompt ${t.prompt.length} chars`);
+        log(`  ${bin} ${resumeArgs({ sessionId: "<stream 1 session id>", model, effort, lastFile: path.join(runDir, "logs", `${t.id}.last.txt`) }).map(sq).join(" ")}  < prompt`);
+        log(`  prompt: ${t.prompt}`);
+      }
+      log(`\n… ${pace.parallel} stream(s), each one session resumed up to ${CACHE_TURNS_PER_SESSION} times, until ${targetWindow} has moved ${pace.targetPp} pp or ${pace.maxHours} h have passed with ${RF.MIN_STEPS}+ steps. No calls made.`);
+      return;
+    }
     for (let n = 0; n < 3; n++) {
       const t = taskAt(n);
       const dir = path.join(workRoot, t.id);
@@ -488,7 +548,7 @@ async function cmdRun(a) {
       log(`  ${bin} ${codexArgs({ dir, sandbox: cfg.sandbox, model, effort, lastFile: path.join(runDir, "logs", `${t.id}.last.txt`) }).map(sq).join(" ")}  < prompt`);
       log(`  prompt: ${t.prompt.split("\n")[0].slice(0, 160)}${t.prompt.length > 160 ? " …" : ""}`);
     }
-    log(`\n… then more tasks, ${pace.parallel} at a time, until weekly has moved ${pace.targetPp} pp or ${pace.maxHours} h have passed with ${RF.MIN_STEPS}+ steps. No calls made.`);
+    log(`\n… then more tasks, ${pace.parallel} at a time, until ${targetWindow} has moved ${pace.targetPp} pp or ${pace.maxHours} h have passed with ${RF.MIN_STEPS}+ steps. No calls made.`);
     return;
   }
 
@@ -512,8 +572,10 @@ async function cmdRun(a) {
     effort,
     sandbox: cfg.sandbox,
     codexVersion: v,
-    workload: { version: WORKLOAD_VERSION, hash: workloadHash() },
+    workload: cfg.weights ? { version: `arms-${ARM_WORKLOAD_VERSION}`, hash: armWorkloadHash() } : { version: WORKLOAD_VERSION, hash: workloadHash() },
     plan: { id: plan.id, name: plan.name, feeUsd: planFee(plan), planType: null },
+    targetWindow,
+    ...(arm === "cache" ? { cacheMode } : {}),
     targetPp: pace.targetPp,
     maxHours: pace.maxHours,
     minSteps: RF.MIN_STEPS,
@@ -572,7 +634,7 @@ async function cmdRun(a) {
     if (seen && seen.id !== plan.id) {
       plan = seen;
       if (planFee(plan) == null) fail(`${plan.name}: no monthly fee in scripts/billing-periods.mjs`);
-      pace = pacing({ arm, plan, model, prices, ...asked });
+      pace = pacing({ arm, plan, model, prices, ...asked, window: targetWindow });
     }
   } catch (err) {
     fail(err.message);
@@ -584,42 +646,74 @@ async function cmdRun(a) {
   const parallel = pace.parallel;
   const w0 = first?.windows?.weekly?.pct;
   if (w0 == null) fail("no weekly reading after the ping");
-  if (w0 + targetPp > maxWeekly) fail(`weekly at ${w0}%: +${targetPp} pp would pass ${maxWeekly}%`);
-  const st = { ts: firstEv.ts, weekly: w0, fiveH: first?.windows?.["5h"]?.pct ?? null, maxTask5h: 0, movedPp: 0, readings: [{ r: w0 }], failures: 0 };
+  const t0 = first?.windows?.[targetWindow]?.pct;
+  if (t0 == null) fail(`no ${targetWindow} reading after the ping`);
+  const weeklyNeed = targetWindow === "weekly" ? targetPp : targetPp / FIVE_H_PER_WEEKLY;
+  if (w0 + weeklyNeed > maxWeekly) fail(`weekly at ${w0}%: +${RF.round(weeklyNeed, 2)} pp would pass ${maxWeekly}%`);
+  // movedPp, readings: the target window
+  const st = { ts: firstEv.ts, weekly: w0, fiveH: first?.windows?.["5h"]?.pct ?? null, maxTask5h: 0, target: t0, movedPp: 0, readings: [{ r: t0 }], failures: 0 };
   const steps = () => Math.round(st.movedPp / RF.detectStep(st.readings));
   let pauseUntil = null;
   let n = 0;
   const loopStart = Date.now();
+  // cache arm (resume): one session per stream, resumed with a one-word question per call
+  const streams = Array.from({ length: parallel }, (_, s) => ({ s: s + 1, dir: path.join(workRoot, `stream-${s + 1}`), sessionId: null, turns: 0, busy: false, sessions: 0 }));
 
   const runTask = async (t, idx) => {
-    const dir = path.join(workRoot, t.id);
+    const resume = arm === "cache" && cacheMode === "resume";
+    const stream = resume ? streams.find((x) => !x.busy) : null;
+    if (stream) stream.busy = true;
+    const dir = stream ? stream.dir : path.join(workRoot, t.id);
     fs.mkdirSync(dir, { recursive: true });
     writeFiles(dir, t.files);
     const tStart = Date.now();
-    const rec = { id: t.id, dir, startedAt: nowIso(), endedAt: null, exit: null, threadId: null };
+    const rec = { id: t.id, dir, startedAt: nowIso(), endedAt: null, exit: null, threadId: null, ...(stream ? { stream: stream.s } : {}) };
     m.tasks.push(rec);
     saveManifest(runDir, m);
-    const r = await runCodex(bin, codexArgs({ dir, sandbox: cfg.sandbox, model, effort, lastFile: path.join(runDir, "logs", `${t.id}.last.txt`) }), t.prompt, { timeoutMs, logFile: path.join(runDir, "logs", `${t.id}.jsonl`) });
+    const lastFile = path.join(runDir, "logs", `${t.id}.last.txt`);
+    const logFile = path.join(runDir, "logs", `${t.id}.jsonl`);
+    let r;
+    if (stream && stream.sessionId && stream.turns < CACHE_TURNS_PER_SESSION) {
+      r = await runCodex(bin, resumeArgs({ sessionId: stream.sessionId, model, effort, lastFile }), t.prompt, { timeoutMs, logFile, cwd: dir });
+      rec.resumed = true;
+      stream.turns++;
+    } else if (stream) {
+      // new session: the long prefix, then resumes of it
+      r = await runCodex(bin, codexArgs({ dir, sandbox: cfg.sandbox, model, effort, lastFile }), cacheFirst(tag), { timeoutMs, logFile });
+      stream.sessionId = r.code === 0 ? r.threadId : null;
+      stream.turns = 0;
+      stream.sessions++;
+      rec.first = true;
+    } else r = await runCodex(bin, codexArgs({ dir, sandbox: cfg.sandbox, model, effort, lastFile }), t.prompt, { timeoutMs, logFile });
+    if (stream) stream.busy = false;
     rec.endedAt = nowIso();
     rec.exit = r.timedOut ? "timeout" : r.code;
     rec.threadId = r.threadId;
     const ss = sessionsUnder(dir, tStart);
-    const priced = RF.priceTimeline(RF.buildTimeline(ss).events, prices.models, model);
+    // a resumed rollout holds the session's earlier calls too: count this call's events only
+    const priced = RF.priceTimeline(RF.buildTimeline(ss, { fromMs: cfg.weights ? tStart : null }).events, prices.models, model);
     const usd = priced.length ? priced[priced.length - 1].ca : 0;
     rec.calls = priced.filter((e) => e.kind === "call").length;
     rec.usd = RF.round(usd, 6);
+    if (cfg.weights) {
+      const c = priced.filter((e) => e.kind === "call");
+      const inTok = c.reduce((s, e) => s + e.priced.tokens.input, 0);
+      rec.cachedShare = inTok > 0 ? RF.round(c.reduce((s, e) => s + e.priced.tokens.cached, 0) / inTok, 4) : null;
+    }
     saveManifest(runDir, m);
     // parallel tasks finish out of order: only a reading newer than the last one moves the counters
     const ev = lastRateEvent(ss);
     const rate = ev?.rate;
     const wk = rate?.windows?.weekly;
     const fh = rate?.windows?.["5h"];
+    const tw = rate?.windows?.[targetWindow];
     if (ev && ev.ts > st.ts) {
       st.ts = ev.ts;
-      if (wk) {
-        if (wk.pct >= st.weekly) st.movedPp += wk.pct - st.weekly;
-        st.weekly = wk.pct;
-        st.readings.push({ r: wk.pct });
+      if (wk) st.weekly = wk.pct;
+      if (tw) {
+        if (tw.pct >= st.target) st.movedPp += tw.pct - st.target;
+        st.target = tw.pct;
+        st.readings.push({ r: tw.pct });
       }
       if (fh) {
         if (st.fiveH != null && fh.pct >= st.fiveH) st.maxTask5h = Math.max(st.maxTask5h, fh.pct - st.fiveH);
@@ -631,7 +725,8 @@ async function cmdRun(a) {
     const etaTarget = rateH ? ((targetPp - st.movedPp) / rateH) * 60 : null;
     const etaCap = rateH ? Math.max((pace.maxHours - hours) * 60, ((RF.MIN_STEPS - steps()) / rateH) * 60) : null;
     const eta = etaTarget != null ? Math.min(etaTarget, etaCap) : null;
-    log(`${hhmm(Date.now())} ${t.id.padEnd(16)} exit ${String(rec.exit).padEnd(7)} calls ${String(rec.calls).padStart(3)}  $${usd.toFixed(3).padStart(7)}  ${st.fiveH != null ? `5h ${st.fiveH}%  ` : ""}weekly ${st.weekly}%  +${st.movedPp}/${targetPp} pp${eta != null && eta > 0 ? `  ~${Math.round(eta)} min left` : ""}`);
+    log(`${hhmm(Date.now())} ${t.id.padEnd(16)} exit ${String(rec.exit).padEnd(7)} calls ${String(rec.calls).padStart(3)}  $${usd.toFixed(3).padStart(7)}  ${st.fiveH != null ? `5h ${st.fiveH}%  ` : ""}weekly ${st.weekly}%  +${RF.round(st.movedPp, 2)}/${targetPp} pp${targetWindow === "weekly" ? "" : ` ${targetWindow}`}${rec.cachedShare != null && arm === "cache" ? `  cached ${Math.round(100 * rec.cachedShare)}%` : ""}${eta != null && eta > 0 ? `  ~${Math.round(eta)} min left` : ""}`);
+    if (arm === "cache" && idx === 4 && rec.cachedShare != null && rec.cachedShare < 0.8) log(`  cached ${Math.round(100 * rec.cachedShare)}% of input: below 80%; stop with Ctrl-C and rerun with --cache-mode fresh if it stays there`);
     if (interrupted || m.stopReason) return;
     if (rec.exit !== 0) {
       st.failures++;
@@ -819,8 +914,11 @@ function analyseAndWrite(a) {
     const files = fs.existsSync(copies) && fs.readdirSync(copies).length ? fs.readdirSync(copies).map((f) => path.join(copies, f)) : RF.listRolloutFiles(SESSIONS_DIR, fromMs, toMs);
     sessions = files.map((f) => RF.parseRolloutFile(f));
   } else if (a.dir) {
+    // a folder of rollouts, searched recursively: a run's rollouts/ copy or ~/.codex/sessions
+    // (narrow with --root, --from, --to)
     const dir = path.resolve(a.dir);
-    sessions = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl")).map((f) => RF.parseRolloutFile(path.join(dir, f)));
+    if (!fs.existsSync(dir)) fail(`${dir} not found`);
+    sessions = RF.listRolloutFiles(dir, fromMs, toMs).map((f) => RF.parseRolloutFile(f));
     tag ||= path.basename(dir);
   } else if (fromMs != null) {
     sessions = RF.listRolloutFiles(a["sessions-dir"] || SESSIONS_DIR, fromMs, toMs).map((f) => RF.parseRolloutFile(f));
@@ -928,26 +1026,117 @@ function cmdCompare(a) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// weights
+// ---------------------------------------------------------------------------------------------
+
+function cmdWeights(a) {
+  if (typeof a.runs !== "string") fail("weights --runs <tag>,<tag>,… (cache, input, output, reasoning runs; A and B runs as holdouts)");
+  const entries = a.runs.split(",").map((x) => x.trim()).filter(Boolean);
+  const holdout = new Set(typeof a.holdout === "string" ? a.holdout.split(",").map((x) => x.trim()) : []);
+  for (const h of holdout) if (!entries.includes(h)) entries.push(h);
+  const runsDirs = [RUNS_DIR, ...(typeof a["runs-dir"] === "string" ? a["runs-dir"].split(",").map((d) => path.resolve(d)) : [])];
+  const sessionsDir = typeof a["sessions-dir"] === "string" ? path.resolve(a["sessions-dir"]) : SESSIONS_DIR;
+  const prices = loadPrices();
+  const boot = a.boot != null ? Number(a.boot) : 400;
+  const seed = a.seed != null ? Number(a.seed) : 1;
+  if (!(Number.isInteger(boot) && boot >= 20)) fail("--boot: a whole number, 20 or more");
+  const runs = [];
+  let model = typeof a.model === "string" ? a.model : null;
+  let planId = typeof a.plan === "string" ? a.plan : null;
+  if (planId && !planById(planId)) fail(`--plan ${PLAN_IDS.join(" | ")}`);
+  const cache = new Map();
+  const parse = (f) => cache.get(f) || cache.set(f, RF.parseRolloutFile(f)).get(f);
+  for (const e of entries) {
+    let loc;
+    try {
+      loc = WT.locateRun(e, { runsDirs, sessionsDir, workBase: WORK_BASE });
+    } catch (err) {
+      fail(err.message);
+    }
+    const m = loc.manifest;
+    const runModel = m?.model ?? null;
+    model ||= runModel || DEFAULT_MODEL;
+    if (runModel && runModel !== model) fail(`${loc.tag} ran ${runModel}, not ${model}: fit one model at a time`);
+    if (!planId && m?.plan?.id) planId = m.plan.id;
+    else if (m?.plan?.id && m.plan.id !== planId) fail(`${loc.tag} ran on ${m.plan.id}, not ${planId}: fit one plan at a time`);
+    const arm = m?.arm ?? null;
+    const sessions = loc.files.map(parse);
+    try {
+      priceFor(prices, model);
+    } catch (err) {
+      fail(err.message);
+    }
+    const run = WT.runFromSessions({ tag: loc.tag, arm, role: holdout.has(e) || holdout.has(loc.tag) ? "holdout" : null, sessions, prices, model, root: loc.root, fromMs: loc.fromMs, toMs: loc.toMs });
+    const res = RF.analyse({ sessions, prices, manifest: m, expected: expectedFrom({}, m), root: loc.root, fromMs: loc.fromMs, toMs: loc.toMs, plan: planId ? planById(planId) : null });
+    run.verdict = res.verdict;
+    run.flags = res.flags;
+    run.source = loc.source;
+    if (!run.calls) fail(`${loc.tag}: no calls in its rollouts (${loc.source})`);
+    runs.push(run);
+    log(`${loc.tag.padEnd(18)} ${String(arm ?? "—").padEnd(9)} ${run.role.padEnd(7)} calls ${String(run.calls).padStart(4)}  API $${run.usd.reduce((x, y) => x + y, 0).toFixed(3)}  ${loc.source}  verdict ${res.verdict}`);
+  }
+  const plan = planId ? planById(planId) : planById(DEFAULT_PLAN_ID);
+  const out = WT.fitRuns({ runs, model, plan, prices, boot, seed, kitVersion: KIT_VERSION });
+  out.generatedAt = nowIso();
+  fs.mkdirSync(RESULTS_DIR, { recursive: true });
+  const file = typeof a.out === "string" ? path.resolve(a.out) : path.join(RESULTS_DIR, `weights-${plan.id}-${model}.json`);
+  fs.writeFileSync(file, JSON.stringify(out, null, 2) + "\n");
+  printWeights(out, log);
+  log(`\nwrote ${file}`);
+  return out;
+}
+
+export function printWeights(r, out = console.log) {
+  const f = (x, d = 2) => (x == null || !Number.isFinite(x) ? "—" : x.toFixed(d));
+  const ci = (c, d = 2) => (c ? `${f(c[0], d)}–${f(c[1], d)}` : "—");
+  out(`\nweights · ${r.planName ?? r.plan} · ${r.model} · verdict ${r.verdict} · weight 1 = API price; uncached input fixed at 1`);
+  for (const [w, x] of Object.entries(r.windows)) {
+    if (!x.usable) {
+      out(`${w}: ${x.reason}`);
+      continue;
+    }
+    out(`\n${w} · ${x.crossings} steps in ${x.segments} segments · lag ${x.lag} · $${f(x.scale.usdPerUnit, 4)}/pp at weight 1 (95% ${ci(x.scale.ci95, 4)})`);
+    for (const k of r.kinds) {
+      const v = x.weights[k];
+      const label = (r.kindLabels?.[k] ?? k).padEnd(15);
+      if (v.fixed) out(`  ${label} 1 (reference)`);
+      else if (v.est == null) out(`  ${label} —  ${v.reason}`);
+      else out(`  ${label} ${f(v.est)} (95% ${ci(v.ci95)})${v.identified ? "" : `  not identified: ${v.reason}`}`);
+    }
+    for (const h of x.holdout) out(h.usable ? `  holdout ${h.tag.padEnd(14)} predicted ÷ measured ${f(h.ratio.est, 3)} (95% ${ci(h.ratio.ci95, 3)})${h.inside ? "" : "  outside"} · at API prices ${f(h.apiPriceRatio.est, 3)}` : `  holdout ${h.tag}: ${h.reason}`);
+  }
+  const c = r.windowsCompared;
+  if (c?.comparable) {
+    out(`\n5h ÷ weekly: ${Object.entries(c.kinds).map(([k, v]) => `${k} ${f(v.ratio)} (95% ${ci(v.ci95)})`).join(" · ")} · ${c.same ? "same weights" : "weights differ"}`);
+  }
+  for (const fl of r.flags) out(`${fl.severity.padEnd(7)} ${fl.code}: ${fl.detail}`);
+}
+
+// ---------------------------------------------------------------------------------------------
 
 const HELP = `codex-quota ${KIT_VERSION}
 
   node kits/codex/scripts/codex-quota.mjs smoke [--plan <plan>] [--model <slug>] [--codex <path>]
   node kits/codex/scripts/codex-quota.mjs check [--plan <plan>] [--model <slug>] [--codex <path>]
-  node kits/codex/scripts/codex-quota.mjs run --arm A|B [options]
+  node kits/codex/scripts/codex-quota.mjs run --arm A|B|cache|input|output|reasoning [options]
   node kits/codex/scripts/codex-quota.mjs analyse --run <tag> | --dir <folder> | --from <ISO> [--to <ISO>] [options]
   node kits/codex/scripts/codex-quota.mjs compare <result-a.json> <result-b.json> [--out <file>]
+  node kits/codex/scripts/codex-quota.mjs weights --runs <tag>,<tag>,… [--runs-dir <folder>] [options]
   node kits/codex/scripts/codex-quota.mjs prices [--site public/data/combined.json] [--models ${PRICED_MODELS.join(",")}]
 
 run options
   --arm               A (coding tasks, up to +${ARMS.A.targetPp} pp) | B (low-cache prompts, up to +${ARMS.B.targetPp} pp)
+                      cache | input | output | reasoning (token weights, +${ARMS.cache.targetPp} pp weekly or +${ARMS.cache.targetPp5h} pp 5h each)
+  --window            weekly | 5h: the window --target-pp counts (default weekly)
+  --cache-mode        resume | fresh (cache arm; default resume)
   --plan              ${PLAN_IDS.join(" | ")} (default from plan_type; required for Pro)
   --model             codex model slug, passed as -m (default ${DEFAULT_MODEL}); needs a price in prices.json
   --tag               run name (default <date>-<arm>)
-  --target-pp         weekly pp to use (default per plan, at most A ${ARMS.A.targetPp}, B ${ARMS.B.targetPp})
-  --max-hours         stop after this many hours once weekly made ${RF.MIN_STEPS} steps (default A ${ARMS.A.maxHours}, B ${ARMS.B.maxHours})
+  --target-pp         pp of --window to use (default per plan, at most A ${ARMS.A.targetPp}, B ${ARMS.B.targetPp}, weight arms ${ARMS.cache.targetPp})
+  --max-hours         stop after this many hours once the window made ${RF.MIN_STEPS} steps (default A ${ARMS.A.maxHours}, B ${ARMS.B.maxHours}, weight arms ${ARMS.cache.maxHours})
   --parallel          tasks at a time, 1 to ${MAX_PARALLEL} (default per plan)
   --max-weekly        stop at this weekly % (default 85)
-  --effort            default medium
+  --effort            default medium (A, B); low (cache, input, output); high (reasoning)
   --idle-min          idle check length, minutes (default 5)
   --settle-min        wait before the idle check, minutes (default 2)
   --task-timeout-min  per task (default 25)
@@ -957,12 +1146,23 @@ run options
 
 analyse options
   --run <tag>         kits/codex/results/runs/<tag>/ (manifest + rollouts)
-  --dir <folder>      every rollout-*.jsonl in a folder
+  --dir <folder>      every rollout-*.jsonl under a folder (e.g. ~/.codex/sessions)
   --from / --to       ISO times; rollouts from ~/.codex/sessions (or --sessions-dir)
   --root <dir>        keep sessions whose cwd is under <dir>
   --model / --effort  expected model and effort (default from the manifest)
   --plan              ${PLAN_IDS.join(" | ")} (default from the manifest, else plan_type)
   --out <file>        default kits/codex/results/<tag>.json
+
+weights options
+  --runs <list>       run tags or folders, comma-separated: run folders (manifest.json), tags under
+                      kits/codex/results/runs or --runs-dir, or folders of rollout-*.jsonl
+  --runs-dir <dirs>   more folders holding <tag>/manifest.json, comma-separated
+  --holdout <list>    runs to predict, not fit (default: every run that is not cache, input, output or reasoning)
+  --sessions-dir      rollouts for runs without copies (default ~/.codex/sessions)
+  --plan / --model    default from the manifests
+  --boot N            bootstrap draws (default 400)
+  --seed N            default 1
+  --out <file>        default kits/codex/results/weights-<plan>-<model>.json
 `;
 
 async function main() {
@@ -975,6 +1175,7 @@ async function main() {
   if (cmd === "run") return cmdRun(a);
   if (cmd === "analyse" || cmd === "analyze") return analyseAndWrite(a);
   if (cmd === "compare") return cmdCompare(a);
+  if (cmd === "weights") return cmdWeights(a);
   fail(`unknown command ${cmd}\n${HELP}`);
 }
 
