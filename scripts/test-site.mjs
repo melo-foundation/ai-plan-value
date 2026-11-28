@@ -2934,8 +2934,10 @@ test("kit status: kits/status.json lists every kit adapter, with date and eviden
     assert.ok(KIT_STATUS.kits.codex.adapters.plus.evidence.includes(f), f);
     assert.ok(fs.existsSync(path.join(ROOT, "data", "quota-measurements", f)), f);
   }
-  const subs = fs.readdirSync(path.join(ROOT, "data", "quota-weights", "submissions", "anthropic"));
-  assert.equal(KIT_STATUS.kits["claude-code"].adapters["claude-code"].status, subs.length ? "tested" : "untested");
+  // Only real kit runs count: seed files converted from outside sources ("seed": true) do not.
+  const dir = path.join(ROOT, "data", "quota-weights", "submissions", "anthropic");
+  const kitRuns = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl")).filter((f) => !fs.readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).some((l) => { try { return JSON.parse(l).seed === true; } catch { return false; } }));
+  assert.equal(KIT_STATUS.kits["claude-code"].adapters["claude-code"].status, kitRuns.length ? "tested" : "untested");
 });
 
 test("kit status: README Status cells match kits/status.json (node scripts/kit-status.mjs)", () => {
@@ -2948,7 +2950,8 @@ test("kit status: README Status cells match kits/status.json (node scripts/kit-s
   assert.equal(all["kits/api-plan/README.md"].filled, Object.keys(KIT_STATUS.kits["api-plan"].adapters).length, "a provider without a Status cell");
   assert.equal(all["kits/codex/README.md"].filled, Object.keys(KIT_STATUS.kits.codex.adapters).length, "a Codex plan without a Status cell");
   const idx = fs.readFileSync(path.join(ROOT, "kits", "README.md"), "utf8");
-  assert.match(idx, /\| Claude Code \| .* \| Tested \(\d{4}-\d{2}-\d{2}\) \|/);
+  const cc = KIT_STATUS.kits["claude-code"].adapters["claude-code"].status === "tested";
+  assert.match(idx, cc ? /\| Claude Code \| .* \| Tested \(\d{4}-\d{2}-\d{2}\) \|/ : /\| Claude Code \| .* \| Untested/);
   assert.match(idx, /\| Codex CLI \| .* \| Plus: Tested \(2026-11-27\); Pro 10x, Pro 20x, Pro 500: Untested: run `smoke` first \|/);
   // a flipped status changes the cell
   const flipped = structuredClone(KIT_STATUS);
