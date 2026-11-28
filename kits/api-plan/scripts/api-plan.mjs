@@ -33,6 +33,8 @@ import { ADAPTERS, adapterFor, baseUrlFor, windowDef, MeterShapeError } from "./
 import { siteModelId, priceFromSite, parsePriceOption, nearModels, priceUsage, plansFor, planFee, siteRef } from "./site.mjs";
 import { analyseRun, RUN_SCHEMA, typedResolution } from "./fit.mjs";
 import { promptAt, WORKLOAD_VERSION, workloadHash, approxTokens } from "../workload/prompts.mjs";
+import { API_ARMS, ARM_MAX_TOKENS, ARM_WORKLOAD_VERSION, armPromptAt, armWorkloadHash } from "../workload/arms.mjs";
+import * as WT from "./weights.mjs";
 import * as Smoke from "../../lib/smoke.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -167,26 +169,31 @@ const hostOf = (u) => {
 // Model calls
 // ---------------------------------------------------------------------------------------------
 
-export function requestFor(api, baseUrl, key, model, prompt, maxTokens) {
+/**
+ * One model request. prompt.effort (token-weight arms; dropped with { effort: false }): OpenAI
+ * `reasoning_effort`; Anthropic `thinking` with a budget below max_tokens when high; Ollama `think`.
+ */
+export function requestFor(api, baseUrl, key, model, prompt, maxTokens, { effort = true } = {}) {
+  const eff = effort ? prompt.effort ?? null : null;
   if (api === "anthropic") {
     const system = prompt.cacheSystem ? [{ type: "text", text: prompt.system, cache_control: { type: "ephemeral" } }] : prompt.system;
     return {
       url: `${baseUrl}/v1/messages`,
       headers: { "content-type": "application/json", "x-api-key": key, authorization: `Bearer ${key}`, "anthropic-version": "2023-06-01" },
-      body: { model, max_tokens: maxTokens, system, messages: [{ role: "user", content: prompt.user }] },
+      body: { model, max_tokens: maxTokens, system, messages: [{ role: "user", content: prompt.user }], ...(eff === "high" ? { thinking: { type: "enabled", budget_tokens: Math.max(1024, Math.min(12000, maxTokens - 2000)) } } : {}) },
     };
   }
   if (api === "ollama") {
     return {
       url: `${baseUrl}/api/chat`,
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-      body: { model, stream: false, options: { num_predict: maxTokens }, messages: [{ role: "system", content: prompt.system }, { role: "user", content: prompt.user }] },
+      body: { model, stream: false, options: { num_predict: maxTokens }, messages: [{ role: "system", content: prompt.system }, { role: "user", content: prompt.user }], ...(eff ? { think: eff === "high" } : {}) },
     };
   }
   return {
     url: `${baseUrl}/chat/completions`,
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: { model, max_tokens: maxTokens, stream: false, messages: [{ role: "system", content: prompt.system }, { role: "user", content: prompt.user }] },
+    body: { model, max_tokens: maxTokens, stream: false, messages: [{ role: "system", content: prompt.system }, { role: "user", content: prompt.user }], ...(eff ? { reasoning_effort: eff } : {}) },
   };
 }
 
@@ -233,7 +240,7 @@ async function httpJson(url, { method = "GET", headers = {}, body = null, timeou
 const excerpt = (r) => redact((r.json?.error?.message || r.json?.message || r.json?.msg || r.text || r.error || "").toString().replace(/\s+/g, " ").slice(0, 200));
 
 async function callOnce(ctx, prompt, maxTokens, timeoutMs) {
-  const req = requestFor(ctx.api, ctx.baseUrl, ctx.key, ctx.model, prompt, maxTokens);
+  const req = requestFor(ctx.api, ctx.baseUrl, ctx.key, ctx.model, prompt, maxTokens, { effort: ctx.effortParam !== false });
   const delays = [5000, 20000, 60000];
   for (let attempt = 0; ; attempt++) {
     const t0 = Date.now();
@@ -530,9 +537,15 @@ let interrupted = 0;
 async function cmdRun(a) {
   const ctx = context(a);
   const ad = ctx.adapter;
-  const tag = typeof a.tag === "string" ? a.tag : `${new Date().toISOString().slice(0, 10)}-${ad.id}`;
+  const arm = a.arm == null ? null : String(a.arm).toLowerCase();
+  if (arm != null && !API_ARMS.includes(arm)) fail(`--arm ${API_ARMS.join(" | ")}`);
+  if (arm === "write" && ctx.api !== "anthropic") fail("--arm write needs the Anthropic API (--api anthropic): OpenAI-style APIs do not bill cache writes");
+  if (arm && ctx.mode === "manual") fail(`--arm ${arm} needs an automatic meter: ${ad.provider} is read by hand`);
+  ctx.effortParam = !a["no-effort"];
+  const tag = typeof a.tag === "string" ? a.tag : `${new Date().toISOString().slice(0, 10)}-${ad.id}${arm ? `-${arm}` : ""}`;
   if (!/^[\w.-]+$/.test(tag)) fail("--tag: letters, digits, . _ - only");
-  const maxTokens = numOpt(a, "max-tokens", 4000);
+  const maxTokens = numOpt(a, "max-tokens", arm ? ARM_MAX_TOKENS[arm] : 4000);
+  const promptOf = (n) => (arm ? armPromptAt(arm, n, tag) : promptAt(n, tag));
   const idleMin = numOpt(a, "idle-min", ctx.mode === "manual" ? 2 : 3);
   const settleMin = numOpt(a, "settle-min", ctx.mode === "manual" ? 5 : 2);
   const maxPct = numOpt(a, "max-pct", 90);
@@ -543,10 +556,10 @@ async function cmdRun(a) {
   const dry = !!a["dry-run"];
   const runDir = path.join(RUNS_DIR, tag);
 
-  const prompt0 = promptAt(0, tag);
+  const prompt0 = promptOf(0);
   if (dry) {
-    const req = requestFor(ctx.api, ctx.baseUrl, `$${ad.env}`, ctx.model, prompt0, maxTokens);
-    log(`dry run · ${ad.provider} · tag ${tag} · model ${ctx.model} · meter ${ctx.mode}`);
+    const req = requestFor(ctx.api, ctx.baseUrl, `$${ad.env}`, ctx.model, prompt0, maxTokens, { effort: ctx.effortParam });
+    log(`dry run · ${ad.provider} · tag ${tag} · model ${ctx.model} · meter ${ctx.mode}${arm ? ` · arm ${arm}` : ""}`);
     log(`price     ${ctx.siteModel} $${ctx.price.input} / $${ctx.price.cachedInput} / $${ctx.price.output} per 1M (input / cached / output) · ${ctx.price.source}`);
     if (ctx.fee) log(`plan      ${ctx.fee.plan} · $${f(ctx.fee.feeUsd)}/month${ctx.fee.currency === "CNY" ? ` (¥${ctx.fee.feeLocal})` : ""} · site ${ctx.ref ? `${f(ctx.ref.subsidy)}×` : "none"}`);
     log(`key       $${ad.env} ${ctx.key ? "set" : "not set"}`);
@@ -558,7 +571,8 @@ async function cmdRun(a) {
     const per = expectedUsdPerPp(ctx, w);
     const target = numOpt(a, "target", ad.meter.target);
     log(`target    +${target} pp of ${w}${per ? ` ≈ $${f(per * target)} of API usage` : ""} · stop at ${maxPct}% · max ${maxCalls} calls`);
-    log(`workload  v${WORKLOAD_VERSION} ${workloadHash()} · shared, shared, unique · ~${approxTokens().shared} / ~${approxTokens().unique} input tokens · max_tokens ${maxTokens}`);
+    if (arm) log(`workload  arms v${ARM_WORKLOAD_VERSION} ${armWorkloadHash()} · ${arm} · ~${Math.round((prompt0.system.length + prompt0.user.length) / 4)} input tokens · max_tokens ${maxTokens}${prompt0.effort && ctx.effortParam ? ` · effort ${prompt0.effort}` : ""}`);
+    else log(`workload  v${WORKLOAD_VERSION} ${workloadHash()} · shared, shared, unique · ~${approxTokens().shared} / ~${approxTokens().unique} input tokens · max_tokens ${maxTokens}`);
     log("\nNo calls made.");
     return;
   }
@@ -585,7 +599,9 @@ async function cmdRun(a) {
     price: ctx.price,
     fee: ctx.fee,
     siteRef: ctx.ref,
-    workload: { version: WORKLOAD_VERSION, hash: workloadHash() },
+    workload: arm ? { version: `arms-${ARM_WORKLOAD_VERSION}`, hash: armWorkloadHash() } : { version: WORKLOAD_VERSION, hash: workloadHash() },
+    arm,
+    effortParam: arm ? ctx.effortParam : null,
     maxTokens,
     primary: null,
     target: null,
@@ -673,7 +689,7 @@ async function cmdRun(a) {
   const loopStart = Date.now();
   let last = start;
   while (!interrupted) {
-    const p = promptAt(n, tag);
+    const p = promptOf(n);
     const r = await callOnce(ctx, p, maxTokens, callTimeoutMs);
     const rec = { n, id: p.id, profile: p.profile, t0: r.t0, t1: r.t1, ok: r.ok, status: r.status, usage: r.usage, responseModel: r.responseModel, usd: 0, parts: null };
     if (r.ok && r.usage) {
@@ -793,6 +809,55 @@ function printSummary(r) {
   for (const fl of r.flags) log(`${fl.severity.padEnd(7)} ${fl.code}: ${fl.detail}`);
 }
 
+function cmdWeights(a) {
+  if (typeof a.runs !== "string") fail("weights --runs <tag>,<tag>,… (cache, input, output, reasoning, write runs; mixed runs as holdouts)");
+  const tags = a.runs.split(",").map((x) => x.trim()).filter(Boolean);
+  const holdout = new Set(typeof a.holdout === "string" ? a.holdout.split(",").map((x) => x.trim()) : []);
+  for (const h of holdout) if (!tags.includes(h)) tags.push(h);
+  const dirs = [RUNS_DIR, ...(typeof a["runs-dir"] === "string" ? a["runs-dir"].split(",").map((d) => path.resolve(d)) : [])];
+  const records = tags.map((t) => {
+    const p = dirs.map((d) => path.join(d, t, "run.json")).find((x) => fs.existsSync(x));
+    if (!p) fail(`run ${t} not found in ${dirs.join(", ")}: pass --runs-dir <folder holding <tag>/run.json>`);
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  });
+  const one = (k, label) => {
+    const vals = [...new Set(records.map((r) => r[k]))];
+    if (vals.length > 1) fail(`runs on different ${label}s (${vals.join(", ")}): fit one ${label} at a time`);
+  };
+  one("adapter", "provider");
+  one("model", "model");
+  if (records.some((r) => r.mode === "manual")) fail("weights need automatic meter readings after every call; manual runs have two readings");
+  const boot = a.boot != null ? Number(a.boot) : 400;
+  if (!(Number.isInteger(boot) && boot >= 20)) fail("--boot: a whole number, 20 or more");
+  const out = WT.fitRuns({ records, holdout, boot, seed: a.seed != null ? Number(a.seed) : 1, kitVersion: KIT_VERSION });
+  out.generatedAt = nowIso();
+  const slug = (s) => String(s || "no-plan").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  fs.mkdirSync(RESULTS_DIR, { recursive: true });
+  const file = typeof a.out === "string" ? path.resolve(a.out) : path.join(RESULTS_DIR, `weights-${slug(records[0].fee?.plan ?? records[0].adapter)}-${slug(records[0].model)}.json`);
+  fs.writeFileSync(file, redact(JSON.stringify(out, null, 2)) + "\n");
+  log(`\nweights · ${out.provider} · ${out.plan ?? "no plan"} · ${out.model} · verdict ${out.verdict} · weight 1 = API price; uncached input fixed at 1`);
+  for (const r of out.runs) log(`${r.tag.padEnd(18)} ${String(r.arm ?? "mixed").padEnd(9)} ${r.role.padEnd(7)} calls ${String(r.calls).padStart(4)}  API $${f(r.apiUsd, 3)}`);
+  for (const [w, x] of Object.entries(out.windows)) {
+    if (!x.usable) {
+      log(`${w}: ${x.reason}`);
+      continue;
+    }
+    log(`\n${w} · ${x.crossings} steps · lag ${x.lag} · $${f(x.scale.usdPerUnit, 6)} per ${x.unit} at weight 1 (95% ${x.scale.ci95 ? `${f(x.scale.ci95[0], 6)}–${f(x.scale.ci95[1], 6)}` : "—"})`);
+    for (const k of out.kinds) {
+      const v = x.weights[k];
+      const label = WT.KIND_LABEL[k].padEnd(15);
+      if (v.fixed) log(`  ${label} 1 (reference)`);
+      else if (v.est == null) log(`  ${label} —  ${v.reason}`);
+      else log(`  ${label} ${f(v.est)} (95% ${v.ci95 ? `${f(v.ci95[0])}–${f(v.ci95[1])}` : "—"})${v.identified ? "" : `  not identified: ${v.reason}`}`);
+    }
+    for (const h of x.holdout) log(h.usable ? `  holdout ${h.tag.padEnd(14)} predicted ÷ measured ${f(h.ratio.est, 3)} (95% ${f(h.ratio.ci95[0], 3)}–${f(h.ratio.ci95[1], 3)})${h.inside ? "" : "  outside"} · at API prices ${f(h.apiPriceRatio.est, 3)}` : `  holdout ${h.tag}: ${h.reason}`);
+  }
+  for (const c of out.windowsCompared) if (c.comparable) log(`\n${c.windows.join(" ÷ ")}: ${Object.entries(c.kinds).map(([k, v]) => `${k} ${f(v.ratio)}${v.ci95 ? ` (95% ${f(v.ci95[0])}–${f(v.ci95[1])})` : ""}`).join(" · ")} · ${c.same ? "same weights" : "weights differ"}`);
+  for (const fl of out.flags) log(`${fl.severity.padEnd(7)} ${fl.code}: ${fl.detail}`);
+  log(`\nwrote ${file}`);
+  return out;
+}
+
 /** Per-plan run estimates from the site's multiples and the workload's token sizes. */
 export function estimates(site, { secondsPerCall = 20, outputTokens = 1200 } = {}) {
   const tk = approxTokens();
@@ -836,10 +901,13 @@ const HELP = `api-plan ${KIT_VERSION}
   node kits/api-plan/scripts/api-plan.mjs run --provider <id> --model <m> --plan <name> [options]
   node kits/api-plan/scripts/api-plan.mjs analyse --run <tag> [--out <file>]
   node kits/api-plan/scripts/api-plan.mjs estimate
+  node kits/api-plan/scripts/api-plan.mjs weights --runs <tag>,<tag>,… [--holdout <tags>] [--runs-dir <dir>] [--boot N] [--out <file>]
 
 providers: ${Object.keys(ADAPTERS).join(", ")}
 
 run options
+  --arm <arm>         cache | input | output | reasoning | write (Anthropic API): token-weight workload
+  --no-effort         send no reasoning_effort / thinking / think field (arms output, reasoning)
   --manual            type the meter from the dashboard
   --window <name>     meter window to pace on (default: the adapter's)
   --target N          pp of that window (default per adapter)
@@ -876,6 +944,7 @@ async function main() {
   if (cmd === "run") return cmdRun(a);
   if (cmd === "analyse" || cmd === "analyze") return analyseAndWrite(a);
   if (cmd === "estimate") return cmdEstimate(a);
+  if (cmd === "weights") return cmdWeights(a);
   fail(`unknown command ${cmd}\n${HELP}`);
 }
 

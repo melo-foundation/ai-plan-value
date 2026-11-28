@@ -138,6 +138,44 @@ Each run writes `kits/api-plan/results/<tag>.json` and prints a summary. To anal
 | `measured ÷ site` | your multiple ÷ the site's multiple for the plan and model |
 | `verdict` | `clean`, `check` (warnings) or `contaminated` (errors) |
 
+## Token weights
+
+Measures the meter's weight for uncached input, cached input, cache writes, visible output and reasoning, each relative to its API price (uncached input = 1), per provider and model, on every window the meter reports.
+
+Requirements: an automatic meter (not `kimi`, `step` or `--manual`). Reasoning gets its own weight on OpenAI-style APIs only (`completion_tokens_details.reasoning_tokens`); on `--api anthropic` and `ollama` thinking counts as output.
+
+Run the arms one after another, then fit them with a mixed run as holdout:
+
+    node kits/api-plan/scripts/api-plan.mjs run --provider glm --model glm-5.3 --plan "GLM Coding Lite ¥118 (mixed)" --arm cache --tag glm-cache1
+    node kits/api-plan/scripts/api-plan.mjs run --provider glm --model glm-5.3 --plan "GLM Coding Lite ¥118 (mixed)" --arm input --tag glm-input1
+    node kits/api-plan/scripts/api-plan.mjs run --provider glm --model glm-5.3 --plan "GLM Coding Lite ¥118 (mixed)" --arm output --tag glm-output1
+    node kits/api-plan/scripts/api-plan.mjs run --provider glm --model glm-5.3 --plan "GLM Coding Lite ¥118 (mixed)" --arm reasoning --tag glm-reasoning1
+    node kits/api-plan/scripts/api-plan.mjs weights --runs glm-cache1,glm-input1,glm-output1,glm-reasoning1,glm-lite-1
+
+On `--api anthropic` (MiniMax by default) also run `--arm write`. The result is `kits/api-plan/results/weights-<plan>-<model>.json`.
+
+| Arm | Request | `max_tokens` | Effort field |
+|---|---|---|---|
+| `cache` | one ≈ 40k-token system prompt, the same every call (Anthropic: `cache_control`), one-word question | 16 | none |
+| `input` | a unique ≈ 30k-token user prompt | 16 | none |
+| `output` | a short prompt for 400 numbered lines | 8000 | `reasoning_effort: low` (OpenAI); none (Anthropic) |
+| `reasoning` | a short puzzle, number-only answer | 16000 | `reasoning_effort: high` (OpenAI); `thinking` (Anthropic); `think: true` (Ollama) |
+| `write` | a unique ≈ 30k-token system prompt with `cache_control` (Anthropic API only) | 16 | none |
+
+Each arm uses the provider's target from the Providers table (`--target` to change it); five arms use five times that. `--window` picks the window the target counts.
+
+| Message or flag | Do |
+|---|---|
+| `--arm … needs an automatic meter` | use a provider with an automatic meter |
+| `--arm write needs the Anthropic API` | add `--api anthropic` where the provider has one, or skip the write arm |
+| HTTP 400 on `output` or `reasoning` | rerun that arm with `--no-effort` |
+| `cache_low` | send the result as is: the provider served under 80% of the cache arm's input from cache |
+| `run_short`, `window_unusable` | rerun that arm with a larger `--target` and a new `--tag` |
+| `arm_impure`, `holdout_miss`, `windows_differ` | send the result as is |
+| `run <tag> not found` | pass `--runs-dir <folder holding <tag>/run.json>` |
+
+`weights` takes `--runs <tags>`, `--holdout <tags>` (default: every run without `--arm`), `--runs-dir <folders>`, `--boot` (400), `--seed` (1), `--out <file>`.
+
 ## When it fails
 
 | Message or flag | Do |
@@ -166,7 +204,9 @@ Each run writes `kits/api-plan/results/<tag>.json` and prints a summary. To anal
 | `--provider` | `kimi`, `glm`, `minimax`, `bailian`, `deeprelay`, `ollama`, `step`, `mimo` | none |
 | `--model` | the model name the provider's API takes | none |
 | `--plan` | a name from `plans` | none |
-| `--tag` | letters, digits, `.` `_` `-` | `<date>-<provider>` |
+| `--tag` | letters, digits, `.` `_` `-` | `<date>-<provider>` (`-<arm>` with `--arm`) |
+| `--arm` | `cache`, `input`, `output`, `reasoning`, `write` | none (mixed workload) |
+| `--no-effort` | omit the effort field on `output` and `reasoning` | off |
 | `--manual` | type the meter from the dashboard | automatic where the table says so |
 | `--window` | a window the meter reports | per provider |
 | `--target` | % of that window | per provider (table above) |
@@ -183,7 +223,7 @@ Each run writes `kits/api-plan/results/<tag>.json` and prints a summary. To anal
 | `--max-pct` | % of any monthly or weekly window to stop at | 90 |
 | `--max-usd` | API $ to stop at | 3 × the expected $ |
 | `--max-calls` | calls | 3000 |
-| `--max-tokens` | output tokens per call | 4000 |
+| `--max-tokens` | output tokens per call | 4000; arms: see Token weights |
 | `--poll-every` | calls between meter reads | 1 |
 | `--idle-min` | minutes | 3 (manual 2) |
 | `--settle-min` | minutes | 2 (manual 5) |
@@ -193,3 +233,5 @@ Each run writes `kits/api-plan/results/<tag>.json` and prints a summary. To anal
 ## Send your result
 
 Open a [Quota measurement](https://github.com/melo-foundation/ai-plan-value/issues/new?template=quota-measurement.yml) issue, pick harness `API plan kit`, and attach `kits/api-plan/results/<tag>.json`.
+
+After a token-weight fit, also attach `kits/api-plan/results/weights-<plan>-<model>.json`.

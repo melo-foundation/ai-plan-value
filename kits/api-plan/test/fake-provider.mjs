@@ -12,6 +12,7 @@
  *   key        expected API key
  *   kind       glm | minimax | ollama | ollama-legacy | mimo | bailian | deeprelay | kimi
  *   price      { input, cachedInput, output, cacheWrite? } USD per 1M
+ *   weights    { input, cached, cacheWrite, output, reasoning } meter $ per API $ of each kind (default 1)
  *   beta       { <window>: $ per native unit }
  *   start      { <window>: native units used at start }
  *   capacity   { <window>: window size } (count / credit / token meters)
@@ -44,7 +45,6 @@ const resets = { "5h": nowS + 4 * 3600, session: nowS + 4 * 3600, weekly: nowS +
 const requests = [];
 let calls = 0;
 let reads = 0;
-let sharedSeen = false;
 
 const authKind = (h) => (h == null ? "none" : h === KEY ? "raw" : h === `Bearer ${KEY}` ? "bearer" : "other");
 const reading = (w) => {
@@ -53,6 +53,15 @@ const reading = (w) => {
 };
 const r6 = (x) => Math.round(x * 1e6) / 1e6;
 
+const seenSystems = new Set();
+/**
+ * Tokens of one call. A long system prompt (> 2000 tokens) seen before is a cache hit but for its
+ * last 64 tokens; the
+ * first time, an Anthropic request writes it to the cache. Output: 14 tokens per line asked for
+ * ("Write exactly N numbered lines"), 3 for "single word" prompts, else 700–1100; reasoning
+ * (OpenAI reasoning_effort, Anthropic thinking, Ollama think): high 3000–5000, low 20, none: 30% of
+ * the output on OpenAI responses as before. Output is capped at max_tokens.
+ */
 function usageFor(body, api) {
   const sys = api === "anthropic" ? (Array.isArray(body.system) ? body.system.map((b) => b.text).join("") : body.system || "") : (body.messages || []).filter((m) => m.role === "system").map((m) => m.content).join("");
   const user = (body.messages || []).filter((m) => m.role === "user").map((m) => m.content).join("");
@@ -62,14 +71,27 @@ function usageFor(body, api) {
   let cached = 0;
   let write = 0;
   if (shared && api !== "ollama") {
-    if (sharedSeen) cached = Math.floor(sysT * 0.9);
+    if (seenSystems.has(sys)) cached = sysT - 64;
     else if (api === "anthropic") write = sysT;
-    sharedSeen = true;
+    seenSystems.add(sys);
   }
-  const output = 700 + ((calls * 37) % 400);
+  const lines = user.match(/Write exactly (\d+) numbered lines/);
+  let visible = lines ? Number(lines[1]) * 14 : /single word|number only/.test(user) ? 3 : 700 + ((calls * 37) % 400);
+  const effort = api === "openai" ? body.reasoning_effort ?? null : api === "anthropic" ? (body.thinking?.type === "enabled" ? "high" : null) : body.think === true ? "high" : null;
+  let reasoning = effort === "high" ? 3000 + ((calls * 397) % 2000) : effort ? 20 : api === "openai" ? Math.round(visible * 0.3) : 0;
+  const cap = body.max_tokens ?? body.options?.num_predict ?? Infinity;
+  if (reasoning + (effort ? visible : 0) > cap) reasoning = Math.max(0, cap - visible);
+  if (effort) visible = Math.min(visible, cap - reasoning);
+  else visible = Math.min(visible, cap);
+  // without an effort the OpenAI reasoning share is inside the output count (the earlier behaviour)
+  const output = effort ? visible + reasoning : visible;
+  const visibleOut = effort ? visible : visible - (api === "openai" ? reasoning : 0);
   const uncached = sysT + userT - cached - write;
-  const usd = (uncached * price.input + cached * price.cachedInput + write * (price.cacheWrite ?? price.input) + output * price.output) / 1e6;
-  return { uncached, cached, write, output, usd };
+  const parts = { input: (uncached * price.input) / 1e6, cached: (cached * price.cachedInput) / 1e6, cacheWrite: (write * (price.cacheWrite ?? price.input)) / 1e6, output: (visibleOut * price.output) / 1e6, reasoning: ((output - visibleOut) * price.output) / 1e6 };
+  const usd = Object.values(parts).reduce((a, b) => a + b, 0);
+  const weights = { input: 1, cached: 1, cacheWrite: 1, output: 1, reasoning: 1, ...(cfg.weights || {}) };
+  const meterUsd = Object.entries(parts).reduce((a, [k, v]) => a + v * weights[k], 0);
+  return { uncached, cached, write, output, reasoning: api === "openai" ? output - visibleOut : 0, usd, meterUsd };
 }
 
 function charge(usd, u) {
@@ -77,7 +99,7 @@ function charge(usd, u) {
     if (cfg.kind === "deeprelay") {
       // weighted tokens: input (cached counts in full) or output
       used[w] += /output/.test(w) ? u.output : u.uncached + u.cached + u.write;
-    } else used[w] += usd / beta[w];
+    } else used[w] += u.meterUsd / beta[w];
   }
 }
 
@@ -234,7 +256,7 @@ const server = http.createServer((req, res) => {
       object: "chat.completion",
       model,
       choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
-      usage: { prompt_tokens: u.uncached + u.cached, completion_tokens: u.output, total_tokens: u.uncached + u.cached + u.output, prompt_tokens_details: { cached_tokens: u.cached }, completion_tokens_details: { reasoning_tokens: Math.round(u.output * 0.3) } },
+      usage: { prompt_tokens: u.uncached + u.cached, completion_tokens: u.output, total_tokens: u.uncached + u.cached + u.output, prompt_tokens_details: { cached_tokens: u.cached }, completion_tokens_details: { reasoning_tokens: u.reasoning } },
     });
   });
 });
