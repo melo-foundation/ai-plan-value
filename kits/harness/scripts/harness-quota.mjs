@@ -66,7 +66,7 @@ function setup(a, { needPlan = true } = {}) {
     effort = typeof a.effort === "string" ? a.effort : ad.efforts.default;
     if (!ad.efforts.values.includes(effort)) fail(`--effort ${ad.efforts.values.join(" | ")}`);
   } else if (a.effort) fail(`${ad.name} takes no --effort`);
-  const window = typeof a.window === "string" ? a.window : ad.meter.window;
+  const window = typeof a.window === "string" ? a.window : (plan && ad.meter.windowFor?.(plan)) || ad.meter.window;
   if (!ad.meter.windows[window]) fail(`--window ${Object.keys(ad.meter.windows).join(" | ")}`);
   let site;
   try {
@@ -81,10 +81,45 @@ function setup(a, { needPlan = true } = {}) {
   } catch (e) {
     fail(e.message);
   }
-  const fee = plan ? feeFor(plan, site) : null;
+  const fee = plan ? planFee(ad, plan, site) : null;
   const siteRef = plan ? siteMultiple(site, plan, siteModelId, effort) : null;
   const bin = typeof a.bin === "string" ? a.bin : ad.bin;
-  return { ad, plan, model, effort, window, site, siteModelId, price, fee, siteRef, bin };
+  const inputs = adapterInputs(ad, a, { require: needPlan });
+  return { ad, plan, model, effort, window, site, siteModelId, price, fee, siteRef, bin, inputs };
+}
+
+/** Fee from billing-periods / combined.json, else the adapter's own record for plans not on the site (kit.json notOnSite). */
+function planFee(ad, plan, site) {
+  const f = feeFor(plan, site);
+  if (f) return f;
+  const p = ad?.plans.find((x) => x.plan === plan && x.notOnSite && x.usd > 0);
+  return p ? { usd: p.usd, source: `kits/harness/kit.json (not on the site; ${p.source})`, notOnSite: true } : null;
+}
+
+/** Adapter-specific inputs (ad.inputs: [{ key, values?, type?: "number", required? }]) → { key: value }. */
+function adapterInputs(ad, a, { require }) {
+  const out = {};
+  for (const inp of ad.inputs || []) {
+    const v = a[inp.key];
+    const want = inp.values ? inp.values.join(" | ") : "<number>";
+    if (v == null || v === true) {
+      if (inp.required && require) fail(`${ad.name} needs --${inp.key} ${want}`);
+      continue;
+    }
+    if (inp.values && !inp.values.includes(String(v))) fail(`--${inp.key} ${want}`);
+    if (inp.type === "number") {
+      const n = Number(v);
+      if (!(n > 0)) fail(`--${inp.key}: a positive number`);
+      out[inp.key] = n;
+    } else out[inp.key] = String(v);
+  }
+  return out;
+}
+
+/** Version of the harness: the binary's version, or the adapter's own string for cloud harnesses (bin null). */
+function harnessVersion(ad, bin, a) {
+  if (ad.bin == null) return ad.version(null, a);
+  return whichBin(bin) ? ad.version(bin) : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -96,9 +131,9 @@ async function cmdCheck(a) {
   const { ad, bin } = s;
   const warn = [];
   log(`node ${process.versions.node}${Number(process.versions.node.split(".")[0]) < 20 ? "  (needs 20+)" : ""}`);
-  const v = whichBin(bin) ? ad.version(bin) : null;
+  const v = harnessVersion(ad, bin, a);
   log(`${ad.name} ${v ?? "not found"}`);
-  if (!v) warn.push(`${bin} not found: ${ad.install}, or pass --bin <path>`);
+  if (!v) warn.push(ad.bin == null ? `${ad.name}: ${ad.install}` : `${bin} not found: ${ad.install}, or pass --bin <path>`);
   const procs = otherProcesses(ad.procMatch);
   log(`other ${ad.name} processes ${procs.length ? procs.map((p) => `pid ${p.pid} (${p.cmd})`).join(", ") : "none"}`);
   if (procs.length) warn.push("close the processes listed above");
@@ -110,7 +145,7 @@ async function cmdCheck(a) {
     if (!ad.meter.auto) warn.push(`${ad.name} has no automatic meter`);
     else if (v) {
       try {
-        const r = await ad.meter.auto.read({ bin, model: s.model, dir: os.tmpdir(), timeoutMs: 90000 });
+        const r = await ad.meter.auto.read({ bin, model: s.model, dir: os.tmpdir(), timeoutMs: 90000, inputs: s.inputs });
         log(`meter reading ${r.pct}%${r.resetsAt ? ` · resets ${new Date(r.resetsAt * 1000).toLocaleString()}` : ""}${r.plan ? ` · plan ${r.plan}` : ""}`);
         if (s.plan && r.plan && r.plan !== s.plan) warn.push(`meter reports ${r.plan}, not ${s.plan}`);
       } catch (e) {
@@ -130,7 +165,7 @@ function cmdPlans(a) {
   const s = setup(a, { needPlan: false });
   log(`${s.ad.name} · ${s.model} (${s.siteModelId})`);
   for (const { plan } of s.ad.plans) {
-    const fee = feeFor(plan, s.site);
+    const fee = planFee(s.ad, plan, s.site);
     const ref = siteMultiple(s.site, plan, s.siteModelId, s.effort);
     log(`  ${plan.padEnd(24)} ${fee ? `$${fee.usd}`.padEnd(8) : "—".padEnd(8)} site ${ref ? `${ref.value}×` : "—"}`);
   }
@@ -182,7 +217,7 @@ const saveManifest = (dir, m) => fs.writeFileSync(path.join(dir, "manifest.json"
 
 async function cmdRun(a) {
   const s = setup(a);
-  const { ad, plan, model, effort, window, bin } = s;
+  const { ad, plan, model, effort, window, bin, inputs } = s;
   const arm = String(a.arm || "A").toUpperCase();
   if (!["A", "B"].includes(arm)) fail("--arm A | B");
   const autoRequested = !!a["auto-meter"];
@@ -211,6 +246,7 @@ async function cmdRun(a) {
 
   if (a["dry-run"]) {
     log(`dry run · ${ad.name} · ${plan} · ${model}${effort ? ` ${effort}` : ""} · arm ${arm} · tag ${tag}`);
+    if (Object.keys(inputs).length) log(`inputs     ${Object.entries(inputs).map(([k, v]) => `--${k} ${v}`).join(" · ")}`);
     log(`prices     ${s.siteModelId} $${s.price.input} / $${s.price.cachedInput} / $${s.price.output} per 1M (input / cached / output), as of ${s.price.asOf}`);
     log(`fee        ${s.fee ? `$${s.fee.usd}/month` : "unknown"} · site ${s.siteRef ? `${s.siteRef.value}×` : "none"}`);
     log(`meter      ${autoRequested ? `auto: ${ad.meter.auto.route}; manual if it fails` : `manual: ${meterWhere}`} · ${ad.meter.unit} · window ${window}`);
@@ -221,17 +257,21 @@ async function cmdRun(a) {
     for (let n = 0; n < 3; n++) {
       const t = taskAt(n);
       const dir = path.join(workRoot, t.id);
-      const c = ad.command({ dir, prompt: "<prompt>", model, effort, logDir, taskId: t.id, a });
-      const env = Object.entries(c.env || {}).map(([k, v]) => `${k}=${sq(v)}`).join(" ");
       log(`\ntask ${t.id}${Object.keys(t.files).length ? ` · starter files: ${Object.keys(t.files).join(", ")}` : ""} · prompt ${t.prompt.length} chars`);
+      if (!ad.command) {
+        log(`  ${ad.describeTask({ dir, a, inputs })}`);
+        continue;
+      }
+      const c = ad.command({ dir, prompt: "<prompt>", model, effort, logDir, taskId: t.id, a, inputs });
+      const env = Object.entries(c.env || {}).map(([k, v]) => `${k}=${sq(v)}`).join(" ");
       log(`  cd ${sq(c.cwd || dir)} && ${env ? env + " " : ""}${bin} ${c.args.map(sq).join(" ")}`);
     }
     log(`\n… then more tasks until the meter has moved ${targetPp} pp. No calls made.`);
     return;
   }
 
-  const version = whichBin(bin) ? ad.version(bin) : null;
-  if (!version) fail(`${bin} not found: ${ad.install}, or pass --bin <path>`);
+  const version = harnessVersion(ad, bin, a);
+  if (!version) fail(ad.bin == null ? `${ad.name}: ${ad.install}` : `${bin} not found: ${ad.install}, or pass --bin <path>`);
   const procs = otherProcesses(ad.procMatch);
   if (procs.length && !a.force) fail(`close these first (or pass --force): ${procs.map((p) => `pid ${p.pid} (${p.cmd})`).join(", ")}`);
   const pre = ad.preflight({ bin, a });
@@ -251,8 +291,10 @@ async function cmdRun(a) {
     model,
     siteModelId: s.siteModelId,
     effort,
+    inputs,
+    costUnit: ad.costUnit || "api-usd",
     arm,
-    workload: { version: WORKLOAD_VERSION, hash: workloadHash(), arm },
+    workload: { version: WORKLOAD_VERSION, hash: workloadHash(), arm, ...(ad.workloadNote ? { note: ad.workloadNote } : {}) },
     meter: { mode, autoRoute: autoRequested ? ad.meter.auto.route : null, unit: ad.meter.unit, window, windowsPerMonth: ad.meter.windows[window].perMonth, note: ad.meter.note, every },
     targetPp,
     maxPct,
@@ -288,7 +330,7 @@ async function cmdRun(a) {
     let r = null;
     if (mode === "auto") {
       try {
-        r = await ad.meter.auto.read({ bin, model, dir: workRoot, timeoutMs: meterTimeoutMs });
+        r = await ad.meter.auto.read({ bin, model, dir: workRoot, timeoutMs: meterTimeoutMs, inputs });
       } catch (e) {
         log(`auto meter failed: ${redact(e.message)}; switching to manual`);
         mode = "manual";
@@ -296,14 +338,14 @@ async function cmdRun(a) {
       }
     }
     if (!r) {
-      const res = await askReading(io, `${label} · ${ad.meter.manual.where}, % used: `, { allowLeft: ad.meter.manual.allowLeft });
+      const res = ad.meter.manual.ask ? await ad.meter.manual.ask(io, label, { plan, inputs }) : await askReading(io, `${label} · ${ad.meter.manual.where}, % used: `, { allowLeft: ad.meter.manual.allowLeft });
       if (res.stop) return { stop: true };
       if (res.skip) {
         m.skippedReadings++;
         saveManifest(runDir, m);
         return null;
       }
-      r = { pct: res.pct, resetsAt: null };
+      r = { pct: res.pct, resetsAt: null, extraUsed: res.extraUsed ?? null };
     }
     const rec = { ts: nowIso(), pct: r.pct, tasksDone, resetsAt: r.resetsAt ?? null, mode, label };
     if (r.periodType) rec.periodType = r.periodType;
@@ -360,11 +402,29 @@ async function cmdRun(a) {
     const rec = { id: t.id, startedAt: nowIso(), endedAt: null, exit: null };
     m.tasks.push(rec);
     saveManifest(runDir, m);
-    const cmd = ad.command({ dir, prompt: t.prompt, model, effort, logDir, taskId: t.id, a });
-    const r = await runChild(bin, { ...cmd, cwd: cmd.cwd || dir }, { timeoutMs, logFile: path.join(logDir, `${t.id}.out`) });
-    rec.endedAt = nowIso();
-    rec.exit = r.timedOut ? "timeout" : r.code;
-    const u = ad.parseUsage({ stdout: r.stdout, logDir, taskId: t.id, model });
+    let r;
+    let u;
+    if (ad.runTask) {
+      // cloud harnesses: the adapter runs the task (API or the user pastes it) and reports exit, usage and ACUs
+      r = await ad.runTask({ task: t, dir, model, effort, inputs, io, logDir, timeoutMs, a, isInterrupted: () => interrupted > 0 });
+      if (r.stop) {
+        m.tasks.pop();
+        m.stopReason = "stopped at a task";
+        saveManifest(runDir, m);
+        break;
+      }
+      rec.endedAt = nowIso();
+      rec.exit = r.exit;
+      r.stderr ||= "";
+      if (r.acus != null) rec.acus = r.acus;
+      u = { usage: r.usage || [], tokenSource: r.tokenSource || "none" };
+    } else {
+      const cmd = ad.command({ dir, prompt: t.prompt, model, effort, logDir, taskId: t.id, a, inputs });
+      r = await runChild(bin, { ...cmd, cwd: cmd.cwd || dir }, { timeoutMs, logFile: path.join(logDir, `${t.id}.out`) });
+      rec.endedAt = nowIso();
+      rec.exit = r.timedOut ? "timeout" : r.code;
+      u = ad.parseUsage({ stdout: r.stdout, logDir, taskId: t.id, model });
+    }
     rec.usage = u.usage;
     rec.tokenSource = u.tokenSource;
     if (u.incomplete) rec.usageIncomplete = true;
@@ -372,11 +432,11 @@ async function cmdRun(a) {
     sinceReading++;
     saveManifest(runDir, m);
     const calls = u.usage.reduce((x, y) => x + (y.calls || 1), 0);
-    log(`${hhmm(Date.now())} ${t.id.padEnd(16)} exit ${String(rec.exit).padEnd(7)} calls ${String(calls).padStart(3)}  tokens ${u.tokenSource}`);
+    log(`${hhmm(Date.now())} ${t.id.padEnd(16)} exit ${String(rec.exit).padEnd(7)} ${rec.acus != null ? `ACUs ${rec.acus}` : `calls ${String(calls).padStart(3)}  tokens ${u.tokenSource}`}`);
     if (rec.exit !== 0) {
       failures++;
       if (r.stderr.trim()) log(`  stderr: ${redact(r.stderr.trim().split("\n").slice(-3).join(" | ")).slice(0, 400)}`);
-      if (n === 1 && !calls) {
+      if (n === 1 && !calls && rec.acus == null) {
         m.stopReason = "first task made no calls";
         break;
       }
@@ -460,7 +520,7 @@ function analyseAndWrite(a) {
   } catch (e) {
     fail(e.message);
   }
-  const res = analyse({ manifest, price, fee: feeFor(manifest.plan, site), site: siteMultiple(site, manifest.plan, manifest.siteModelId, manifest.effort), sameModel: ad.sameModel });
+  const res = analyse({ manifest, price, fee: planFee(ad, manifest.plan, site), site: siteMultiple(site, manifest.plan, manifest.siteModelId, manifest.effort), sameModel: ad.sameModel });
   res.generatedAt = nowIso();
   const hits = secretHits(res);
   if (hits.length) fail(`result not written: ${hits.map((h) => `${h.path} (${h.kind})`).join(", ")}`);
@@ -479,6 +539,18 @@ function printSummary(r) {
   const pct = (x) => (x == null ? "—" : `${(100 * x).toFixed(1)}%`);
   log(`\n${r.tag} · ${r.harness.name} · ${r.plan} · ${r.model}${r.effort ? ` ${r.effort}` : ""} · verdict ${r.verdict}`);
   log(`tasks ${r.run.tasks} (${r.run.failedTasks} failed) · calls ${r.run.calls} · readings ${r.run.readings} (${r.meter.requested === r.meter.mode ? r.meter.mode : `${r.meter.requested} → ${r.meter.mode}`}) · ${r.run.minutes.toFixed(0)} min`);
+  if (r.acu) {
+    const a = r.acu;
+    log(`ACUs ${f2(a.total)} · ${f4(a.perTask)} per task (${a.tasksWithAcus} of ${a.tasks} tasks read)`);
+    const w = r.fit;
+    if (!w.usable) log(`${w.window} ${w.firstReading ?? "—"}% → ${w.lastReading ?? "—"}% · ${w.reason}`);
+    else log(`${w.window} ${w.firstReading}% → ${w.lastReading}% · ${w.crossings} steps of ${w.fitStep} pp · ${f4(a.perPp.est)} ACU/pp (95% ${ci(a.perPp.ci95, f4)})`);
+    if (a.monthlyAcus) log(`monthly ACUs ${f2(a.monthlyAcus.est)} (95% ${ci(a.monthlyAcus.ci95, f2)})`);
+    if (a.usdPerAcu != null) log(`at $${a.usdPerAcu}/ACU: $${f2(a.usdPerTask)} per task${a.monthlyUsd ? ` · $${f2(a.monthlyUsd.est)}/month · ${f2(a.multiple)}× the fee` : ""}`);
+    if (r.meter.note) log(r.meter.note);
+    for (const fl of r.flags) log(`${fl.severity.padEnd(7)} ${fl.code}: ${fl.detail}`);
+    return;
+  }
   log(`tokens uncached ${r.tokens.uncachedInput} · cached ${r.tokens.cachedInput} · cache write ${r.tokens.cacheWrite} · output ${r.tokens.output} (reasoning ${r.tokens.reasoning})`);
   log(`API $${f2(r.usd.total)} · uncached ${pct(r.usdShare?.uncachedInput)} · cached ${pct(r.usdShare?.cachedInput)} · output ${pct(r.usdShare?.output)}`);
   const w = r.fit;
@@ -518,6 +590,10 @@ run options
   --bin               harness binary
   --site              combined.json (default public/data/combined.json)
   --gemini-sandbox    docker | podman | sandbox-exec (Gemini CLI)
+  --contributor       on | off (Muse Code, required)
+  --included-usd      the plan's included usage on the dashboard, $ (Cursor, required)
+  --devin-api         start Devin sessions through the API (DEVIN_API_KEY, DEVIN_ORG_ID)
+  --acu-usd           $ per ACU for the plan (Devin)
   --force             start with other harness processes open or preflight warnings, or reuse a tag
   --dry-run           print the commands; no calls
 `;

@@ -40,6 +40,15 @@ export function fakeGrokInstall(root) {
   return bin;
 }
 
+/** A fake single-file harness binary (test/fake-<fake>.mjs) installed as bin/<name>. */
+export function fakeBinInstall(root, fake, name) {
+  fs.mkdirSync(path.join(root, "bin"), { recursive: true });
+  const bin = path.join(root, "bin", name);
+  fs.copyFileSync(path.join(here, `fake-${fake}.mjs`), bin);
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+
 /**
  * Run the kit; answer each "% used: " prompt from `answer(meter, promptText, n)` (default: the
  * meter file's value, floored). Resolves { code, stdout, stderr, prompts }.
@@ -54,10 +63,11 @@ export function drive(args, { env = {}, meter, answer = null, timeoutMs = 120000
     child.stdout.on("data", (d) => {
       stdout += d;
       pending += d;
-      const idx = pending.lastIndexOf("% used: ");
+      // every kit prompt ends in "used: " (% used, $ used, ACUs used)
+      const idx = pending.lastIndexOf("used: ");
       if (idx >= 0) {
-        const line = pending.slice(pending.lastIndexOf("\n", idx) + 1, idx + 8);
-        pending = pending.slice(idx + 8);
+        const line = pending.slice(pending.lastIndexOf("\n", idx) + 1, idx + 6);
+        pending = pending.slice(idx + 6);
         prompts.push(line);
         const used = meter && fs.existsSync(meter) ? JSON.parse(fs.readFileSync(meter, "utf8")).used : 0;
         const a = answer ? answer(used, line, prompts.length) : String(Math.floor(used));

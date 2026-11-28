@@ -79,16 +79,24 @@ test("every adapter plan has a fee and every default model a price; kit.json mat
   assert.deepEqual(KIT.harnesses.map((h) => h.id).sort(), Object.keys(ADAPTERS).sort());
   for (const h of KIT.harnesses) {
     const ad = ADAPTERS[h.id];
-    assert.deepEqual(h.plans, ad.plans.map((p) => p.plan));
+    // plans: names, or { plan, usd, notOnSite, source } for plans not on the site yet
+    const names = h.plans.map((p) => (typeof p === "string" ? p : p.plan));
+    assert.deepEqual(names, ad.plans.map((p) => p.plan));
+    for (const p of h.plans.filter((x) => typeof x !== "string")) assert.deepEqual(p, ad.plans.find((x) => x.plan === p.plan));
     assert.equal(h.defaultModel, ad.models.default);
     assert.equal(h.window, ad.meter.window);
     assert.equal(h.windowsPerMonth, ad.meter.windows[ad.meter.window].perMonth);
-    for (const p of h.plans) {
-      assert.ok(feeFor(p, site)?.usd > 0, `fee for ${p}`);
+    for (const p of names) {
+      const own = ad.plans.find((x) => x.plan === p);
+      if (own.notOnSite) {
+        assert.ok(own.usd > 0 && !feeFor(p, site), `${p}: notOnSite needs a fee here and none on the site`);
+        assert.ok(!site.entries.some((e) => e.plan === p), `${p} is on the site: drop notOnSite`);
+      } else assert.ok(feeFor(p, site)?.usd > 0, `fee for ${p}`);
       assert.ok(new RegExp(h.planTest).test(p), `${p} vs ${h.planTest}`);
     }
     assert.ok(priceFor(site, ad.siteModelId(ad.models.default)).input > 0);
-    for (const k of ["id", "name", "bin", "install", "login", "version", "procMatch", "preflight", "siteModelId", "sameModel", "command", "parseUsage"]) assert.ok(ad[k] != null, `${h.id}.${k}`);
+    const need = ad.runTask ? ["id", "name", "install", "login", "version", "procMatch", "preflight", "siteModelId", "sameModel", "runTask", "describeTask"] : ["id", "name", "bin", "install", "login", "version", "procMatch", "preflight", "siteModelId", "sameModel", "command", "parseUsage"];
+    for (const k of need) assert.ok(ad[k] != null, `${h.id}.${k}`);
     assert.ok(ad.meter.manual.where && ad.meter.unit && ad.pacing.targetPp > 0);
   }
 });

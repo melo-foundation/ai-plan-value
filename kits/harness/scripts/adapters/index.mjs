@@ -46,6 +46,18 @@
  *   }
  *   pacing        { targetPp, maxPct, every }      defaults for --target-pp, --max-pct, --every
  *   typical       { minutes: "1–3 h", meter: "+25 pp of one day" }   README / dry-run text
+ *
+ * Optional (muse.mjs, cursor.mjs, devin.mjs):
+ *   plans[i]      { plan, usd, notOnSite: true, source }  plan not on the site yet: fee from here
+ *   inputs        [{ key, values? | type: "number", required? }]  extra --<key> flags; recorded in
+ *                 the result as inputs; passed to command() and meter.manual.ask()
+ *   meter.windowFor(plan) → window id               per-plan default window
+ *   meter.manual.ask(io, label, { plan, inputs }) → { pct, extraUsed? } | { skip } | { stop }
+ *                                                  custom manual prompt (e.g. dashboard $ → %)
+ *   bin: null, version(null, a), runTask({ task, dir, io, timeoutMs, a, … }) → { exit, acus?,
+ *                 usage?, tokenSource?, stderr? } | { stop }, describeTask({ dir, a }) → string
+ *                                                  cloud harness: the adapter runs each task
+ *   costUnit      "acu"                            no tokens: fit ACUs per pp instead of API $
  */
 
 import gemini from "./gemini.mjs";
@@ -58,3 +70,9 @@ export function getAdapter(id) {
   if (!a) throw new Error(`--harness ${Object.keys(ADAPTERS).join(" | ")}`);
   return a;
 }
+
+// Muse Code, Cursor CLI, Devin
+import muse from "./muse.mjs";
+import cursor from "./cursor.mjs";
+import devin from "./devin.mjs";
+Object.assign(ADAPTERS, { [muse.id]: muse, [cursor.id]: cursor, [devin.id]: devin });
