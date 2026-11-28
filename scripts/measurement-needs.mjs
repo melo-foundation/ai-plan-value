@@ -46,7 +46,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept"
  */
 export const FAMILIES = [
   { id: "chatgpt-plus", test: (p) => p === "ChatGPT Plus", kit: { name: "Codex", href: "codex/README.md" } },
-  { id: "chatgpt-pro", test: (p) => /^ChatGPT Pro\b/.test(p), kit: null, note: "Codex kit takes Plus only" },
+  { id: "chatgpt-pro", test: (p) => /^ChatGPT Pro\b/.test(p), kit: { name: "Codex", href: "codex/README.md" } },
   { id: "claude", test: (p) => /^Claude (Pro|Max|Ultra|Team)\b/.test(p), kit: { name: "Claude Code", href: "../docs/QUOTA-WEIGHTS.md" } },
   { id: "google", test: (p) => /^Google AI\b/.test(p), kit: null },
   { id: "copilot", test: (p) => /^GitHub Copilot\b/.test(p), kit: null },

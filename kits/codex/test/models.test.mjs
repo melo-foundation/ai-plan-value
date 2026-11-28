@@ -18,7 +18,10 @@ const REAL_PRICES = JSON.parse(fs.readFileSync(path.join(here, "..", "prices.jso
 const parseSim = (sim) => sim.sessions.map((s) => RF.parseRolloutText(s.text, s.name));
 const codes = (r) => r.flags.map((f) => f.code);
 const within = (x, truth, rel) => Math.abs(x - truth) / truth <= rel;
-const cli = (args, env = {}) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", env: { ...process.env, ...env }, timeout: 120000 });
+// CODEX_HOME defaults to an empty folder so dry runs never read this machine's rollouts
+const EMPTY_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "codex-quota-home-"));
+process.on("exit", () => fs.rmSync(EMPTY_HOME, { recursive: true, force: true }));
+const cli = (args, env = {}) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", env: { ...process.env, CODEX_HOME: EMPTY_HOME, ...env }, timeout: 120000 });
 const execLines = (out) => out.split("\n").filter((l) => / exec /.test(l));
 
 test("dry run passes --model to every codex exec as -m; default gpt-6.2-sol", () => {
@@ -50,7 +53,8 @@ test("prices.json holds per-model prices and site Plus multiples for the three m
   assert.equal(REAL_PRICES.models["gpt-6.1-sol"].input, 2);
   for (const m of ["gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.2-astra"]) assert.match(REAL_PRICES.models[m].asOf, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(within(siteRefFor(REAL_PRICES, "gpt-6.1-sol").subsidy, 14.93, 0.001));
-  assert.ok(within(siteRefFor(REAL_PRICES, "gpt-6.2-astra").subsidy, 6.26, 0.001));
+  assert.equal(siteRefFor(REAL_PRICES, "gpt-6.2-astra").subsidy, REAL_PRICES.sites["ChatGPT Plus"]["gpt-6.2-astra"].subsidy);
+  assert.equal(siteRefFor(REAL_PRICES, "gpt-6.2-astra").subsidy, REAL_PRICES.site["gpt-6.2-astra"].subsidy);
   assert.equal(siteRefFor(REAL_PRICES, "gpt-0-nothing"), null);
   assert.throws(() => priceFor(REAL_PRICES, "gpt-0-nothing"), /no price for gpt-0-nothing/);
 });
@@ -88,8 +92,10 @@ test("calls are priced at their own model's rate", () => {
   assert.ok(Math.abs(priced[1].usd - 4 * sol) < 1e-12);
 });
 
+const ASTRA_PLUS = siteRefFor(REAL_PRICES, "gpt-6.2-astra").subsidy;
+
 test("Astra run: $/pp recovered at Astra prices, compared with the Astra site multiple", () => {
-  const beta = (6.2646 * 20) / 400; // $0.31323 per weekly pp
+  const beta = (ASTRA_PLUS * 20) / 400;
   const sim = simulateRun({ seed: 8, model: "gpt-6.2-astra", price: ASTRA_PRICE, calls: 120, sessions: 20, beta: { "5h": 0.05, weekly: beta } });
   const r = RF.analyse({ sessions: parseSim(sim), prices: PRICES, expected: { model: "gpt-6.2-astra", effort: "medium" }, site: siteRefFor(REAL_PRICES, "gpt-6.2-astra") });
   assert.ok(!codes(r).includes("model_mismatch"));
@@ -140,8 +146,8 @@ function fakeRun({ model, tag, targetPp, env = {} }) {
 }
 
 test("run with --model gpt-6.2-astra stops on the meter at the target, not on Sol's $/pp", () => {
-  // Astra prices; meter at the site's Astra multiple: each task moves weekly ≈ 1.2 pp (Sol: ≈ 0.1)
-  const betaWk = (6.2646 * 20) / 400;
+  // Astra prices; meter at the site's Astra multiple: each task (≈ $0.37) moves weekly ≈ 1 pp (Sol: ≈ 0.1)
+  const betaWk = (ASTRA_PLUS * 20) / 400;
   const { r, tmp, manifest, result } = fakeRun({
     model: "gpt-6.2-astra",
     tag: "astra-e2e",
@@ -153,9 +159,10 @@ test("run with --model gpt-6.2-astra stops on the meter at the target, not on So
     assert.equal(manifest.model, "gpt-6.2-astra");
     assert.equal(manifest.stopReason, "target reached");
     const n = manifest.tasks.length;
-    assert.ok(n >= 9 && n <= 12, `${n} tasks`);
     const usdPerTask = manifest.tasks.reduce((s, t) => s + t.usd, 0) / n;
     assert.ok(usdPerTask > 0.3 && usdPerTask < 0.45, `task $ ${usdPerTask} (Astra prices)`);
+    const expectTasks = (12 * betaWk) / usdPerTask;
+    assert.ok(n >= expectTasks - 2 && n <= expectTasks + 1, `${n} tasks, expected about ${expectTasks.toFixed(1)}`);
     const wk = result.windows.weekly;
     const moved = wk.lastReading - wk.firstReading;
     assert.ok(moved >= 12 && moved <= 12 + 3, `moved ${moved} pp`);
@@ -163,7 +170,7 @@ test("run with --model gpt-6.2-astra stops on the meter at the target, not on So
     assert.ok(!codes(result).includes("model_mismatch"));
     assert.ok(within(wk.usdPerPp.est, betaWk, 0.05), String(wk.usdPerPp.est));
     assert.ok(within(result.subsidy.site.ratio, 1, 0.05), String(result.subsidy.site.ratio));
-    assert.ok(r.stdout.includes("site gpt-6.2-astra Plus 6.26×"), r.stdout);
+    assert.ok(r.stdout.includes(`site gpt-6.2-astra Plus ${ASTRA_PLUS.toFixed(2)}×`), r.stdout);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

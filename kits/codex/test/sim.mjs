@@ -23,7 +23,9 @@ const iso = (ms) => new Date(ms).toISOString();
  *   weight: { uncached, cached, output } meter weights relative to API $ (default 1 each),
  *   extra: [{ atCall, pp: { weekly, "5h" } }]  outside use added before call atCall,
  *   modelAt: { callIndex: model }, effortAt: { callIndex: effort },
- *   gapS: seconds between calls, resetAtCall: { "5h": index } force a window reset before that call
+ *   gapS: seconds between calls, resetAtCall: { "5h": index } force a window reset before that call,
+ *   planType: rate_limits.plan_type (default "plus"),
+ *   windows: "both" | "weekly" (primary null) | "weekly-primary" (weekly in the primary slot)
  * }
  * Returns { sessions: [{ name, text }], truth }.
  */
@@ -49,6 +51,8 @@ export function simulateRun(opts = {}) {
     gapS: 12,
     resetAtCall: {},
     price: PRICE,
+    planType: "plus",
+    windows: "both",
     ...opts,
   };
   const rnd = mulberry32(o.seed);
@@ -99,13 +103,14 @@ export function simulateRun(opts = {}) {
       const before = { ...U };
       for (const w of Object.keys(U)) U[w] += meterUsd / o.beta[w];
       const R = o.lag === 1 ? before : U;
+      const fiveH = { used_percent: read(R["5h"]), window_minutes: 300, resets_at: resets["5h"] };
+      const weekly = { used_percent: read(R.weekly), window_minutes: 10080, resets_at: resets.weekly };
       const rate = {
         limit_id: "codex",
         limit_name: null,
-        primary: { used_percent: read(R["5h"]), window_minutes: 300, resets_at: resets["5h"] },
-        secondary: { used_percent: read(R.weekly), window_minutes: 10080, resets_at: resets.weekly },
+        ...(o.windows === "weekly" ? { primary: null, secondary: weekly } : o.windows === "weekly-primary" ? { primary: weekly } : { primary: fiveH, secondary: weekly }),
         credits: { has_credits: false, unlimited: false, balance: "0" },
-        plan_type: "plus",
+        plan_type: o.planType,
         rate_limit_reached_type: null,
       };
       push("event_msg", { type: "token_count", info: { total_token_usage: { ...total }, last_token_usage: last, last_usage_includes_reasoning: true, model_context_window: 475000 }, rate_limits: rate });

@@ -11,7 +11,7 @@ Kit approach:
 
 | Plan family | Meter | Machine-readable | Unit | Resolution | Windows | Tokens per request locally | Kit approach | Sources |
 |---|---|---|---|---|---|---|---|---|
-| ChatGPT Plus, Pro 10x / 20x / 500 (Codex CLI) | `/status`; `~/.codex/sessions/**/rollout-*.jsonl` (`rate_limits`); web usage page | yes, JSONL (format has no spec) | % | float (`used_percent: f64`) | 5h (300 min) and weekly (10080 min); Pro: weekly only | yes: input, cached input, output, reasoning (cumulative per session) | automatic (kit: [Codex](codex/README.md), Plus only) | [protocol.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs), [Codex pricing](https://learn.chatgpt.com/docs/pricing.md) |
+| ChatGPT Plus, Pro 10x / 20x / 500 (Codex CLI) | `/status`; `~/.codex/sessions/**/rollout-*.jsonl` (`rate_limits`); web usage page | yes, JSONL (format has no spec) | % | float (`used_percent: f64`) | 5h (300 min) and weekly (10080 min); Pro: weekly only | yes: input, cached input, output, reasoning (cumulative per session) | automatic (kit: [Codex](codex/README.md), Plus and Pro; `--plan` names the Pro tier: `plan_type` is `pro`, `prolite` or `promax`, tier mapping unverified) | [protocol.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs), [Codex pricing](https://learn.chatgpt.com/docs/pricing.md) |
 | Claude Pro, Max, Ultra, Team (Claude Code) | `/usage`; status line JSON `rate_limits.five_hour` / `seven_day` | yes, JSON on the status line's stdin | % | decimal (`23.5` in the docs) | 5h, 7d | yes: `usage` in `~/.claude/projects/*/*.jsonl` | automatic (kit: [Claude Code](../docs/QUOTA-WEIGHTS.md)); `rate_limits` on Team unverified | [statusline](https://code.claude.com/docs/en/statusline), [issue 45133](https://github.com/anthropics/claude-code/issues/45133) |
 | Google AI Pro, Ultra (Gemini CLI) | `/stats model` | screen text only; internal `retrieveUserQuota` returns `remainingFraction` per model (undocumented) | requests | fraction (internal); screen unverified | daily, per minute | yes: `--telemetry-target=local --telemetry-outfile` | semi-manual; automatic through the undocumented quota call | [quota and pricing](https://www.geminicli.com/docs/resources/quota-and-pricing.md), [commands](https://geminicli.com/docs/reference/commands), [Code Assist quotas](https://developers.google.com/gemini-code-assist/resources/quotas), [types.ts](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/types.ts) |
 | GitHub Copilot | github.com/settings/billing; IDE status icon; REST billing usage (org and enterprise; per user unverified) | org and enterprise only | AI credits ($0.01); premium requests on annual legacy plans | per request (legacy) | monthly, 00:00 UTC on the 1st | unverified | not needed (credits); semi-manual (legacy premium requests) | [usage-based billing](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals), [premium requests](https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/monitor-premium-requests), [REST billing](https://docs.github.com/en/rest/billing/usage) |
@@ -38,12 +38,11 @@ Kit approach:
 
 | # | Kit | Plans | Approach |
 |---|---|---|---|
-| 1 | Codex kit for ChatGPT Pro | Pro 10x, 20x, 500 | automatic, same meter as Plus |
-| 2 | Generic API kit: fixed workload over an OpenAI- or Anthropic-compatible endpoint, provider meter read before and after | Kimi, MiniMax, GLM Coding, 百炼 / Qwen, DeepRelay, Ollama, Step, MiMo | automatic where the meter has an API (GLM, MiniMax, 百炼, DeepRelay, Ollama); semi-manual for the rest |
-| 3 | Grok kit | SuperGrok, SuperGrok Plus / Heavy / Lite, X Plus / Ultra | semi-manual |
-| 4 | Gemini CLI kit | Google AI Pro, Ultra 5x / 20x | semi-manual, tokens from the telemetry file |
-| 5 | Factory Droid kit | Droid Pro, Max | semi-manual |
-| 6 | Generic semi-manual kit: meter typed by hand, tokens from the tool's log | Muse Code, Mistral Vibe, Cursor, Devin | semi-manual |
+| 1 | Generic API kit: fixed workload over an OpenAI- or Anthropic-compatible endpoint, provider meter read before and after | Kimi, MiniMax, GLM Coding, 百炼 / Qwen, DeepRelay, Ollama, Step, MiMo | automatic where the meter has an API (GLM, MiniMax, 百炼, DeepRelay, Ollama); semi-manual for the rest |
+| 2 | Grok kit | SuperGrok, SuperGrok Plus / Heavy / Lite, X Plus / Ultra | semi-manual |
+| 3 | Gemini CLI kit | Google AI Pro, Ultra 5x / 20x | semi-manual, tokens from the telemetry file |
+| 4 | Factory Droid kit | Droid Pro, Max | semi-manual |
+| 5 | Generic semi-manual kit: meter typed by hand, tokens from the tool's log | Muse Code, Mistral Vibe, Cursor, Devin | semi-manual |
 
 Run the existing [Claude Code kit](../docs/QUOTA-WEIGHTS.md) on Claude Max, Ultra and Pro with Claude Opus 5 first.
 
