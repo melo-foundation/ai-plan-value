@@ -6,9 +6,9 @@
       "readme": "docs/QUOTA-WEIGHTS.md",
       "adapters": {
         "claude-code": {
-          "status": "untested",
-          "date": null,
-          "evidence": "data/quota-weights/submissions/anthropic/ holds 4 seed files converted from outside sources, not runs of scripts/quota-probe.mjs"
+          "status": "tested",
+          "date": "2026-11-28",
+          "evidence": "probe --ping on Claude Ultra (Claude Code 2.1.332): prompt ran through the SDK, 7-day meter read from rate_limit_event, no 5-hour meter on Ultra"
         }
       }
     },

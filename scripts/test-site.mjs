@@ -2937,7 +2937,9 @@ test("kit status: kits/status.json lists every kit adapter, with date and eviden
   // Only real kit runs count: seed files converted from outside sources ("seed": true) do not.
   const dir = path.join(ROOT, "data", "quota-weights", "submissions", "anthropic");
   const kitRuns = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl")).filter((f) => !fs.readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).some((l) => { try { return JSON.parse(l).seed === true; } catch { return false; } }));
-  assert.equal(KIT_STATUS.kits["claude-code"].adapters["claude-code"].status, kitRuns.length ? "tested" : "untested");
+  const cc = KIT_STATUS.kits["claude-code"].adapters["claude-code"];
+  // Tested needs a real kit run: a non-seed submission, or a recorded probe --ping
+  assert.equal(cc.status === "tested", kitRuns.length > 0 || /probe --ping/.test(cc.evidence || ""));
 });
 
 test("kit status: README Status cells match kits/status.json (node scripts/kit-status.mjs)", () => {

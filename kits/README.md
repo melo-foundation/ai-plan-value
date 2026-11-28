@@ -16,7 +16,7 @@ Claude Code has no smoke check.
 
 | Plan family | Harness | Instructions | One run uses | Status |
 |---|---|---|---|---|
-| Claude (Pro, Max, Ultra, Team) | Claude Code | [docs/QUOTA-WEIGHTS.md](../docs/QUOTA-WEIGHTS.md) | about 12% of the weekly limit (weekly run); about 30% of one 5-hour window (5h run) | Untested: run `smoke` first |
+| Claude (Pro, Max, Ultra, Team) | Claude Code | [docs/QUOTA-WEIGHTS.md](../docs/QUOTA-WEIGHTS.md) | about 12% of the weekly limit (weekly run); about 30% of one 5-hour window (5h run) | Tested (2026-11-28) |
 | ChatGPT Plus, Pro 10x / 20x / 500 | Codex CLI | [kits/codex/README.md](codex/README.md) | Plus: 12% of the weekly limit (run A) + 8% (run B); Pro: 3–4% (A) + 3% (B) | Plus: Tested (2026-11-27); Pro 10x, Pro 20x, Pro 500: Untested: run `smoke` first |
 | Google AI (Pro, Ultra 5x / 20x) | Gemini CLI | [kits/harness/README.md](harness/README.md) | meter typed by hand from the Gemini app; `--auto-meter` reads it automatically | Untested: run `smoke` first |
 | SuperGrok (Lite, Plus, Heavy), X Plus / Ultra | Grok Build | [kits/harness/README.md](harness/README.md) | meter typed by hand from grok.com Settings > Usage; `--auto-meter` reads it automatically | Untested: run `smoke` first |
