@@ -1797,7 +1797,7 @@ function loadApp(search = "", { phone = false, data = null } = {}) {
   const ctx = vm.createContext(g);
   vm.runInContext(appJs.replace(/\bimport\.meta\.url\b/g, JSON.stringify("http://localhost/app.js?v=test")), ctx, { filename: "public/app.js" });
   const api = vm.runInContext(
-    "({ state, render, renderMeta, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, plainSource, renderProvenance, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
+    "({ state, render, renderMeta, subsidySources, getAllEntriesResolved, getFilteredRows, chartBars, relTooltip, plainSource, renderProvenance, fmtUsd, syncUrlFromState, pairedBench, pairedCost, COST_MODES, BENCHMARKS, LEVELS, LEVEL_LABEL, LEVEL_GLYPH, LEVEL_RANK, TABLE_PAGE })",
     ctx
   );
   const app = { ...api, $: document.getElementById, document, location, localStorage: g.localStorage, created, keydown: (props) => (docListeners.keydown || []).forEach((f) => f({ repeat: false, ...props })) };
@@ -2310,6 +2310,19 @@ test("?ultrablackout is pure black and white with gradients and shadows removed"
   for (const v of ["--shell-bg", "--panel-head-top", "--btn-top", "--zebra", "--fg", "--muted", "--link"]) {
     const hex = (cssDecl(null, 'html.ultrablackout[data-theme="dark"]', v) || "").toLowerCase();
     assert.ok(["#000", "#fff", "transparent"].includes(hex), `${v} is pure black or white (${hex})`);
+  }
+});
+
+test("Cross-plan disagreement lines are kept in the data but never shown on the site", () => {
+  const app = appWithData();
+  app.render();
+  const flagged = entries.filter((e) => (chains[e.rel?.chain]?.lines || []).some((l) => l.startsWith("inconsistent")));
+  assert.ok(flagged.length > 0, "expected at least one flagged row in the data");
+  for (const e of flagged.slice(0, 20)) {
+    const row = app.getAllEntriesResolved().find((r) => r.id === e.id);
+    if (!row) continue;
+    const text = app.relTooltip(row) + " " + JSON.stringify(app.subsidySources ? app.subsidySources(row) : []);
+    assert.ok(!/inconsistent|disagrees/i.test(text), `${e.id} shows the disagreement tag: ${text}`);
   }
 });
 

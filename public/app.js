@@ -292,7 +292,8 @@ function subsidySources(r) {
   if (mix) sub.push(`Adjusted ×${mix.f.toFixed(2)} for how Claude's limit counts cached tokens (${mix.lo.toFixed(2)}–${mix.hi.toFixed(2)})`);
   const client = r.clientFactor?.[state.costMode];
   if (client) sub.push(`Adjusted ÷${(1 / client.f).toFixed(1)}: T3 Code's SDK client uses the limit faster (${(1 / client.hi).toFixed(1)}–${(1 / client.lo).toFixed(1)})`);
-  sub.push(...(chain?.lines || []).map(plainSource));
+  // Cross-plan disagreement lines stay in the data (they list what to measure next) but are not shown.
+  sub.push(...(chain?.lines || []).filter((l) => !l.startsWith("inconsistent")).map(plainSource));
   return sub;
 }
 
@@ -646,7 +647,6 @@ function plainSource(line) {
     .replace(/^Fable only ÷ 0\.5 \(50% cap\)$/, "Fable-only use: counts Fable's half of the weekly limit; the other half is for other Claude models")
     .replace(/^Fable-only reading ÷ 0\.5 \(converted to whole week\)$/, "source assumed Fable alone (half the week); doubled to count the whole week")
     .replace(/^pooled ([\d.]+)× Fei \+ ([\d.]+)× Priors$/, "average of Fei ($1×) and Priors ($2×)")
-    .replace(/^inconsistent ×([\d.]+) \((.+?) vs (.+?), same pool\)$/, "disagrees ×$1 with other plans ($2 vs $3)")
     .replace(/^derived \(official plan ratio\)$/, "estimated from a sibling plan (official plan ratio)")
     .replace(/^(.+?) tokens × 1 \(price ratio\)$/, "same quota as $1")
     .replace(/^(.+?) tokens × ([\d.]+) \(price ratio\)$/, (_, m, r) => {
