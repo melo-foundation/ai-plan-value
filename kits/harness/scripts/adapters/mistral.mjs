@@ -28,8 +28,9 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { dotsToHyphens, splitJsonStream, versionOf } from "../lib/util.mjs";
+import { dotsToHyphens, loginFile, splitJsonStream, versionOf } from "../lib/util.mjs";
 
 const DEFAULT_BASE = "https://api.mistral.ai/v1";
 // tests point the budget call at a local server
@@ -99,6 +100,10 @@ export default {
   version(bin) {
     return versionOf(bin, ["--version"]);
   },
+  loginCheck() {
+    if (process.env.MISTRAL_API_KEY) return { status: "pass", reason: "MISTRAL_API_KEY set (not printed)" };
+    return loginFile(path.join(os.homedir(), ".vibe", ".env"), "Vibe key file", "run vibe and sign in, or vibe --setup");
+  },
   procMatch(cmd) {
     const base = (s) => path.basename(s || "");
     return cmd.slice(0, 2).some((x) => ["vibe", "vibe-rs", "vibe-app-server", "vibe-acp"].includes(base(x)));
@@ -142,7 +147,8 @@ export default {
     auto: {
       route: "GET api.mistral.ai/v1/billing/budget with $MISTRAL_API_KEY (undocumented)",
       async read({ timeoutMs }) {
-        return readingFromBudget(await fetchBudget({ timeoutMs }));
+        const j = await fetchBudget({ timeoutMs });
+        return { ...readingFromBudget(j), fields: Object.keys(j || {}) };
       },
     },
   },

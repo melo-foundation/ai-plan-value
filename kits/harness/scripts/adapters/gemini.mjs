@@ -30,7 +30,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dotsToHyphens, splitJsonStream, versionOf, whichBin } from "../lib/util.mjs";
+import os from "node:os";
+import { dotsToHyphens, loginFile, splitJsonStream, versionOf, whichBin } from "../lib/util.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const PROBE = path.join(here, "gemini-quota-probe.mjs");
@@ -148,6 +149,9 @@ export default {
   version(bin) {
     return versionOf(bin, ["--version"]);
   },
+  loginCheck() {
+    return loginFile(path.join(os.homedir(), ".gemini", "oauth_creds.json"), "Google login file", "run gemini and choose Sign in with Google");
+  },
   procMatch(cmd) {
     const base = (s) => path.basename(s || "");
     return cmd.slice(0, 2).some((x) => base(x) === "gemini") || cmd.join(" ").includes("@google/gemini-cli/");
@@ -205,7 +209,7 @@ export default {
       route: "Code Assist retrieveUserQuota (undocumented)",
       async read({ bin, model, dir, timeoutMs }) {
         const j = await runProbe({ bin, model, dir, timeoutMs });
-        return readingFromBuckets(j.buckets, model);
+        return { ...readingFromBuckets(j.buckets, model), fields: j.fields || [] };
       },
     },
   },

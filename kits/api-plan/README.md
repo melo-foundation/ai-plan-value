@@ -2,6 +2,13 @@
 
 Measures the API dollars behind each unit of a coding plan's quota meter when you use the plan through its API key, and the plan's monthly API value and subsidy multiple.
 
+Run the smoke check first; it uses one short prompt and gives a report to send:
+
+    export ZAI_API_KEY=<your key>
+    node kits/api-plan/scripts/api-plan.mjs smoke --provider glm --model glm-5.3
+
+Use your provider's `--provider`, key variable and `--model` from the table below. On a manual meter, type the dashboard value at the `used:` prompt. Open the link it prints and press Create. The report is `kits/api-plan/results/smoke-<provider>-<date>.json`.
+
 ## Requirements
 
 - A paid plan from the table below and its API key.
@@ -13,16 +20,16 @@ Measures the API dollars behind each unit of a coding plan's quota meter when yo
 
 ## Providers
 
-| `--provider` | Plans | Key variable | Meter | Meter source | Dashboard | One run uses | Takes |
-|---|---|---|---|---|---|---|---|
-| `kimi` | Kimi Moderato, Allegretto, Allegro, Plus, Pro, Max, Ultra | `KIMI_API_KEY` | manual | dashboard | https://www.kimi.com/membership/subscription?tab=quota | +1% of the monthly total | 20 min – 4.5 h |
-| `glm` | GLM Coding Lite, Pro, Max | `ZAI_API_KEY` | automatic | `GET api.z.ai/api/monitor/usage/quota/limit` (undocumented) | https://z.ai/manage-apikey/coding-plan/personal/my-plan | +5% of the weekly limit | 40 min – 11.5 h |
-| `minimax` | MiniMax M Plan Go, Explore, Build; Token Plan Plus, Max, Ultra | `MINIMAX_API_KEY` | automatic | `GET www.minimax.io/v1/token_plan/remains` (documented endpoint, undocumented fields) | https://platform.minimax.io/console/usage | +3% of the weekly limit | 1 – 17.5 h |
-| `bailian` | 阿里云百炼 Token Plan Lite, Essential, Standard, Pro; Qwen Token Plan Standard (`--region intl`, meter unverified) | `BAILIAN_API_KEY` (`sk-sp-…`) | automatic | `bl usage token-plan --output json` (documented command, undocumented fields) | https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan | +1% of the monthly quota | 20 min – 2.5 h |
-| `deeprelay` | DeepRelay Base, Plus | `DEEPRELAY_API_KEY` | automatic | `deeprelay billing subscription -o json` (documented) | https://deeprelay.ai/dashboard | +1% of the monthly input allowance | 30 min – 1.7 h |
-| `ollama` | Ollama Pro, Max | `OLLAMA_API_KEY` | automatic | `GET ollama.com/api/balance` (documented) | https://ollama.com/settings | +1% of the monthly credits | Pro 4 h, Max 18 h |
-| `step` | Step Plan Mini, Plus, Pro, Max | `STEPFUN_API_KEY` | manual | dashboard | https://platform.stepfun.com/step-plan | +1% of the monthly credits | 50 min – 14 h (Max 67 h) |
-| `mimo` | MiMo Token Plan Lite, Standard, Pro, Max | `MIMO_API_KEY` (`tp-…`) | automatic | `GET token-plan-cn.xiaomimimo.com/v1/platform/token_plan` (documented) | https://platform.xiaomimimo.com/#/console/plan-manage | +1% of the monthly credits | 20 min – 4.5 h |
+| `--provider` | Plans | Key variable | Meter | Meter source | Dashboard | One run uses | Takes | Status |
+|---|---|---|---|---|---|---|---|---|
+| `kimi` | Kimi Moderato, Allegretto, Allegro, Plus, Pro, Max, Ultra | `KIMI_API_KEY` | manual | dashboard | https://www.kimi.com/membership/subscription?tab=quota | +1% of the monthly total | 20 min – 4.5 h | Untested: run `smoke` first |
+| `glm` | GLM Coding Lite, Pro, Max | `ZAI_API_KEY` | automatic | `GET api.z.ai/api/monitor/usage/quota/limit` (undocumented) | https://z.ai/manage-apikey/coding-plan/personal/my-plan | +5% of the weekly limit | 40 min – 11.5 h | Untested: run `smoke` first |
+| `minimax` | MiniMax M Plan Go, Explore, Build; Token Plan Plus, Max, Ultra | `MINIMAX_API_KEY` | automatic | `GET www.minimax.io/v1/token_plan/remains` (documented endpoint, undocumented fields) | https://platform.minimax.io/console/usage | +3% of the weekly limit | 1 – 17.5 h | Untested: run `smoke` first |
+| `bailian` | 阿里云百炼 Token Plan Lite, Essential, Standard, Pro; Qwen Token Plan Standard (`--region intl`, meter unverified) | `BAILIAN_API_KEY` (`sk-sp-…`) | automatic | `bl usage token-plan --output json` (documented command, undocumented fields) | https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan | +1% of the monthly quota | 20 min – 2.5 h | Untested: run `smoke` first |
+| `deeprelay` | DeepRelay Base, Plus | `DEEPRELAY_API_KEY` | automatic | `deeprelay billing subscription -o json` (documented) | https://deeprelay.ai/dashboard | +1% of the monthly input allowance | 30 min – 1.7 h | Untested: run `smoke` first |
+| `ollama` | Ollama Pro, Max | `OLLAMA_API_KEY` | automatic | `GET ollama.com/api/balance` (documented) | https://ollama.com/settings | +1% of the monthly credits | Pro 4 h, Max 18 h | Untested: run `smoke` first |
+| `step` | Step Plan Mini, Plus, Pro, Max | `STEPFUN_API_KEY` | manual | dashboard | https://platform.stepfun.com/step-plan | +1% of the monthly credits | 50 min – 14 h (Max 67 h) | Untested: run `smoke` first |
+| `mimo` | MiMo Token Plan Lite, Standard, Pro, Max | `MIMO_API_KEY` (`tp-…`) | automatic | `GET token-plan-cn.xiaomimimo.com/v1/platform/token_plan` (documented) | https://platform.xiaomimimo.com/#/console/plan-manage | +1% of the monthly credits | 20 min – 4.5 h | Untested: run `smoke` first |
 
 Times include 10 minutes of idle checks. Per-plan figures (API $, calls, time):
 
@@ -134,6 +141,7 @@ Each run writes `kits/api-plan/results/<tag>.json` and prints a summary. To anal
 | Message or flag | Do |
 |---|---|
 | `set <VAR>` | export the provider's key variable |
+| `smoke`: `partly` or `fails` | send the report as is |
 | `rejected the key in $<VAR>` | use the plan's own key (Bailian `sk-sp-…`, MiMo `tp-…`, MiniMax Token Plan key) |
 | `no API price for <model>` | pass `--site-model <id>` from the list it prints, or `--price input,cached,output` |
 | `plan "…" is not a … plan`, `no plan "…"` | copy a name from the `plans` command |

@@ -82,8 +82,11 @@ async function main() {
   }
   if (!q?.buckets?.length) done({ ok: false, error: "retrieveUserQuota returned no buckets (not a Code Assist login, or no project)" });
   const n = (x) => (x == null ? null : Number(x));
+  // field names only (for the smoke report): top level, and the first bucket's
+  const plain = (o) => (o && typeof o === "object" ? Object.keys(o).filter((k) => /^[A-Za-z_]\w{0,39}$/.test(k)) : []);
   done({
     ok: true,
+    fields: [...plain(q), ...plain(q.buckets[0]).map((k) => `buckets.${k}`)],
     buckets: q.buckets.map((b) => ({ modelId: b.modelId ?? null, remainingFraction: n(b.remainingFraction), remainingAmount: b.remainingAmount != null ? n(b.remainingAmount) : null, resetTime: b.resetTime ?? null, tokenType: b.tokenType ?? null })),
   });
 }

@@ -6,7 +6,8 @@
  *   node scripts/measurement-needs.mjs --stdout   # prints instead of writing
  *
  * Also called at the end of scripts/refresh-data.mjs. Output depends only on the dataset (the
- * reference date is dataset.generatedAt), so two runs on one file give identical bytes.
+ * reference date is dataset.generatedAt) and kits/status.json (" · untested" after the kit link of
+ * an untested adapter), so two runs on one file give identical bytes.
  *
  * Method (rationale lives here, not in the generated file):
  * - Rows: subscription rows visible by default on the site: not legacy, not off-peak, not
@@ -30,6 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { codexIdForPlan, entryOf, isTested, loadStatus } from "./kit-status.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -95,18 +97,38 @@ export function kitRegistry(kitsDir = path.join(path.dirname(fileURLToPath(impor
     }
     for (const h of k.harnesses || []) {
       if (!h.planTest) continue;
-      out.push({ re: new RegExp(h.planTest), name: h.harness, href: `${d}/README.md`, manual: h.meter === "manual" });
+      out.push({ re: new RegExp(h.planTest), name: h.harness, href: `${d}/README.md`, manual: h.meter === "manual", kit: k.kit || d, id: h.id });
     }
   }
   return out;
 }
 const KIT_REGISTRY = kitRegistry();
 
-export function kitText(plan) {
+export const UNTESTED_SUFFIX = " · untested";
+
+/** { kit, id } of the kits/status.json adapter that measures `plan`, or null when no kit does. */
+export function statusKeyFor(plan) {
   const f = familyOf(plan);
-  if (f?.kit) return `[Kit: ${f.kit.name}](${f.kit.href})`;
+  if (f?.kit) {
+    if (f.id === "claude") return { kit: "claude-code", id: "claude-code" };
+    if (f.id === "chatgpt-plus" || f.id === "chatgpt-pro") return { kit: "codex", id: codexIdForPlan(plan) };
+    if (f.kit.href === "api-plan/README.md") return { kit: "api-plan", id: f.id };
+    throw new Error(`no kits/status.json key for ${plan}`);
+  }
   const r = KIT_REGISTRY.find((x) => x.re.test(plan));
-  if (r) return `[Kit: ${r.name}${r.manual ? ", meter typed by hand" : ""}](${r.href})`;
+  return r ? { kit: r.kit, id: r.id } : null;
+}
+
+const untested = (plan, status) => {
+  const k = statusKeyFor(plan);
+  return k ? (isTested(entryOf(status, k.kit, k.id)) ? "" : UNTESTED_SUFFIX) : "";
+};
+
+export function kitText(plan, status = loadStatus()) {
+  const f = familyOf(plan);
+  if (f?.kit) return `[Kit: ${f.kit.name}](${f.kit.href})${untested(plan, status)}`;
+  const r = KIT_REGISTRY.find((x) => x.re.test(plan));
+  if (r) return `[Kit: ${r.name}${r.manual ? ", meter typed by hand" : ""}](${r.href})${untested(plan, status)}`;
   if (f?.notNeeded) return `Not needed (${f.notNeeded})`;
   return f?.note ? `No kit yet (${f.note})` : "No kit yet";
 }
@@ -175,7 +197,7 @@ const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const mdCell = (s) => String(s).replace(/\|/g, "\\|");
 
 /** Ranked list of plans with their need score and plain-language reasons. */
-export function rankPlans(dataset) {
+export function rankPlans(dataset, status = loadStatus()) {
   const chains = dataset.stats?.chains || {};
   const refT = dataEnd(String(dataset.generatedAt || "").slice(0, 10)) ?? dataEnd(dataset.latestDataDate);
   const refYear = new Date(refT).getUTCFullYear();
@@ -323,7 +345,7 @@ export function rankPlans(dataset) {
       first: first.name,
       reasons,
       fails: [...planFails.values()].sort(),
-      kit: kitText(P.plan),
+      kit: kitText(P.plan, status),
     });
   }
 

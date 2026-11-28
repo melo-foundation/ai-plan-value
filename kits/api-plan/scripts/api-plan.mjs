@@ -7,6 +7,7 @@
  *
  *   node kits/api-plan/scripts/api-plan.mjs providers
  *   node kits/api-plan/scripts/api-plan.mjs plans --provider <id>
+ *   node kits/api-plan/scripts/api-plan.mjs smoke --provider <id> --model <model> [--plan <name>]
  *   node kits/api-plan/scripts/api-plan.mjs check --provider <id> --model <model> [--plan <name>]
  *   node kits/api-plan/scripts/api-plan.mjs run --provider <id> --model <model> --plan <name> [options]
  *   node kits/api-plan/scripts/api-plan.mjs analyse --run <tag>
@@ -32,6 +33,7 @@ import { ADAPTERS, adapterFor, baseUrlFor, windowDef, MeterShapeError } from "./
 import { siteModelId, priceFromSite, parsePriceOption, nearModels, priceUsage, plansFor, planFee, siteRef } from "./site.mjs";
 import { analyseRun, RUN_SCHEMA, typedResolution } from "./fit.mjs";
 import { promptAt, WORKLOAD_VERSION, workloadHash, approxTokens } from "../workload/prompts.mjs";
+import * as Smoke from "../../lib/smoke.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 export const KIT_VERSION = "1.0.0";
@@ -328,7 +330,7 @@ async function readAuto(ctx) {
     json = r.json;
   }
   const parsed = m.parse(json, { model: ctx.model });
-  return { windows: parsed.windows };
+  return { windows: parsed.windows, fields: Smoke.fieldNames(json) };
 }
 
 const pctOf = (x) => (x && x.capacity > 0 ? (100 * x.used) / x.capacity : null);
@@ -402,6 +404,125 @@ async function cmdCheck(a) {
     for (const w of warn) log(`  ${w}`);
     process.exitCode = 1;
   } else log("\nok");
+}
+
+// ---------------------------------------------------------------------------------------------
+// smoke
+// ---------------------------------------------------------------------------------------------
+
+/** Raw usage field names of a response body: usage{} keys and their *_details{} keys; Ollama's counters. */
+export function usageFieldNames(api, body) {
+  if (api === "ollama") return Smoke.fieldNames(body).filter((k) => /_count$|_duration$/.test(k));
+  const u = body?.usage;
+  const out = Smoke.fieldNames(u);
+  for (const k of out.slice()) if (u[k] && typeof u[k] === "object") for (const j of Smoke.fieldNames(u[k])) out.push(`${k}.${j}`);
+  return out;
+}
+
+/** One typed meter reading for the smoke check; null when stdin ends. Never fatal. */
+async function smokeManual(ctx, w, capacity) {
+  const def = windowDef(ctx.adapter, w);
+  for (let tries = 0; tries < 3; tries++) {
+    process.stdout.write(redact(`\nopen ${ctx.adapter.meter.dashboard} and type the ${def.label} usage (${def.unit === "%" ? "37.5% or 62.5% left" : `${def.unit}, or N left`}), ${def.unit} used: `));
+    const line = await nextLine();
+    if (line == null) return null;
+    try {
+      parseManual(line, { unit: def.unit, capacity });
+      return { ok: true, unit: def.unit, label: def.label };
+    } catch (err) {
+      log(`  ${err.message}`);
+    }
+  }
+  return { ok: false, unit: def.unit, label: def.label };
+}
+
+/**
+ * One request of a one-line prompt (no system prompt, no tools) to the plan's endpoint, one meter
+ * reading. Writes kits/api-plan/results/smoke-<provider>-<date>.json.
+ */
+async function cmdSmoke(a) {
+  const ctx = context(a, { needModel: false });
+  const ad = ctx.adapter;
+  if (!ctx.model) fail("--model <model name as the provider's API takes it>, e.g. --model glm-5.3");
+  const clean = Smoke.cleaner(redact);
+  const S = Smoke.stepList();
+  const fields = { usage: [], meter: [] };
+  let toolVersion = null;
+
+  S.add("endpoint", "pass", `${ctx.api} API, ${typeof a["base-url"] === "string" ? "custom --base-url" : `${ctx.region || "default"} region`}`);
+  S.add("key", ctx.key ? "pass" : "fail", ctx.key ? `$${ad.env} set (not printed)` : `set ${ad.env}`);
+
+  let json = null;
+  if (ctx.key) {
+    const req = requestFor(ctx.api, ctx.baseUrl, ctx.key, ctx.model, { system: "", user: Smoke.SMOKE_PROMPT }, 256);
+    if (ctx.api === "anthropic") delete req.body.system;
+    else req.body.messages = req.body.messages.filter((m) => m.role !== "system");
+    log(`smoke · ${ad.provider} · ${ctx.model} · one prompt: ${Smoke.SMOKE_PROMPT}`);
+    const r = await httpJson(req.url, { method: "POST", headers: req.headers, body: req.body, timeoutMs: 120000 });
+    if (r.status === 200 && r.json) {
+      json = r.json;
+      S.add("prompt", "pass", "HTTP 200");
+    } else if (r.status === 401 || r.status === 403) S.add("prompt", "fail", `key rejected (HTTP ${r.status}): use the plan's own key in $${ad.env}`);
+    else S.add("prompt", "fail", r.status == null ? `no response (${r.error})` : `HTTP ${r.status}${r.status === 200 ? ", body is not JSON" : ""}`);
+  } else S.add("prompt", "skipped", "no key");
+
+  if (json) {
+    const u = usageFrom(ctx.api, json);
+    fields.usage = usageFieldNames(ctx.api, json);
+    if (!u) S.add("usage", "fail", "the response has no usage field");
+    else {
+      const found = ["uncached", "cached", "cacheWrite", "output", "reasoning"].filter((k) => u[k] > 0);
+      S.add("usage", u.output > 0 && u.uncached + u.cached + u.cacheWrite > 0 ? "pass" : "fail", `parsed: ${found.join(", ") || "nothing"}`);
+    }
+    const want = ctx.expectModel || ctx.model;
+    const got = typeof json.model === "string" ? json.model : null;
+    const same = got && got.toLowerCase() === want.toLowerCase();
+    if (!got) S.add("model", "skipped", "the response names no model");
+    else S.add("model", same ? "pass" : "fail", same ? `${got} as requested` : `requested ${want}, response says ${got}: pass --expect-model if it is an alias`);
+  } else for (const id of ["usage", "model"]) S.add(id, "skipped", "the prompt did not run");
+
+  const capacity = a.capacity != null ? numOpt(a, "capacity", null) : null;
+  let autoOk = false;
+  if (ctx.mode === "auto") {
+    if (ad.meter.cli) {
+      const vr = spawnSync(ctx.cliBin, ["--version"], { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] });
+      if (vr.status === 0 && vr.stdout.trim()) toolVersion = `${ad.meter.cli.bin} ${vr.stdout.trim().split("\n")[0]}`;
+    }
+    if (!ctx.key && !ad.meter.cli) {
+      S.add("meter-auto", "skipped", "no key");
+      S.add("meter-fields", "skipped", "no key");
+    } else {
+      try {
+        const r = await readAuto(ctx);
+        const ws = Object.keys(r.windows);
+        autoOk = ws.length > 0;
+        fields.meter = r.fields || [];
+        const units = [...new Set(Object.values(r.windows).map((x) => x.unit))];
+        S.add("meter-auto", autoOk ? "pass" : "fail", autoOk ? `automatic: parsed ${ws.join(", ")} (unit ${units.join(", ")})` : "automatic: no windows in the response");
+        S.add("meter-fields", fields.meter.length ? "pass" : "fail", fields.meter.length ? "response field names recorded" : "no field names");
+      } catch (err) {
+        S.add("meter-auto", "fail", `automatic: ${err.message}`);
+        S.add("meter-fields", "skipped", "no response");
+      }
+    }
+  } else {
+    S.add("meter-auto", "skipped", ad.meter.modes.includes("auto") ? "--manual" : "no automatic meter");
+    S.add("meter-fields", "skipped", "no automatic meter read");
+  }
+  if (autoOk) S.add("meter-manual", "skipped", "the automatic reading worked");
+  else {
+    const w = typeof a.window === "string" ? a.window : ad.meter.primary;
+    const m = await smokeManual(ctx, w, capacity);
+    if (!m) S.add("meter-manual", "skipped", "no reading typed");
+    else S.add("meter-manual", m.ok ? "pass" : "fail", m.ok ? `manual: ${m.label} reading parsed (unit ${m.unit})` : `manual: three readings did not parse (unit ${m.unit})`);
+  }
+  if (lineReader) lineReader.close();
+
+  const report = Smoke.buildReport({ kit: "api-plan", kitDir: KIT_DIR, adapter: ad.id, toolVersion, plan: typeof a.plan === "string" ? a.plan : null, model: ctx.model, steps: S.steps, fields, critical: ["key", "prompt"], clean, secrets: [...SECRETS] });
+  const file = Smoke.writeReport(RESULTS_DIR, report);
+  Smoke.printReport(report, file, log);
+  if (report.result === "fails") process.exitCode = 1;
+  return report;
 }
 
 let interrupted = 0;
@@ -710,6 +831,7 @@ const HELP = `api-plan ${KIT_VERSION}
 
   node kits/api-plan/scripts/api-plan.mjs providers
   node kits/api-plan/scripts/api-plan.mjs plans --provider <id>
+  node kits/api-plan/scripts/api-plan.mjs smoke --provider <id> --model <m> [--plan <name>] [--manual]
   node kits/api-plan/scripts/api-plan.mjs check --provider <id> [--model <m>] [--plan <name>]
   node kits/api-plan/scripts/api-plan.mjs run --provider <id> --model <m> --plan <name> [options]
   node kits/api-plan/scripts/api-plan.mjs analyse --run <tag> [--out <file>]
@@ -749,6 +871,7 @@ async function main() {
   if (!cmd || a.help || cmd === "help") return log(HELP);
   if (cmd === "providers") return cmdProviders();
   if (cmd === "plans") return cmdPlans(a);
+  if (cmd === "smoke") return cmdSmoke(a);
   if (cmd === "check") return cmdCheck(a);
   if (cmd === "run") return cmdRun(a);
   if (cmd === "analyse" || cmd === "analyze") return analyseAndWrite(a);

@@ -194,7 +194,9 @@ test("kits/NEEDED.md names this kit with each plan's meter mode", async () => {
     if (!ad) continue;
     n++;
     const mode = ad.meter.default === "auto" ? "automatic" : "manual";
-    assert.equal(MN.kitText(plan), `[Kit: API plans (${mode})](api-plan/README.md)`, plan);
+    const KS = await import("../../../scripts/kit-status.mjs");
+    const suffix = KS.isTested(KS.entryOf(KS.loadStatus(), "api-plan", ad.id)) ? "" : MN.UNTESTED_SUFFIX;
+    assert.equal(MN.kitText(plan), `[Kit: API plans (${mode})](api-plan/README.md)${suffix}`, plan);
   }
   assert.ok(n > 30);
 });

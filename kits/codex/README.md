@@ -2,6 +2,12 @@
 
 Measures the API dollars behind each percentage point of the Codex weekly limit on ChatGPT Plus, Pro 10x, Pro 20x and Pro 500, and the plan's monthly API value and subsidy multiple.
 
+Run the smoke check first; it uses one short prompt and gives a report to send:
+
+    node kits/codex/scripts/codex-quota.mjs smoke --plan plus
+
+On Pro, pass `--plan pro-10x`, `pro-20x` or `pro-500`. Open the link it prints and press Create. The report is `kits/codex/results/smoke-codex-<date>.json`.
+
 ## Requirements
 
 - ChatGPT Plus, Pro 10x, Pro 20x or Pro 500.
@@ -12,12 +18,12 @@ Measures the API dollars behind each percentage point of the Codex weekly limit 
 
 ## Plans
 
-| Plan | `--plan` | Fee |
-|---|---|---|
-| ChatGPT Plus | `plus` (optional) | $20 |
-| ChatGPT Pro 10x | `pro-10x` (required) | $100 |
-| ChatGPT Pro 20x | `pro-20x` (required) | $200 |
-| ChatGPT Pro 500 | `pro-500` (required) | $500 |
+| Plan | `--plan` | Fee | Status |
+|---|---|---|---|
+| ChatGPT Plus | `plus` (optional) | $20 | Tested (2026-11-27) |
+| ChatGPT Pro 10x | `pro-10x` (required) | $100 | Untested: run `smoke` first |
+| ChatGPT Pro 20x | `pro-20x` (required) | $200 | Untested: run `smoke` first |
+| ChatGPT Pro 500 | `pro-500` (required) | $500 | Untested: run `smoke` first |
 
 Pass `--plan` on Pro: its `plan_type` (`pro`, `prolite` or `promax`) does not name the tier. A `--plan` that does not match the account's `plan_type` stops the run after the first ping.
 
@@ -122,6 +128,8 @@ To analyse a run again:
 | `check`: `codex not found` | install the Codex CLI or pass `--codex <path>` |
 | `check`: `no ~/.codex/sessions` | run `codex` once and log in |
 | `check`: `close the processes listed above` | close them and run `check` again |
+| `smoke`: `close these first (or pass --force)` | close the other Codex sessions and run `smoke` again |
+| `smoke`: `partly` or `fails` | send the report as is |
 | `plan_type pro is one of …: pass --plan` | add `--plan pro-10x`, `pro-20x` or `pro-500` |
 | `--plan … does not match plan_type …` | log in with the account for that plan, or fix `--plan` |
 | `plan_type … is not a plan this kit measures` | log in with a Plus or Pro account |

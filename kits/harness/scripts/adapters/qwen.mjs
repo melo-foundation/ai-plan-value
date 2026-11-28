@@ -174,7 +174,8 @@ export default {
       route: "bl usage token-plan --output json (documented command, undocumented fields)",
       async read({ window, a = {}, timeoutMs }) {
         const blBin = typeof a.bl === "string" ? a.bl : "bl";
-        return readingFromBl(runBl({ blBin, timeoutMs }), window || "monthly");
+        const j = runBl({ blBin, timeoutMs });
+        return { ...readingFromBl(j, window || "monthly"), fields: Object.keys(j || {}) };
       },
     },
   },

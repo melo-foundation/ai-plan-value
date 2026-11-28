@@ -4,6 +4,7 @@
  * Plus, Pro 10x / 20x / 500; GPT-6.2 Sol by default, any model via --model) from Codex CLI rollout
  * files, and the monthly API value and subsidy multiple the site uses. Usage: kits/codex/README.md.
  *
+ *   node kits/codex/scripts/codex-quota.mjs smoke [--plan <plan>] [--model <slug>]
  *   node kits/codex/scripts/codex-quota.mjs check [--plan <plan>]
  *   node kits/codex/scripts/codex-quota.mjs run --arm A|B [--plan <plan>] [--model <slug>] [--tag <tag>] [--target-pp N] [--dry-run] [options]
  *   node kits/codex/scripts/codex-quota.mjs analyse --run <tag> | --dir <folder> | --from <ISO> --to <ISO> [options]
@@ -27,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import * as RF from "./rollout-fit.mjs";
 import { TASKS_A, taskB, WORKLOAD_VERSION, workloadHash, B_ROWS } from "../workload/tasks.mjs";
 import { PLANS, PLAN_IDS, DEFAULT_PLAN_ID, planById, planFee, resolvePlan } from "./plans.mjs";
+import * as Smoke from "../../lib/smoke.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const KIT_VERSION = "1.1.0";
@@ -685,6 +687,115 @@ async function cmdRun(a) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// smoke
+// ---------------------------------------------------------------------------------------------
+
+/** Raw field names in a rollout file: token usage objects and rate_limits (names only). */
+function rolloutFieldNames(file) {
+  const usage = new Set();
+  const meter = new Set();
+  let text = "";
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch {
+    return { usage: [], meter: [] };
+  }
+  for (const line of text.split("\n")) {
+    let o;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const p = o?.payload;
+    if (o?.type !== "event_msg" || p?.type !== "token_count") continue;
+    for (const k of Smoke.fieldNames(p.info?.last_token_usage || p.info?.total_token_usage)) usage.add(k);
+    for (const k of Smoke.fieldNames(p.rate_limits)) meter.add(k);
+  }
+  return { usage: [...usage], meter: [...meter] };
+}
+
+/**
+ * One `codex exec` of a one-line prompt in a throwaway folder, with the idle-ping command shape
+ * (read-only sandbox, the run's model and effort). Writes kits/codex/results/smoke-codex-<date>.json.
+ */
+async function cmdSmoke(a) {
+  const bin = a.codex || "codex";
+  const model = typeof a.model === "string" ? a.model : DEFAULT_MODEL;
+  if (!MODEL_SLUG.test(model)) fail("--model <slug>, e.g. gpt-6.2-sol");
+  const effort = typeof a.effort === "string" ? a.effort : ARMS.A.effort;
+  if (a.plan != null && (a.plan === true || !planById(a.plan))) fail(`--plan ${PLAN_IDS.join(" | ")}`);
+  const clean = Smoke.cleaner();
+  const S = Smoke.stepList();
+  const fields = { usage: [], meter: [] };
+  let planId = typeof a.plan === "string" ? planById(a.plan).id : null;
+
+  const v = codexVersion(bin);
+  S.add("binary", v ? "pass" : "fail", v ? `codex-cli ${v}` : "codex not found: install the Codex CLI or pass --codex <path>");
+  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+  const loggedIn = fs.existsSync(path.join(codexHome, "auth.json"));
+  S.add("login", loggedIn ? "pass" : "fail", loggedIn ? "auth.json present (not opened)" : "no auth.json in the Codex home: run codex and log in");
+
+  let run = null;
+  let dir = null;
+  let base = null;
+  if (v) {
+    const procs = otherAgentProcesses();
+    if (procs.length && !a.force) fail(`close these first (or pass --force): ${procs.map((p) => `${p.kind} pid ${p.pid}`).join(", ")}`);
+    fs.mkdirSync(WORK_BASE, { recursive: true });
+    base = fs.mkdtempSync(path.join(WORK_BASE, "smoke-"));
+    dir = path.join(base, "ping");
+    fs.mkdirSync(dir);
+    const startMs = Date.now();
+    log(`smoke · codex exec -m ${model} · effort ${effort} · one prompt: ${Smoke.SMOKE_PROMPT}`);
+    const r = await runCodex(bin, codexArgs({ dir, sandbox: "read-only", model, effort, lastFile: null }), Smoke.SMOKE_PROMPT, { timeoutMs: 5 * 60000, logFile: path.join(base, "exec.jsonl") });
+    run = { r, sessions: sessionsUnder(dir, startMs) };
+    S.add("prompt", r.code === 0 ? "pass" : "fail", r.timedOut ? "timed out after 5 min" : `exit ${r.code ?? r.signal}`);
+  } else S.add("prompt", "skipped", "no codex binary");
+
+  if (run) {
+    const events = run.sessions.flatMap((s) => s.events);
+    for (const s of run.sessions) {
+      const f = rolloutFieldNames(s.file);
+      fields.usage.push(...f.usage);
+      fields.meter.push(...f.meter);
+    }
+    const calls = events.filter((e) => e.kind === "call");
+    if (!run.sessions.length) S.add("usage", "fail", "no rollout file for the prompt in the Codex sessions folder");
+    else if (!calls.length) S.add("usage", "fail", "no token_count event with usage in the rollout");
+    else {
+      const found = ["input", "cached", "output", "reasoning"].filter((k) => calls.some((c) => c.usage?.[k] > 0));
+      S.add("usage", found.includes("input") && found.includes("output") ? "pass" : "fail", `parsed: ${found.join(", ") || "nothing"}`);
+    }
+    const seen = [...new Set(events.map((e) => e.model).filter(Boolean))];
+    if (!seen.length) S.add("model", "skipped", "the rollout names no model");
+    else S.add("model", seen.every((m) => m === model) ? "pass" : "fail", seen.every((m) => m === model) ? `${model} as requested` : `requested ${model}, rollout says ${seen.join(", ")}`);
+    const ev = lastRateEvent(run.sessions);
+    const w = ev?.rate?.windows || {};
+    if (!ev) S.add("meter", "fail", "automatic: no rate_limits in the rollout");
+    else if (!w.weekly) S.add("meter", "fail", `automatic: no weekly window (windows: ${Object.keys(w).join(", ") || "none"})`);
+    else S.add("meter", "pass", `automatic: weekly % parsed (unit % of the weekly limit; windows ${Object.keys(w).join(", ")})`);
+    S.add("meter-fields", fields.meter.length ? "pass" : "fail", fields.meter.length ? "rate_limits field names recorded" : "no rate_limits fields");
+    if (ev?.rate?.planType) {
+      try {
+        const p = resolvePlan({ planTypes: [ev.rate.planType], requested: a.plan ?? null });
+        planId = p.id;
+        S.add("plan", "pass", `plan_type ${ev.rate.planType} is ${p.name}`);
+      } catch (err) {
+        S.add("plan", "fail", err.message);
+      }
+    } else S.add("plan", "skipped", "no plan_type in the rollout");
+  } else for (const id of ["usage", "model", "meter", "meter-fields", "plan"]) S.add(id, "skipped", "the prompt did not run");
+  if (base) fs.rmSync(base, { recursive: true, force: true });
+
+  const report = Smoke.buildReport({ kit: "codex", kitDir: KIT_DIR, adapter: "codex", toolVersion: v ? `codex-cli ${v}` : null, plan: planId, model, steps: S.steps, fields, critical: ["binary", "prompt"], clean });
+  const file = Smoke.writeReport(RESULTS_DIR, report);
+  Smoke.printReport(report, file, log);
+  if (report.result === "fails") process.exitCode = 1;
+  return report;
+}
+
+// ---------------------------------------------------------------------------------------------
 // analyse
 // ---------------------------------------------------------------------------------------------
 
@@ -820,6 +931,7 @@ function cmdCompare(a) {
 
 const HELP = `codex-quota ${KIT_VERSION}
 
+  node kits/codex/scripts/codex-quota.mjs smoke [--plan <plan>] [--model <slug>] [--codex <path>]
   node kits/codex/scripts/codex-quota.mjs check [--plan <plan>] [--model <slug>] [--codex <path>]
   node kits/codex/scripts/codex-quota.mjs run --arm A|B [options]
   node kits/codex/scripts/codex-quota.mjs analyse --run <tag> | --dir <folder> | --from <ISO> [--to <ISO>] [options]
@@ -857,6 +969,7 @@ async function main() {
   const a = parseArgs(process.argv.slice(2));
   const cmd = a._[0];
   if (!cmd || a.help || cmd === "help") return log(HELP);
+  if (cmd === "smoke") return cmdSmoke(a);
   if (cmd === "check") return cmdCheck(a);
   if (cmd === "prices") return cmdPrices(a);
   if (cmd === "run") return cmdRun(a);

@@ -198,7 +198,12 @@ export default {
     auto: {
       route: "muse usage --json (command documented; JSON fields from aqua5230/usage, unverified)",
       async read({ bin, dir, timeoutMs }) {
-        return readingFromUsage(await runUsage({ bin, dir, timeoutMs }));
+        const out = await runUsage({ bin, dir, timeoutMs });
+        let fields = [];
+        try {
+          fields = Object.keys(JSON.parse(String(out).trim()) || {});
+        } catch {}
+        return { ...readingFromUsage(out), fields };
       },
     },
   },
