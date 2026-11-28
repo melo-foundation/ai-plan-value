@@ -7,6 +7,11 @@ on:
     # Auto-refresh data and redeploy every 6 hours
     - cron: "0 */6 * * *"
   workflow_dispatch:
+    inputs:
+      pricing_baseline:
+        description: "Re-record the pricing-page baseline (US, USD) and commit it"
+        type: boolean
+        default: false
 
 permissions:
   # write: the build job commits data/reliability/history.jsonl back to main ([skip ci]).
@@ -75,6 +80,35 @@ jobs:
         if: steps.refresh.outcome == 'failure' || steps.tests.outcome == 'failure'
         run: |
           echo "Refresh or automated tests failed; keeping previous live Pages deployment intact."
+          exit 1
+
+      - name: Re-record pricing-page baseline from this runner
+        # Manual only. The baseline must come from the same US runner the scheduled watch uses,
+        # so both see USD pages; a baseline recorded elsewhere sees local currency and always "changes".
+        if: github.event_name == 'workflow_dispatch' && inputs.pricing_baseline
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        env:
+          CHROME_BIN: google-chrome
+        run: |
+          set -euo pipefail
+          node scripts/check-pricing-pages.mjs --update-baseline --out /tmp/pricing-pages.json > /dev/null
+          F=data/pricing-pages/baseline.json
+          cp "$F" /tmp/baseline-new.json
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3; do
+            git fetch --quiet origin main
+            rm -rf /tmp/base-wt && git worktree prune
+            git worktree add --quiet --detach /tmp/base-wt origin/main
+            cp /tmp/baseline-new.json "/tmp/base-wt/$F"
+            git -C /tmp/base-wt add "$F"
+            git -C /tmp/base-wt diff --cached --quiet && { echo "Baseline unchanged"; exit 0; }
+            git -C /tmp/base-wt commit --quiet -m "Re-record pricing-page baseline from the CI runner (USD) [skip ci]"
+            if git -C /tmp/base-wt push --quiet origin HEAD:main; then echo "Baseline pushed"; exit 0; fi
+            sleep $((i * 5))
+          done
           exit 1
 
       - name: Commit reliability history to main

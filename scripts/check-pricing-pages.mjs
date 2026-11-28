@@ -70,7 +70,13 @@ export function priceLines(text) {
 export function textHash(text) {
   const lines = priceLines(text);
   const basis = lines.length ? lines : uniqSorted(normLines(text).filter((l) => /\d/.test(l)));
-  return { hash: crypto.createHash("sha256").update(basis.join("\n")).digest("hex").slice(0, 16), priceLines: lines.length, region: lines.length ? "price-lines" : "body" };
+  return {
+    hash: crypto.createHash("sha256").update(basis.join("\n")).digest("hex").slice(0, 16),
+    priceLines: lines.length,
+    region: lines.length ? "price-lines" : "body",
+    // Kept (each line ≤ 300 chars) so a change can be shown as lines added and removed
+    lines: basis.map((l) => l.slice(0, 300)),
+  };
 }
 
 /** Page state from a render result: ok | blocked | login | dns | error | empty. */
@@ -99,7 +105,12 @@ export function diffPages(baseline, report, unknownPlans = {}) {
     const isOk = now.state === "ok";
     const extra = unknownPlans[url]?.length ? { unknownPlans: unknownPlans[url] } : {};
     if (isOk && !wasOk) out.readable.push({ url, was: was?.state ?? "missing", hash: now.hash, ...extra });
-    else if (isOk && wasOk && was.hash !== now.hash) out.changed.push({ url, was: was.hash, now: now.hash, ...extra });
+    else if (isOk && wasOk && was.hash !== now.hash) {
+      const lineDiff = Array.isArray(was.lines) && Array.isArray(now.lines)
+        ? { removed: was.lines.filter((l) => !now.lines.includes(l)), added: now.lines.filter((l) => !was.lines.includes(l)) }
+        : {};
+      out.changed.push({ url, was: was.hash, now: now.hash, ...lineDiff, ...extra });
+    }
     else if (!isOk && wasOk) out.stopped.push({ url, now: now.state, ...extra });
   }
   for (const k of Object.keys(out)) out[k].sort((a, b) => a.url.localeCompare(b.url));
@@ -264,7 +275,7 @@ export function readBaseline(file = BASELINE_PATH) {
 
 export function baselineFrom(pages, generated = new Date().toISOString().slice(0, 10)) {
   const out = {};
-  for (const [url, p] of Object.entries(pages)) out[url] = { state: p.state, hash: p.hash, priceLines: p.priceLines };
+  for (const [url, p] of Object.entries(pages)) out[url] = { state: p.state, hash: p.hash, priceLines: p.priceLines, ...(p.lines ? { lines: p.lines } : {}) };
   return { version: 1, generated, pages: out };
 }
 
@@ -277,7 +288,11 @@ export function issueBody(diff, { runUrl = null, generated = null } = {}) {
     lines.push("");
   };
   sec("Readable now", diff.readable, (r) => `${r.url} (was ${r.was})`);
-  sec("Prices changed", diff.changed, (r) => `${r.url} (${r.was} → ${r.now})`);
+  sec("Prices changed", diff.changed, (r) => {
+    if (!r.added && !r.removed) return `${r.url} (${r.was} → ${r.now}; no saved lines to compare)`;
+    const show = (sign, ls) => ls.slice(0, 12).map((l) => `\n  ${sign} \`${l.replace(/`/g, "'").slice(0, 160)}\``).join("");
+    return `${r.url}${show("−", r.removed)}${show("+", r.added)}`;
+  });
   sec("Stopped loading", diff.stopped, (r) => `${r.url} (now ${r.now})`);
   lines.push(`Baseline: \`data/pricing-pages/baseline.json\` (${generated || "none"}).`);
   lines.push("Update the tables in `scripts/billing-periods.mjs` / `scripts/included-credits.mjs`, then run `node scripts/check-pricing-pages.mjs --update-baseline` and commit the baseline.");

@@ -286,8 +286,9 @@ Every `unknown` record in `BILLING_PERIODS` and `INCLUDED_CREDITS` has `reason` 
 - A page reported `changed` or `stopped` is rendered again; it is reported only when both renders differ from the baseline (`flaky` otherwise).
 - Report (stdout, `--out FILE`): `pages`, `readable` (was not `ok`, now `ok`), `changed` (hash differs), `stopped` (was `ok`, now not). Entries list the `unknown` plans citing that URL.
 - Deploy workflow, scheduled runs only, after the tests, `continue-on-error`: `--issue` comments on the open "Pricing pages changed" issue or opens it.
-- After updating the tables: `node scripts/check-pricing-pages.mjs --update-baseline`, then commit `data/pricing-pages/baseline.json`.
-- Baseline generated locally on 2026-11-26 with `CHROME_ARGS='--host-resolver-rules=MAP platform.stepfun.com 14.103.2.83'`. Local-currency pages (grok.com/plans) and geo-dependent pages report `changed` on the first CI run: regenerate the baseline from the CI report (`/tmp/pricing-pages.json`) or locally.
+- After updating the tables: run the workflow manually with `pricing_baseline` ticked (Actions → Refresh Data and Deploy → Run workflow). The CI runner records the baseline in USD and commits it.
+- Never record the baseline locally: pages show local currency outside the US.
+- The baseline keeps each page's price lines; the issue lists lines removed (−) and added (+).
 
 ## Fable cap
 

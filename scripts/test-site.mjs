@@ -1446,6 +1446,17 @@ test("Pricing page watch: deploy.yml step is scheduled-only, continue-on-error, 
   assert.match(step, /--issue/, "watch step must open/update the issue");
   assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.ok(!/--update-baseline/.test(step), "baseline updates are manual");
+  // The baseline is recorded on the same CI runner (US, USD), only on a manual dispatch with pricing_baseline.
+  const base = steps.find((s) => /--update-baseline/.test(s)) || "";
+  assert.match(base, /\n\s+if: github\.event_name == 'workflow_dispatch' && inputs\.pricing_baseline\n/, "baseline step must be manual-dispatch only");
+  assert.match(base, /\n\s+continue-on-error: true\n/, "baseline step must not fail the deploy");
+  assert.match(workflowYml, /\n\s+pricing_baseline:\n/, "workflow_dispatch needs the pricing_baseline input");
+  const d = PP.diffPages(
+    { pages: { u: { state: "ok", hash: "a", lines: ["$20/month", "$200 billed annually"] } } },
+    { pages: { u: { state: "ok", hash: "b", lines: ["$25/month", "$200 billed annually"] } } }
+  );
+  assert.deepEqual([d.changed[0].removed, d.changed[0].added], [["$20/month"], ["$25/month"]]);
+  assert.match(PP.issueBody(d), /− `\$20\/month`[\s\S]*\+ `\$25\/month`/);
   const iTests = names.findIndex((n) => /^Run automated site and data tests/.test(n));
   const iWatch = names.indexOf(step.split("\n")[0]);
   assert.ok(iTests >= 0 && iWatch > iTests, "watch step must come after the tests");
