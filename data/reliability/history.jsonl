@@ -175,3 +175,4 @@
 {"t":"deploy","d":"2026-11-28T08:41:38.066Z","counts":{"high":919,"medium":1018,"low":637,"speculative":131},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-28T08:52:51.066Z","counts":{"high":919,"medium":1018,"low":637,"speculative":131},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
 {"t":"deploy","d":"2026-11-28T08:55:10.250Z","counts":{"high":919,"medium":1018,"low":637,"speculative":131},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
+{"t":"deploy","d":"2026-11-28T09:12:52.042Z","counts":{"high":919,"medium":1018,"low":637,"speculative":131},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
