@@ -1,241 +1,1010 @@
 {
   "version": 1,
-  "generated": "2026-11-26",
+  "generated": "2026-11-28",
   "pages": {
     "https://bigmodel.cn/glm-coding": {
       "state": "ok",
       "hash": "44e7960de068c71c",
-      "priceLines": 5
+      "priceLines": 5,
+      "lines": [
+        "1. 默认情况下，管理员账号不占用团队席位。如需使用席位，管理员可给自己的账号分配一个席位，加入席位后即可享有相应额度。",
+        "14倍 lite 用量额度",
+        "6倍 lite 用量额度",
+        "glm coding plan 提供 3 种订阅套餐，满足不同开发场景的需求。为了管理资源并确保所有用户的公平使用，我们执行每 5 小时和每周的使用额度限制。 您可以在 用量说明 查看最新套餐的用量额度说明，以选择适合您的套餐。",
+        "每周 10,000 积分"
+      ]
     },
     "https://claude.com/pricing": {
       "state": "ok",
-      "hash": "cc5f3942937702df",
-      "priceLines": 13
+      "hash": "5a6479418efb88df",
+      "priceLines": 13,
+      "lines": [
+        "$0",
+        "$100",
+        "$100 a month in api credits to build on the claude platform† new",
+        "$100/month",
+        "$17",
+        "$200",
+        "$200 a month in api credits, up from $100 on max† new",
+        "$200/month",
+        "every plan has usage limits. most accounts have a limit that resets on a rolling five-hour session window, and paid plans add weekly limits on top. your activity across claude on web, desktop, mobile, and claude code all draws from the same pool. how much you can do depends on the length and complex",
+        "max and ultra are built for people who work with claude throughout the day and want longer, uninterrupted sessions. you get everything in pro, plus more usage. max gives you 5x the usage of pro, every 5 hours and every week. ultra gives you 10x the weekly usage of pro, with no 5-hour limit for verif",
+        "per month with annual subscription discount ($200 billed up front). $20 if billed monthly.",
+        "the claude enterprise plan is built for large businesses operating at scale. pricing is $20 per seat per month plus usage billed at api rates, so cost scales with the models and tasks your team runs. enterprise is billed annually and includes everything in team plus advanced security and admin contr",
+        "the pro plan gives you everything in a free plan with more usage and more of claude's capabilities. that includes claude code, along with projects to organize your chats and documents, access to more claude models, and claude for microsoft 365. you can choose a monthly or annual subscription."
+      ]
     },
     "https://commandcode.ai/pricing": {
       "state": "ok",
       "hash": "9443c248f3367622",
-      "priceLines": 47
+      "priceLines": 47,
+      "lines": [
+        "$0.10/hr",
+        "$1",
+        "$1/mo",
+        "$1/mo go plan · cancel any time",
+        "$10",
+        "$10 in credits included",
+        "$10 on deepseek v4.1 flash",
+        "$10 on glm-5.2",
+        "$10 on qwen 3.7 max",
+        "$10 on qwen 3.7 plus",
+        "$10 on qwen 3.8 27b",
+        "$10 on tencent hy3",
+        "$10/mo",
+        "$100",
+        "$100 on deepseek v4.1 flash",
+        "$100 on glm-5.3 flash",
+        "$100 on ling 3.1 flash",
+        "$100/mo",
+        "$150",
+        "$150 in credits included",
+        "$20/mo",
+        "$200/mo",
+        "$300",
+        "$300 on minimax m3",
+        "$40",
+        "$47",
+        "$57",
+        "$70 on qwen 3.8 27b",
+        "$70 on tencent hy3",
+        "$8",
+        "command code is #1 on vercel gateway. we launched in may. first coding agent purpose built for open models. check what happens in july/aug in the chart below. in aug we launched v1 and $10 goat plan. 53k active paying customers now. we're just getting started.",
+        "credits go up to 2× further",
+        "flat monthly subscriptions for developers with 2-10x better than api prices. a bucket of model credits. buy on demand extra credits anytime, you spend at the underlying api rate — zero markup. run out? top up, or flip on auto-reload. top-up credits roll over and never expire.",
+        "go ($1) is built for international developers — the best coding agent, for everyone. open-source models route through us, eu, and singapore for reliable global access. need more? talk to us about team & enterprise.",
+        "go ($1) starts you off — open-source models, big budgets in tiny dollars. goat ($10) is for developers who live on open models — up to $100 of usage on 29+ models. pro ($20) adds premium models to the shared pool — up to $110 of usage on per-model allowances. max 10× ($100) keeps up with daily shipp",
+        "or $60/year",
+        "pro $20",
+        "up to $100",
+        "up to $100 in credits included",
+        "up to $110",
+        "up to $300 usage with deals",
+        "up to 70% off list price on requests paid with credits.",
+        "up to ~$100 usage with deals",
+        "up to ~$15 usage with deals",
+        "~$300",
+        "~$600",
+        "“command code is the first agent where i trust open models in production. the harness is so solid i had to double check i was still on deepseek flash. shipped multiple clis and a full redwood app for $2.”"
+      ]
     },
     "https://cursor.com/docs/account/pricing/legacy-cursor-plans": {
       "state": "ok",
       "hash": "b699035b751b6910",
-      "priceLines": 9
+      "priceLines": 9,
+      "lines": [
+        "legacy teams seats come in two types. standard ($40/user/mo) includes the standard teams allowance of both pools, and premium ($120/user/mo) includes 5x the standard allowance. usage is allocated per seat, doesn't transfer between members, and resets with the team billing cycle. existing teams can s",
+        "pro $20/mo premium ($30/mo)",
+        "pro+ $60/mo super ($100/mo)",
+        "start (india only) ₹649/mo, tax inclusive plus ($8/mo)",
+        "start costs ₹649 per month, tax inclusive, billed monthly in inr with upi, credit card, or debit card. it includes the cursor models pool, cloud agents, cursor for ios, plugins, mcp servers, hooks, and skills.",
+        "teams premium $120/user/mo teams, super seat ($100/user/mo)",
+        "teams standard $40/user/mo teams, premium seat ($30/user/mo)",
+        "teams. on by default. admins can turn it off or set a team-wide spend limit from the team dashboard. eligible third-party requests also carry the cursor token rate. third-party models are exempt when their cache-read price is strictly below $0.10 per million tokens across every pricing tier.",
+        "ultra $200/mo ultra ($200/mo)"
+      ]
     },
     "https://cursor.com/docs/account/pricing/legacy-cursor-plans.md": {
       "state": "ok",
       "hash": "5c9cede5c4b733a5",
-      "priceLines": 9
+      "priceLines": 9,
+      "lines": [
+        "- **teams.** on by default. admins can turn it off or set a team-wide spend limit from the team dashboard. eligible third-party requests also carry the [cursor token rate](https://cursor.com/docs/models-and-pricing.md#cursor-token-rate). third-party models are exempt when their cache-read price is s",
+        "legacy teams seats come in two types. standard ($40/user/mo) includes the standard teams allowance of both pools, and premium ($120/user/mo) includes 5x the standard allowance. usage is allocated per seat, doesn't transfer between members, and resets with the team billing cycle. existing teams can s",
+        "start costs ₹649 per month, tax inclusive, billed monthly in inr with upi, credit card, or debit card. it includes the cursor models pool, [cloud agents](https://cursor.com/docs/cloud-agent.md), [cursor for ios](https://cursor.com/docs/cloud-agent/mobile.md), plugins, mcp servers, hooks, and skills.",
+        "| **pro** | $20/mo | premium ($30/mo) |",
+        "| **pro+** | $60/mo | super ($100/mo) |",
+        "| **start** (india only) | ₹649/mo, tax inclusive | plus ($8/mo) |",
+        "| **teams premium** | $120/user/mo | teams, super seat ($100/user/mo) |",
+        "| **teams standard** | $40/user/mo | teams, premium seat ($30/user/mo) |",
+        "| **ultra** | $200/mo | ultra ($200/mo) |"
+      ]
     },
     "https://cursor.com/help/account-and-billing/pricing.md": {
       "state": "ok",
       "hash": "81a306ae8be9feb1",
-      "priceLines": 15
+      "priceLines": 15,
+      "lines": [
+        "**auto** balances intelligence, cost, and reliability through [cursor router](https://cursor.com/help/models-and-usage/cursor-router.md). cost mode (classic auto) bills as a cursor-model request and draws from your weekly pool whatever model serves it. on teams and enterprise with cursor router on, ",
+        "annual billing is $80/yr for plus, $300/yr for premium, $1,000/yr for super, and $2,000/yr for ultra. prices exclude tax.",
+        "every paid plan includes a weekly pool of usage for cursor models (grok 4.7, grok 4.6, grok 4.5, and composer 2.5), shared across cursor and grok. plus runs those models at fixed settings (fast off, medium effort) without auto, cloud agents, automations, bugbot, origin, or third-party models. premiu",
+        "| free | $0 | limited |",
+        "| plus | $8/mo | base |",
+        "| premium | $30/mo | 4x plus |",
+        "| pro | $20/mo | premium |",
+        "| pro+ | $60/mo | super |",
+        "| start (india only) | ₹649/mo, tax inclusive | plus |",
+        "| super | $100/mo | 15x plus |",
+        "| teams premium | $120/user/mo | teams, super seat |",
+        "| teams standard | $40/user/mo | teams, premium seat |",
+        "| teams | $30, $100, or $200 per seat/mo | matches the seat's tier |",
+        "| ultra | $200/mo | 50x plus |",
+        "| ultra | $200/mo | ultra |"
+      ]
     },
     "https://deeprelay.ai/pricing": {
       "state": "ok",
-      "hash": "3b3d0c82331d5dd9",
-      "priceLines": 63
+      "hash": "6574ef01365d5ad8",
+      "priceLines": 75,
+      "lines": [
+        "$0.003$0.0009",
+        "$0.0058 –",
+        "$0.006$0.0018",
+        "$0.01 · $0.01 · $0.01",
+        "$0.015 –",
+        "$0.018 –",
+        "$0.02 $0.10",
+        "$0.029 $0.143",
+        "$0.03 –",
+        "$0.034 –",
+        "$0.035 –",
+        "$0.039 –",
+        "$0.044 $0.22",
+        "$0.045–0.09 · $0.0009–0.0018 · $0.18–0.36",
+        "$0.047 –",
+        "$0.053 –",
+        "$0.06 $0.299",
+        "$0.069 –",
+        "$0.075 –",
+        "$0.098 $0.487",
+        "$0.113 $0.565",
+        "$0.115 $0.575",
+        "$0.134 –",
+        "$0.14 $0.70",
+        "$0.15$0.045",
+        "$0.15–0.30 · $0.003–0.006 · $0.60–1.20",
+        "$0.16 $0.80",
+        "$0.17 $0.85",
+        "$0.195 $0.975",
+        "$0.24 $1.20",
+        "$0.26$0.01",
+        "$0.30$0.09",
+        "$0.50",
+        "$0.59 · $0.113 · $1.92",
+        "$0.60$0.18",
+        "$0.90 · $0.167 · $2.83",
+        "$0.99",
+        "$1.20$0.36",
+        "$1.40 · $0.26 · $4.40",
+        "$1.40$0.01",
+        "$2.50",
+        "$4.40$0.01",
+        "$4.99",
+        "128k $0.15 – $0.60",
+        "128k $0.35 $0.04 $1.50",
+        "1m $0.15 $0.015 $0.60",
+        "1m $0.15 $0.03 $0.50",
+        "1m $0.15 – $0.47",
+        "1m $0.32 – $1.28",
+        "1m $0.50 – $3.00",
+        "1m $0.59 $0.113 $1.92",
+        "1m $0.60 $0.012 $2.40",
+        "1m $0.90 $0.167 $2.83",
+        "1m $1.25 $0.15 $4.25",
+        "1m $1.32 $0.13 $3.96",
+        "1m $1.50 $0.075 $4.50",
+        "1m $2.00 $0.20 $10.00",
+        "1m $2.00 $0.25 $6.00",
+        "1m $2.50 $0.50 $7.50",
+        "1m $3.00 $0.30 $15.00",
+        "256k $0.17 – $0.25",
+        "40k $0.10",
+        "billed at the cached rate, up to 98% off fresh input. agents that resend the same context pay a fraction.",
+        "invite someone to deeprelay. once they've deposited $50, $25 of credit lands in your account and $25 in theirs. no cap on how many friends you invite.",
+        "prices are usd per 1m tokens for chat and embeddings, and per unit of output for media. the cached input column is the rate for the part of a prompt served from a partner's prompt cache, typically far below the input rate; a dash there means the model publishes no cached rate, so every prompt token ",
+        "send us a serious issue report or suggestion from the dashboard and we may award $5 in credit, at our discretion. not every submission is rewarded, and the program may change or end at any time.",
+        "then $0.99 per month. checkout shows the exact charge.",
+        "then $4.99 per month. checkout shows the exact charge.",
+        "yes. every account has an invite link on its billing page. once a friend who signed up through it (or entered your code at sign-up) has deposited $50, you each get $25 in credit. rewards are promotional credit, spend-only on pay-per-use inference, never apply to the subscription, and are reversed if",
+        "you each get $25 in credit",
+        "your friend deposits $50",
+        "your friend deposits $50, you each get $25.",
+        "– $0.04",
+        "– $0.07",
+        "– $0.08"
+      ]
     },
     "https://developers.google.com/profile/help/benefits": {
       "state": "ok",
       "hash": "29a7c37b10fed49f",
-      "priceLines": 27
+      "priceLines": 27,
+      "lines": [
+        "$150 google cloud monthly credit",
+        "$50 genai developer annual credit (legacy standalone premium)",
+        "$500 google cloud credit bonus (legacy standalone premium)",
+        "at the end of every month, $150 per developer license is credited to the dedicated billing account associated with the program subscription and sandbox projects. the credit is a lump sum for the number of subscription licenses your organization purchases.",
+        "for example, if you first claimed your google one developer benefits in the google developer program on january 15, your next monthly google cloud credit will be issued on february 15. if you don't see a new credit allocation at the beginning of a calendar month, this is expected until your monthly ",
+        "for gemini enterprise agent platform, the credit can only be applied to google genai models including gemini 2.0+ models, and genmedia models such as imagen and veo. learn more about gemini enterprise agent platform pricing.",
+        "for google ai studio, the credit can only be applied to google genai models including gemini 2.0+ models, and genmedia models such as imagen. learn more about ai studio pricing.",
+        "for google one ai plan subscribers (google ai pro, google ai ultra 5x, and google ai ultra 20x), monthly google cloud credits follow the monthly anniversary of the date your google one developer benefits were first claimed and activated in the google developer program—not the start of the calendar m",
+        "google ai pro: $10 usd per month in genai and google cloud developer credits",
+        "google ai pro: $10 usd per month in genai and google cloud developer credits.",
+        "google ai ultra 20x: $100 usd per month in genai and google cloud developer credits",
+        "google ai ultra 20x: $100 usd per month in genai and google cloud developer credits.",
+        "google ai ultra 5x: $40 usd per month in genai and google cloud developer credits",
+        "google ai ultra 5x: $40 usd per month in genai and google cloud developer credits.",
+        "google skills for orgs is free to all google cloud customers (previously $299 per user per year). for more information, see google skills for your organization.",
+        "how do i get the 35 credits for google skills?",
+        "i earned a certification, but i don't see the $500 google cloud credit bonus benefit card in my dashboard.",
+        "i have earned a google cloud certification. how do i get the $500 google cloud credit?",
+        "legacy standalone premium & enterprise memberships: existing standalone google developer program premium subscribers retain access to their benefits until the end of their current billing period (up to october 18, 2026 for monthly plans, or september 18, 2027 for annual plans). for enterprises, goog",
+        "monthly google cloud credits are granted in usd ($10, $40, or $100 usd per month, depending on your google one ai plan tier). when you claim a credit, the usd amount is converted to your cloud billing account's local currency at redemption time using the exchange rate in effect at the time of the cl",
+        "no. unused google cloud credit expires at the end of the month, and a fresh $150 credit per license is granted the next month.",
+        "note: the standalone google developer program premium subscription has been deprecated, and new users can no longer sign up for it. since september 18, 2026, existing standalone subscriptions can no longer be renewed. existing standalone subscribers can continue to enjoy their benefits until the end",
+        "note: this benefit applies only to existing legacy standalone google developer program premium subscriptions until their current billing period ends. it is not included in google ai pro or ai ultra plans (standard members still receive 35 monthly google skills credits).",
+        "standard membership (no cost): available to all developers who create a google developer program profile. includes gemini in developer documentation and tools, no-cost credits for eligible codelabs and developer events, 35 monthly google skills credits (with gear or google cloud innovators signup), ",
+        "the credit will be available within 7-10 days of passing the certification exam. once the credit is available, the card for this benefit in your google developer program dashboard is automatically updated to display the credit and the google cloud billing accounts that you have access to. select the",
+        "you are eligible for the $500 credit bonus only if you have taken a certification using a voucher provided using gdp premium. if you still don't see this benefit in your dashboard, reach out to program support at gdp-premium-support@google.com.",
+        "you can book one 1-hour session or two 30-minute sessions each year. if you are subscribed to the annual plan, you will get the benefit immediately after payment. if you are subscribed to the monthly plan, you will get the benefit after maintaining an active subscription for six months."
+      ]
     },
     "https://developers.openai.com/api/docs/guides/chatgpt-api-credits": {
       "state": "ok",
       "hash": "77967e34772ecfc4",
-      "priceLines": 10
+      "priceLines": 10,
+      "lines": [
+        "business api credits are pooled and capped at $500 per workspace per month. business workspaces that pay annually upfront receive the full year’s grant in one issuance, and the grant expires at the end of the annual billing cycle.",
+        "business premium $100 per paid premium seat",
+        "business seat changes: adding paid seats or upgrading seat types during a billing cycle can provide extra prorated credits, subject to a shared workspace cap of $500 per monthly billing cycle or $6,000 per annual billing cycle. seat reductions affect the next billing cycle. reassigning an existing s",
+        "business standard $20 per paid standard seat",
+        "no credits remain api requests fail with http 429 and error code credit_balance_exhausted.",
+        "pro ($100 tier) $100",
+        "pro ($200 tier) $200",
+        "pro ($500 tier) $500",
+        "subscription changes: upgrading your pro plan can provide extra prorated credits for the rest of the billing cycle. later grants reflect the eligible plan’s allowance, up to $500 per billing cycle.",
+        "up to $500 per month: your allowance depends on your pro plan or your business workspace’s paid seats."
+      ]
     },
     "https://devin.ai/pricing": {
       "state": "ok",
       "hash": "d77479eb4c2f02d7",
-      "priceLines": 7
+      "priceLines": 7,
+      "lines": [
+        "$0/month",
+        "$20/month",
+        "$200/month",
+        "$80",
+        "$80/month",
+        "shared on-demand credits for up to 100 members",
+        "teams is self-serve at a flat $80/month."
+      ]
     },
     "https://docs.bigmodel.cn/cn/coding-plan/overview": {
       "state": "ok",
       "hash": "9cc165109b691793",
-      "priceLines": 10
+      "priceLines": 10,
+      "lines": [
+        "5 小时积分：采用动态刷新机制，积分额度在请求消耗 5 小时后刷新重置。",
+        "周积分：自套餐下单时起，以 7 天为一个周期刷新。",
+        "套餐同时设有每 5 小时和每周额度上限，您可以在 用量统计 中查看您的额度消耗进展：",
+        "套餐类型 5 小时积分 每周积分",
+        "最多 tokens：全部在非高峰时段，按 0.5 倍积分消耗",
+        "最少 tokens：全部在高峰时段，按 1 倍积分消耗",
+        "模型消耗积分数=（输入 token × input 抵扣系数 + 缓存命中 token × cached input 抵扣系数 + 输出 token × output 抵扣系数） / 10000",
+        "订阅套餐后，在上述工具中调用 glm 模型，按接入指南配置即可使用套餐额度。当套餐额度耗尽后，需要等待下一个 5 小时周期恢复额度，系统不会继续消耗您的其他资源包/账户余额。",
+        "限时活动：11 月 24 日至 12 月 24 日，调用 glm-5.3-flash 所产生的消耗全部按原抵扣系数的 50% 结算，即可用额度为原来的 2 倍。查看 flash 模型搭配使用指南。",
+        "非高峰时段内，模型调用按基础积分消耗的 50% 抵扣。"
+      ]
     },
     "https://docs.devin.ai/admin/billing/self-serve.md": {
       "state": "ok",
       "hash": "299b33e33a96ed1f",
-      "priceLines": 6
+      "priceLines": 6,
+      "lines": [
+        "* **\\$80/month**: every teams subscription is a flat \\$80/month, charged as prepaid [on-demand credits](#on-demand-credits).",
+        "* on the **teams** plan, credits fund all usage, and the \\$80/month subscription is added to the pool as credits each month.",
+        "on the teams plan, every member can pick **free (powered by swe-2)** in the agent selector to run devin cloud sessions at no cost. each member can run up to **2 free sessions at a time**; to start a third, wait for one to finish or pick another mode. sessions in other modes are billed as usual.",
+        "| **max** | power users who need more quota | \\$200/month | 1 |",
+        "| **pro** | individual users | \\$20/month | 1 |",
+        "| **teams** | teams working with devin together | \\$80/month | multiple |"
+      ]
     },
     "https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing": {
       "state": "ok",
       "hash": "c979208502afc754",
-      "priceLines": 9
+      "priceLines": 9,
+      "lines": [
+        "ai credits usage beyond your plan’s included amount is billed after it occurs, separately from your subscription renewal. you must pay for usage you incurred before you canceled, downgraded to copilot free, or reduced your additional usage budget to $0. usage from your final days on the plan might n",
+        "copilot free and copilot student both have an allowance of ai credits and access to models through auto model selection only. copilot free includes 2000 code completions per month and copilot student includes unlimited code completions.",
+        "copilot max $100 usd 10,000 10,000 20,000",
+        "copilot pro $10 usd 1,000 500 1,500",
+        "copilot pro+ $39 usd 3,900 3,100 7,000",
+        "if you are not already being billed by github, in most cases your billing cycle will start on the day you sign up for copilot. for example, if you sign up on 3 september, with monthly billing, your initial billing cycle will run from 3 september until and including 2 october, and then on the same da",
+        "included ai credits do not carry over between months. unused credits are forfeited, and your allowance resets to the full monthly amount at 00:00:00 utc on the first day of each calendar month. this reset date is fixed and does not change based on your subscription billing date. see billing cycles.",
+        "this total is converted into ai credits (1 ai credit = $0.01 usd).",
+        "your additional usage budget is set in us dollars, and your usage is shown in github ai credits. github ai credits draw down your budget at a fixed rate: 1 ai credits = $0.01 usd, so a $10 budget covers 1,000 ai credits."
+      ]
     },
     "https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/what-changed-with-billing": {
       "state": "ok",
       "hash": "a78a3afdfef0c949",
-      "priceLines": 2
+      "priceLines": 2,
+      "lines": [
+        "as of june 1, 2026, github replaced request-based billing with usage-based billing, where the cost of an interaction depends on two things: the model and the number of tokens consumed. under usage-based billing, each plan comes with an included allowance of github ai credits, with the option to set ",
+        "this article only applies to copilot pro and copilot pro+ subscribers on an existing annual plan who remained on legacy premium request-based billing after june 1, 2026."
+      ]
     },
     "https://docs.mistral.ai/admin/billing-usage/subscriptions": {
       "state": "ok",
       "hash": "8b1ab5d47c8a24cb",
-      "priceLines": 0
+      "priceLines": 0,
+      "lines": [
+        "© 2026 mistral ai"
+      ]
     },
     "https://docs.x.ai/grok/faq": {
       "state": "ok",
       "hash": "15cda497f3206ebc",
-      "priceLines": 1
+      "priceLines": 1,
+      "lines": [
+        "you can buy as little as $5 from the usage tab on web."
+      ]
     },
     "https://docs.x.ai/x-subscription/pricing": {
       "state": "ok",
       "hash": "8c949211e66d7da2",
-      "priceLines": 6
+      "priceLines": 6,
+      "lines": [
+        "free $0 $0 limited",
+        "plus $8/mo $80/yr ($7/mo) base",
+        "premium $30/mo $300/yr ($25/mo) 4x",
+        "super $100/mo $1000/yr ($84/mo) 15x",
+        "team plans are available on premium at $30 per seat, super at $100 per seat, and ultra at $200 per seat. each seat includes the same usage as the matching individual tier. team members can also get x benefits from their seat when they connect their x account.",
+        "ultra $200/mo $2000/yr ($167/mo) 50x"
+      ]
     },
     "https://docs.x.ai/x-subscription/x-premium": {
       "state": "ok",
       "hash": "c151697206bcea71",
-      "priceLines": 0
+      "priceLines": 0,
+      "lines": [
+        "last updated: november 3, 2026"
+      ]
     },
     "https://factory.com/pricing": {
       "state": "ok",
       "hash": "bc2ddd9261198b58",
-      "priceLines": 1
+      "priceLines": 1,
+      "lines": [
+        "per team, plus $40/mo per individual"
+      ]
     },
     "https://github.com/features/copilot/plans": {
       "state": "ok",
       "hash": "dc881d041fb079e7",
-      "priceLines": 14
+      "priceLines": 14,
+      "lines": [
+        "$0",
+        "$10 per month",
+        "$100 per month",
+        "$15 monthly total credits for pro3",
+        "$15 per month",
+        "$200 monthly total credits for max3",
+        "$200 per month",
+        "$31 per month",
+        "$39 per month",
+        "$5 per month",
+        "$70 monthly total credits for pro+3",
+        "$70 per month",
+        "2,000 completions per month",
+        "2,000 per month"
+      ]
     },
     "https://help.aliyun.com/zh/model-studio/token-plan-harness-benefits": {
       "state": "ok",
       "hash": "b744457d46050fe8",
-      "priceLines": 15
+      "priceLines": 15,
+      "lines": [
+        "token plan 39元起，节省计划低至 4.5 折",
+        "“—”表示该工具无每月免费额度，仍享 88 折后付费。额度数值与折扣以控制台订阅页展示为准。",
+        "一句话做分析，99 元开启经营洞察",
+        "万小智 ai 建站低至 15元/月",
+        "万镜一刻，视频创作低至59元/月",
+        "下表为 standard 与 pro 套餐各工具的每月免费额度，未列免费额度的工具仅享 88 折后付费。",
+        "云服务器38元/年起，超值低价云产品抢先购",
+        "以联网搜索增强版为例，展示 harness 权益工具的接入流程。联网搜索增强版是 standard 与 pro 套餐附赠的 harness 权益工具，订阅即享每月免费额度与 88 折后付费，无需单独开通，不占用 credits。额度与折扣见上文。",
+        "免费额度优先抵扣；用尽后超出部分按原目录价 88 折后付费。",
+        "剩余权益额度 =（原档位总次数 − 已用次数）+（新档位总次数 − 原档位总次数）× 剩余天数 ÷ 30",
+        "千问官方 maas 平台，为开发者和 agent 而生，新用户赠送 1 亿 + tokens 额度",
+        "原档位总次数 − 已用次数：原档位剩余次数，直接继承。 -（新档位总次数 − 原档位总次数）× 剩余天数 ÷ 30：新档位比原档位多的额度，按剩余天数折算补偿。",
+        "后付费 88 折：免费额度用尽后，超出部分按原目录价 88 折继续计费。",
+        "最高领取价值200元试用点，立即开启云上创新",
+        "高校专属算力普惠，学生认证享300元代金券"
+      ]
     },
     "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview": {
       "state": "ok",
       "hash": "c6b7706a5b569f36",
-      "priceLines": 21
+      "priceLines": 21,
+      "lines": [
+        "139 元/月",
+        "20,000 credits",
+        "200,000 credits",
+        "312 元/月",
+        "39 元/月",
+        "45,000 credits",
+        "79 元/月",
+        "80,000 credits",
+        "qwen4-max-preview 已下线：原模型 id 仍可正常调用，请求自动路由至 qwen4-max，credits 抵扣和用量统计均按 qwen4-max 计算；预览期的限时折扣不再适用，调用按 qwen4-max 标准价格计费，费用可能高于预览期。建议将配置中的模型 id 更新为 qwen4-max。详情参见《模型升级通知》。",
+        "token plan 39元起，节省计划低至 4.5 折",
+        "一句话做分析，99 元开启经营洞察",
+        "万小智 ai 建站低至 15元/月",
+        "万镜一刻，视频创作低至59元/月",
+        "云服务器38元/年起，超值低价云产品抢先购",
+        "千问官方 maas 平台，为开发者和 agent 而生，新用户赠送 1 亿 + tokens 额度",
+        "新用户限时价 19.5 元/月",
+        "新用户限时价 39.5 元/月",
+        "最高领取价值200元试用点，立即开启云上创新",
+        "用量包：定价 100 元/个/月，每个用量包含 20,000 credits。需先订阅有效套餐后购买，最多同时持有 5 个；不占用、不计入套餐月额度，有效期为 1 个月，到期后未使用的额度自动作废，不支持退款。抵扣顺序见用量与额度·抵扣顺序。",
+        "额度调整：2026 年 11 月 9 日 20:00:00（utc+8）起，token plan 个人版四档套餐额度上调，pro 套餐目录价及官网折扣价下调。存量订阅在当前订阅周期内按新额度补齐，已使用额度不变；pro 套餐当前订阅周期价格不变，新价格于下一订阅周期生效。详情参见《token plan 个人版套餐降价通知》。",
+        "高校专属算力普惠，学生认证享300元代金券"
+      ]
     },
     "https://help.mistral.ai/en/articles/455205-how-can-i-upgrade-or-cancel-my-le-chat-subscription": {
       "state": "ok",
       "hash": "2ee430e4c7bde9c3",
-      "priceLines": 1
+      "priceLines": 1,
+      "lines": [
+        "📌 for pro and team plans, you can choose between monthly or annual billing. annual billing includes a 20% discount compared with monthly billing."
+      ]
     },
     "https://help.openai.com/en/articles/20001626": {
       "state": "ok",
       "hash": "96094a1a72515981",
-      "priceLines": 13
+      "priceLines": 13,
+      "lines": [
+        "$100 per monthly billing period",
+        "$100 per paid premium seat, pooled for the workspace",
+        "$20 per paid standard seat, pooled for the workspace",
+        "$200 per monthly billing period",
+        "$500 per monthly billing period",
+        "$500 total per monthly billing period across standard and premium contributions",
+        "business workspaces billed annually upfront receive the full year’s grant at once, capped at $6,000 per annual billing cycle. the first grant is prorated for the time remaining in the current billing cycle and expires when that cycle ends.",
+        "for a monthly business workspace, calculate the full-period allowance as the smaller of ($20 × paid standard seats + $100 × paid premium seats) and $500. for example, 5 standard seats and 3 premium seats contribute $100 + $300 = $400. ten standard seats and 4 premium seats contribute $600 before the",
+        "pro ($100 tier)",
+        "pro ($200 tier)",
+        "pro ($500 tier)",
+        "upgrading a pro plan, adding paid business seats or upgrading business seat types can provide extra prorated credits for the rest of the billing cycle, subject to the applicable cap. business credits are pooled and capped at $500 per monthly cycle or $6,000 per annual cycle. adding paid business sea",
+        "your organization uses the free api credits before purchased api credits. if purchased credits remain after the free balance runs out, api requests continue using them. if no credits remain, requests fail with http 429 and error code credit_balance_exhausted. to continue, add paid api credits in bil"
+      ]
     },
     "https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus": {
-      "state": "ok",
-      "hash": "d26a4d7342481fd0",
-      "priceLines": 2
+      "state": "blocked",
+      "hash": null,
+      "priceLines": 0
     },
     "https://help.openai.com/en/articles/9793128": {
-      "state": "ok",
-      "hash": "fa1e82d77ddcb7e6",
-      "priceLines": 10
+      "state": "blocked",
+      "hash": null,
+      "priceLines": 0
     },
     "https://kilo.ai/pricing/kilo-pass": {
       "state": "ok",
       "hash": "c70d0174b893b383",
-      "priceLines": 22
+      "priceLines": 22,
+      "lines": [
+        "$0",
+        "$19/mo",
+        "$199/mo",
+        "$20",
+        "$40",
+        "$49/mo",
+        "$588",
+        "$588/year",
+        "$60",
+        "$776.65",
+        "$80",
+        "+$188.65",
+        "+$188.65 total bonus",
+        "a monthly ai token subscription with up to 50% bonus credits included.",
+        "annual plans: get 50% extra credits every single month",
+        "get up to 50% free bonus credits for the month on top of what you pay",
+        "monthly plans: get 10% extra credits in month 1, 50% in month 2, then earn up to 40% as your streak grows",
+        "up to $26.60/mo in credits",
+        "up to $278.60/mo in credits",
+        "up to $68.60/mo in credits",
+        "your monthly or annual payment converts 1:1 into paid credits, issued as monthly allotments. once you've used your paid credits each month, you automatically receive free bonus credits—up to 40% extra on monthly plans, 50% on annual plans. bonus credits keep their monthly-cycle deadlines. each perso",
+        "your subscription converts 1:1 into paid credits. once you've used them, you automatically receive free bonus credits — up to 50%. free bonus credits expire at the end of each month."
+      ]
     },
     "https://mimo.mi.com/docs/en-US/price/token-plan": {
       "state": "ok",
       "hash": "8108aa8cc0df214d",
-      "priceLines": 16
+      "priceLines": 16,
+      "lines": [
+        "annual quota 49.2 billion credits 132 billion credits 456 billion credits 984 billion credits",
+        "annual subscription (auto-renewal): compared with the monthly auto-renewal plan, both the individual plan and team plan enjoy a 12% discount for annual auto-renewal, and first-purchase offers are not applicable to annual auto-renewal plans;",
+        "covers flagship models — all plans support the latest flagship models, mimo-v2.6-pro and mimo-v2.6-flash, as well as asr and tts models. pro and max also support mimo-v2.6-pro-ultraspeed. token-based credit conversion keeps usage transparent and manageable.",
+        "for example, if you subscribe to the lite plan (4.1b credits), you can call the mimo- v2.6 series models either individually or in combination. after you use 10m mimo-v2.6-pro input tokens (cache miss), this is equivalent to consuming 3000 m credit s, and you will still have 1100m mimo-v2.5-flash cr",
+        "mimo-v2.5-asr 30m credits",
+        "mimo-v2.6-flash 2 credits 100 credits 200 credits",
+        "mimo-v2.6-pro 2.5 credits 300 credits 600 credits",
+        "mimo-v2.6-pro-ultraspeed 25 credits 3000 credits 6000 credits",
+        "monthly quota 11 billion credits 38 billion credits 82 billion credits",
+        "monthly quota 4.1 billion credits 11 billion credits 38 billion credits 82 billion credits",
+        "monthly quota per seat 11 billion credits 38 billion credits 82 billion credits",
+        "pricing $16/seat/month, ¥99/seat/month $50/seat/month, ¥329/seat/month usd 100/seat/month, cny 659/seat/month",
+        "pricing $6/month, ¥39/month $16/month, ¥99/month $50/month, ¥329/month $100/month, ¥659/month",
+        "pricing $63.36/year, ¥408/year usd 168.96/year, cny 1044/year usd 528.00/year, cny 3468/year usd 1,056.00/year, cny 6,948/year",
+        "pricing usd 168.96/seat/year, cny 1,044/seat/year usd 528/seat/year, cny 3,468/seat/year usd 1,056/seat/year, cny 6,948/seat/year",
+        "the above describes the applicable scenario scope of the monthly plan, and the order of magnitude of task processing for the annual plan is approximately 12 times that of the monthly plan."
+      ]
     },
     "https://ollama.com/pricing": {
       "state": "ok",
       "hash": "dcfdd040ef9cb1e5",
-      "priceLines": 33
+      "priceLines": 33,
+      "lines": [
+        "$0",
+        "$1,000 of usage credits per month, shared across the team",
+        "$20 / mo. or $200/yr billed annually",
+        "$500 / mo.",
+        "$60 of usage credits per month",
+        "beam $0.125 $0.015 $0.40",
+        "clef $0.24 - -",
+        "deepseek-v4-pro $1.32 $0.044 $3.96",
+        "deepseek-v4-pro (off-peak) $0.66 $0.022 $1.98",
+        "deepseek-v4.1-flash $0.30 $0.006 $1.20",
+        "deepseek-v4.1-flash (off-peak) $0.15 $0.003 $0.60",
+        "gemma4 $0.14 $0.05 $0.40",
+        "glm-5.2 $1.40 $0.26 $4.40",
+        "glm-5.3 $1.40 $0.26 $4.40",
+        "glm-5.3-flash $0.15 $0.03 $0.50",
+        "gpt-oss:120b $0.15 $0.014 $0.60",
+        "gpt-oss:20b $0.07 $0.035 $0.30",
+        "hy4 $0.834 $0.042 $2.501",
+        "inkling-2-small $0.30 $0.03 $1.00",
+        "kimi-k2.6 $0.95 $0.16 $4.00",
+        "kimi-k2.7-code $0.95 $0.19 $4.00",
+        "kimi-k3 $3.00 $0.30 $15.00",
+        "kimi-k3.1-pro $2.00 $0.20 $10.00",
+        "mimo-v2.6-flash $0.14 $0.0028 $0.28",
+        "mimo-v2.6-pro $0.435 $0.0036 $0.87",
+        "minimax-m3 $0.60 $0.12 $2.40",
+        "minimax-m3.1-flash $0.15 $0.015 $0.60",
+        "mistral-large-4 $0.70 $0.07 $2.10",
+        "muse-spark-open $1.25 $0.15 $4.25",
+        "nemotron-3-super $0.015 $0.015 $0.60",
+        "nemotron-3-ultra $0.10 $0.10 $3.00",
+        "pay as you go with usage credits. prices are per million tokens. off-peak pricing apply outside 12:00 and 18:00 utc on weekdays and all day on weekends.",
+        "team starts at $500 per month with unlimited users and $1,000 of usage credits included each month, shared across the team."
+      ]
     },
     "https://one.google.com/intl/en_us/about/google-ai-plans/": {
       "state": "ok",
       "hash": "52569a02c9daa1d4",
-      "priceLines": 35
+      "priceLines": 35,
+      "lines": [
+        "$10 in monthly google cloud credits from google developer program.",
+        "$10 monthly credits",
+        "$10/mo",
+        "$100 monthly credits",
+        "$19.99/mo",
+        "$199.99/mo",
+        "$20/mo",
+        "$39",
+        "$4.99/mo",
+        "$40 in monthly google cloud credits from google developer program.",
+        "$40 monthly credits",
+        "$59/mo",
+        "$6.67/mo",
+        "$8.99/mo",
+        "$99.99/mo",
+        "1,000/mo",
+        "10,000/mo",
+        "2,000/mo",
+        "200/mo",
+        "25,000/mo",
+        "3,000/mo",
+        "30,000/mo",
+        "50/mo",
+        "a google ai pro subscription includes google home premium for no additional cost, and can upgrade to advanced for $9.99/month any time.9",
+        "annual ($199.99)",
+        "from $99.99/mo",
+        "get ahead this school year with google ai pro free for 1 year. or, upgrade to get ai pro and youtube premium with ad-free videos and music for just $8.99/mo ($35.98/mo when purchased separately).13",
+        "get expanded access to powerful accelerators and longer runtimes in google colab with 200 compute units per month.",
+        "get higher access to powerful accelerators and longer runtimes in google colab with 2,000 compute units per month.",
+        "get the google home premium advanced plan at no cost ($20/mo value), with 24/7 event history, gemini features, and event descriptions.9",
+        "get the google home premium standard plan at no cost ($10/mo value), with 30 days of event history and gemini features.9",
+        "monthly ($19.99)",
+        "premium lite ($8.99)",
+        "reset all to $0",
+        "unlock google health premium ($9.99/mo value) included for access to health coaching that’s built with gemini and made for you (eligible device required).8"
+      ]
     },
     "https://opencode.ai/docs/go": {
       "state": "ok",
       "hash": "7d76facacf328c0f",
-      "priceLines": 14
+      "priceLines": 14,
+      "lines": [
+        "decision and embedding models come at list price, with no go discount: their monthly limit matches what you pay, $10 on go and $40 on go plus. on go teams it’s $15, $5 higher than go as on every model.",
+        "each model’s monthly limit shows how much usage your plan covers if you use only that model over the month. for example, $1.50 of usage on a model with a $15 limit uses 10% of your monthly allowance. so does $6 on a model with a $60 limit. go responses report how much each request counted in opencod",
+        "gemini decision 1 gemini-decision-1 $0.10 free - -",
+        "gemini embedding 2 gemini-embedding-2 $0.20",
+        "go $10/month lower-cost access to the models below",
+        "go and go plus cover the member who subscribes and the workspace’s api keys. other members you invite use free models or the workspace balance. either can upgrade to go teams at any time, with the unused part of the month’s allowance credited. go teams covers every member of the workspace at $20 per",
+        "go plus $40/month higher usage limits across the models below",
+        "go teams $20/member/month, 2-member minimum every member gets their own limits, $5/month higher than go on every model",
+        "gpt 6 luna decision (> 272k tokens) gpt-6-luna-decision $0.20 free $0.02 $0.25",
+        "gpt 6 luna decision (≤ 272k tokens) gpt-6-luna-decision $0.10 free $0.01 $0.125",
+        "jev 1.14 jev-1.14 $0.042 free - -",
+        "qwen3 embedding 8b qwen3-embedding-8b $0.01",
+        "renewals take the price from your credit when the period ends. if there isn’t enough, go stays active while the renewal retries 1, 3, and 7 days after the period ends, and again as soon as enough credit is added. if the last retry fails, go ends.",
+        "text-embedding-3-small text-embedding-3-small $0.02"
+      ]
     },
     "https://opencode.ai/go": {
       "state": "ok",
       "hash": "c643595b1e24a2f9",
-      "priceLines": 19
+      "priceLines": 19,
+      "lines": [
+        "$10",
+        "$100",
+        "$120",
+        "$15",
+        "$180",
+        "$200",
+        "$30",
+        "$40",
+        "$400",
+        "$60",
+        "$90",
+        "go: $100; go plus: $200",
+        "go: $15; go plus: $60",
+        "go: $200; go plus: $400",
+        "go: $30; go plus: $120",
+        "go: $30; go plus: $90",
+        "go: $60; go plus: $120",
+        "go: $60; go plus: $180",
+        "plans start at $10 a month, with generous limits on the best open-weight models from day one. cancel any time."
+      ]
     },
     "https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers": {
       "state": "ok",
       "hash": "cb2ca09eae4c9012",
-      "priceLines": 12
+      "priceLines": 12,
+      "lines": [
+        "*on team plans, credits for all seats are pooled into one monthly balance, capped at $500 usd. each monthly credit, including the first, is based on the seats on your plan at the start of that billing month. for example, a team with three standard seats and two premium seats receives $260 usd a mont",
+        "add or remove team seats seats added to your plan count from the next billing month’s credit. seats you remove stay on your plan until it renews, so the credit might be lower after that. the pool stays capped at $500 usd.",
+        "discounted team plans (nonprofit, scientists) same as team: $20 usd per standard seat, $100 usd per premium seat*",
+        "max $100 usd",
+        "monthly amount $100 usd (max), $200 usd (ultra), up to $500 usd (team, pooled*)",
+        "new subscribers can claim credits after 7 days on an eligible plan.",
+        "organizations linked to an eligible plan move up to at least the start tier. if their monthly credits are over $200 usd, they move up to at least the build tier.",
+        "team, premium seat $100 usd per seat*",
+        "team, standard seat $20 usd per seat*",
+        "ultra $200 usd",
+        "upgrade from max or ultra to team the link to your max or ultra plan ends. a team owner can claim the team’s credits after the team plan has been active for 7 days.",
+        "upgrade from max to ultra you receive prorated api credits right away, then $200 usd each billing cycle. if you subscribe through google play, the $200 usd credit arrives later, by your next renewal at the latest."
+      ]
     },
     "https://platform.minimax.io/docs/m-plan/token-plan-notice": {
       "state": "ok",
       "hash": "7bdebf63e5953bc8",
-      "priceLines": 0
+      "priceLines": 0,
+      "lines": [
+        "after upgrading, you retain access to m3.1 flash. explore and build also include h3 video generation:",
+        "historical token plan discounts and additional benefits (such as ∞ limits and 150% weekly limit) no longer apply.",
+        "if auto-renewal is on, your historical token plan discounts and additional benefits (such as ∞ limits and 150% weekly limit) are retained.",
+        "image model: h3 image available available",
+        "minimax h3",
+        "minimax m3",
+        "minimax m3.1 flash",
+        "minimax music 3.0",
+        "minimax speech 2.8",
+        "text model: m3.1 flash available available",
+        "the next-generation image model minimax h3 image is now available! view docs →",
+        "video model: h3 not available available on explore and build, not subject to the 5-hour limit"
+      ]
     },
     "https://platform.minimax.io/subscribe/token-plan": {
       "state": "ok",
       "hash": "dfd9506b01698b3a",
-      "priceLines": 9
+      "priceLines": 9,
+      "lines": [
+        "$1,584",
+        "$100",
+        "$25",
+        "$264",
+        "$5",
+        "$660",
+        "100,000 credits",
+        "25,000 credits",
+        "5,000 credits"
+      ]
     },
     "https://platform.minimaxi.com/docs/m-plan/faq": {
       "state": "ok",
       "hash": "6c2c3fd7ca0e6cb3",
-      "priceLines": 10
+      "priceLines": 10,
+      "lines": [
+        "不是。m plan 包含的所有模型共用同一份周额度，您可以根据需要灵活使用。图片和视频模型仅受周窗口限制，不受 5 小时窗口限制；文本、声音等模型还受 5 小时窗口限制。",
+        "两个窗口都从首次使用时开始计时，5 小时窗口持续 5 小时，周窗口持续 7 天。窗口结束后，额度恢复到所在档位的上限，下一次使用时开启新窗口。两个窗口各自独立刷新，5 小时窗口刷新不会恢复本周已用的额度。",
+        "图片和视频模型额度：仅受周窗口控制，不受 5 小时窗口限制。",
+        "文本、声音等模型额度：受 5 小时窗口和周窗口控制。",
+        "是的，年付只需支付 10 个月的费用，相当于省下 2 个月。",
+        "有效期：积分自购买之日起 1 年内有效。",
+        "积分包自购买之日起 1 年内有效，不会因套餐额度窗口刷新而重置有效期。",
+        "积分包：自购买之日起 1 年内有效，不会因为套餐窗口刷新而重置有效期。",
+        "等待额度窗口重置：图片和视频模型仅受周窗口控制，等待 5 小时窗口刷新不会恢复其周额度；文本、声音等模型受 5 小时窗口和周窗口控制。",
+        "达到 5 小时或周额度上限后，您可以选择："
+      ]
     },
     "https://platform.minimaxi.com/docs/m-plan/token-plan-notice": {
       "state": "ok",
       "hash": "20a62b03133dc5eb",
-      "priceLines": 4
+      "priceLines": 4,
+      "lines": [
+        "token plan 的历史优惠和额外权益（如 ∞ 限额、150% 周额度等）不再保留。",
+        "如果你选择继续订阅 token plan，当前的套餐与权益保持不变。只要自动续费保持开启，订阅会按原价格和原有权益持续续费；如果未开启自动续费，订阅将在当前周期结束后到期。在 minimax code ios 端购买的订阅，受 app store 订阅规则限制，当前周期结束后将无法续费，token plan 会员随之结束。我们会向这部分用户赠送积分，积分在 m plan 上线后 24 小时内到账，有效期 1 年。",
+        "开启自动续费的 token plan，历史优惠和额外权益（如 ∞ 限额、150% 周额度等）均保留。",
+        "视频模型 h3 不支持 explore、build 可用，不受 5 小时额度限制"
+      ]
     },
     "https://platform.minimaxi.com/subscribe/token-plan": {
       "state": "ok",
       "hash": "aaacfee0e85719d5",
-      "priceLines": 9
+      "priceLines": 9,
+      "lines": [
+        "22,460 积分",
+        "4,489 积分",
+        "74,900 积分",
+        "¥150",
+        "¥30",
+        "¥500",
+        "￥1,428",
+        "￥5,628",
+        "￥588"
+      ]
     },
     "https://platform.stepfun.com/step-plan": {
       "state": "ok",
       "hash": "1c2e235edf677aa4",
-      "priceLines": 4
+      "priceLines": 4,
+      "lines": [
+        "studio 可额外使用相当于套餐 40% 的专属创作额度。地址：studio.stepfun.com",
+        "¥199",
+        "¥399",
+        "¥99"
+      ]
     },
     "https://platform.xiaomimimo.com/token-plan": {
       "state": "ok",
       "hash": "95b434ccc038d8b0",
-      "priceLines": 15
+      "priceLines": 15,
+      "lines": [
+        "$100",
+        "$144 off",
+        "$16",
+        "$23.04 off",
+        "$50",
+        "$6",
+        "$72 off",
+        "$8.64 off",
+        "10% back on first paid order · all rates double if you're a max / standard annual member",
+        "132 billion credits",
+        "456 billion credits",
+        "49.2 billion credits",
+        "984 billion credits",
+        "annual subscriptions: both personal and team plans offer 12% off compared with monthly subscriptions. the first-purchase discount does not apply to annual subscriptions.",
+        "off-peak usage rate: during off-peak hours (00:00–08:00 beijing time, or 16:00–24:00 utc), usage is charged at a 0.8× credits consumption rate."
+      ]
     },
     "https://www.alibabacloud.com/campaign/ai-landing-page-token": {
       "state": "ok",
       "hash": "12e05e7b39ad6b01",
-      "priceLines": 41
+      "priceLines": 41,
+      "lines": [
+        "$0.15",
+        "$0.32 ~ $0.96",
+        "$0.4 ~ $1.2",
+        "$0.47",
+        "$0.5 ~ $2",
+        "$1.28 ~ $3.84",
+        "$1.5",
+        "$1.6 ~ $4.8",
+        "$100",
+        "$18",
+        "$180",
+        "$195",
+        "$2",
+        "$2.5",
+        "$20",
+        "$200",
+        "$3",
+        "$3 for the first month (regular $6)",
+        "$3 ~ $6",
+        "$30",
+        "$4.5",
+        "$43",
+        "$490",
+        "$5",
+        "$5 for the first month (regular $10)",
+        "$6",
+        "$65",
+        "$7.5",
+        "$75",
+        "100,000 credits/month per seat — 4× standard",
+        "10× credits",
+        "2.25× credits",
+        "20,000 credits / month",
+        "25,000 credits/month per seat",
+        "250,000 credits/month per seat — 10× standard",
+        "45,000 credits / month – 2.25x lite",
+        "4× credits",
+        "80,000 credits / month – 4× lite",
+        "explore how to access multiple leading ai models through a single api with alibaba cloud's token plan. covers unified subscription billing, cross-model flexibility, and how to get started at just $3 for the first month.",
+        "limited-time promotion (qwen3.8-max, deepseek-v4-pro-0813): 2x usage per credit",
+        "the easiest way to try the latest models in one place: token plan starting at $3 for the first month"
+      ]
     },
     "https://www.aliyun.com/benefit/scene/tokenplan": {
       "state": "ok",
-      "hash": "0183ba9c901cd5ae",
-      "priceLines": 39
+      "hash": "4779499e999be2d2",
+      "priceLines": 37,
+      "lines": [
+        "automodel抵扣包20元",
+        "credits 大幅提升 78%，覆盖20+旗舰模型，最新支持 qwen4-max 调用，harness 权益每月免费送",
+        "qoder cn x token plan：开发者cp 加码双11，双产品组合新购再减 5 元，为专业 coding 场景打造，编码自由，量大管饱 活动规则",
+        "qwen4-max 首发上线尝鲜体验，个人版额度大幅提升 78%，20+ 旗舰模型覆盖，harness 权益每月免费送。 使用指南",
+        "token plan + qoder 34.4 元起",
+        "token plan 39元起，节省计划低至 4.5 折",
+        "¥10.00/1个月",
+        "¥100.00/1个月",
+        "¥1298.00/1个月起",
+        "¥139.00/1个月",
+        "¥1398.00/1个月",
+        "¥150.00/1个月起",
+        "¥19.50/1个月起",
+        "¥198.00/1个月",
+        "¥20.00/1个月",
+        "¥39.00/1个月",
+        "¥39.50/1个月起",
+        "¥5000.00/1个月",
+        "¥550.00/1个月起",
+        "¥698.00/1个月",
+        "¥79.00/1个月",
+        "一句话做分析，99 元开启经营洞察",
+        "一次订阅绑定，千问桌面端、qoder、qwen code 等多款 agent 应用通享，12 项 harness 能力统一额度和账单",
+        "万小智 ai 建站低至 15元/月",
+        "万镜一刻，视频创作低至59元/月",
+        "云服务器38元/年起，超值低价云产品抢先购",
+        "千问官方 maas 平台，为开发者和 agent 而生，新用户赠送 1 亿 + tokens 额度",
+        "官网折扣价: ¥10.00/1个月",
+        "官网折扣价: ¥100.00/1个月",
+        "官网折扣价: ¥20.00/1个月",
+        "官网折扣价: ¥5000.00/1个月",
+        "最高领取价值200元试用点，立即开启云上创新",
+        "组合购直降：「token plan + qoder cn」套餐 34.4 元起",
+        "自研mcp抵扣包10元",
+        "轻松上手，个人开发与日常高频编码首选，tp_lite 套餐含 20,000 credits / 月",
+        "进阶实战，适用于已完成入门验证的开发者与创作者，tp_essential 套餐含 45,000 credits / 月",
+        "高校专属算力普惠，学生认证享300元代金券"
+      ]
     },
     "https://www.kimi.com/en/help/membership/membership-pricing": {
       "state": "ok",
       "hash": "c6a17b05431ad9e7",
-      "priceLines": 14
+      "priceLines": 14,
+      "lines": [
+        "annual billing is charged as one annual total. the monthly equivalent is for comparison and is not billed monthly. save up to ¥3,360/year with annual billing.",
+        "china membership pricing with annual billing (chinese interface), captured on october 19, 2026. the large prices are monthly equivalents; annual totals are billed upfront.",
+        "go ¥49/month ¥468/year ¥39/month",
+        "legacy plans retain both a rolling 5-hour kimi code limit and a weekly limit. new plans with kimi code access retain the rolling 5-hour limit and have no weekly limit. both use the monthly shared credit pool. go does not include kimi code; plus and higher new plans do. legacy andante and higher plan",
+        "max ¥699/month ¥6,708/year ¥559/month",
+        "new plans with kimi code access (plus and higher) have a rolling 5-hour usage limit and no weekly limit. legacy plans retain both rolling 5-hour and weekly limits. these are usage limits, not a cap of five hours of use per week, and apply only to kimi code. exhausting the monthly shared credit pool ",
+        "plus ¥99/month ¥948/year ¥79/month",
+        "pro ¥199/month ¥1,908/year ¥159/month",
+        "this is the cloud service fee for a website you published with agent. a published website continuously occupies cloud resources to stay online and accessible, so about 0.08% of your membership credits is deducted. if you no longer need the website online, click “unpublish” to stop the charges.",
+        "this is the sandbox running cost of your kimi claw cloud host. kimi claw is an openclaw deployment in the cloud: every time you invoke claw, the system starts an isolated cloud sandbox to execute code, operate the browser, or call tools. sandboxes are not “free standby”—they are billed continuously ",
+        "ultra ¥1,399/month ¥13,428/year ¥1,119/month",
+        "ultra: more credits, scheduled tasks, and widget tasks for frequent use. includes 28x agent credits, twice the credits of max, plus 4 parallel agent tasks, 25 scheduled tasks and 25 widget tasks, 100 projects, and 50gb of project storage.",
+        "yes. all membership features share one credit pool, and you can allocate your credits as you like. please note that if one feature uses up all credits, other features will also be affected. new plans with kimi code access (plus and higher) have a rolling 5-hour usage limit and no weekly limit. legac",
+        "you can view your current credit balance as a percentage, the next refresh time, and your most recent 1,000 usage records, including usage time, feature, and consumption percentage."
+      ]
     },
     "https://www.kimi.com/help/membership/membership-pricing": {
       "state": "ok",
       "hash": "625e8b11ec9589bf",
-      "priceLines": 14
+      "priceLines": 14,
+      "lines": [
+        "go ¥49/月 ¥468/年 ¥39/月",
+        "max ¥699/月 ¥6,708/年 ¥559/月",
+        "plus ¥99/月 ¥948/年 ¥79/月",
+        "pro ¥199/月 ¥1,908/年 ¥159/月",
+        "ultra ¥1,399/月 ¥13,428/年 ¥1,119/月",
+        "ultra：需要更大额度和更多定时任务、小组件任务的高频用户。提供 28 倍 agent 额度，是 max 的 2 倍；支持 4 个 agent 任务并行、定时任务与小组件任务各 25 个、100 个项目及 50gb 项目存储空间。",
+        "可以。所有会员功能共享一个额度池，你可以自由支配。但请注意：某个功能把额度用完，会影响其他功能的使用；kimi code 另有滚动 5 小时限额，旧套餐另有周限额，仅作用于 kimi code。",
+        "可查看当前额度余额（百分比）、下次刷新时间，以及最近 1000 条使用明细（使用时间、功能、消耗比例）。",
+        "国内会员购买页（连续包年）。大号价格为年付折合月价，实际按全年总额扣费。截图于 2026 年 10 月 19 日。",
+        "年付价格为一次支付的全年总额，折合每月价格仅用于比较，并非按月扣费。连续包年最高可省 ¥3,360/年。",
+        "新会员套餐（plus 及以上）的 kimi code 有滚动 5 小时用量限额，无周限额；旧套餐保留滚动 5 小时限额和周限额。它们是用量限制，不代表每周只能使用 5 小时，且仅作用于 kimi code。月度共享额度用尽也会影响 kimi code。",
+        "旧套餐 andante 及以上仍可使用 kimi code，保留滚动 5 小时限额和周限额。新套餐 go 不包含 kimi code，plus 及以上可使用，取消周限额，保留滚动 5 小时限额。新老套餐均受月度共享额度池限制。",
+        "这是 kimi claw 云主机的沙箱运行费用。kimi claw 是部署在云端的 openclaw：每次调用 claw，系统都会在云端启动一个隔离沙箱来执行代码、操作浏览器或调用工具。沙箱不是\"免费待机\"的，而是按运行时长和资源消耗持续计费——即使你没有主动发起任务，已部署的云主机仍会保留运行环境和数据，因此每天会产生约会员额度 0.6% 的费用，于每天下午 4 点结算。",
+        "这是你通过 agent 发布网站后产生的云服务费用。网站发布后会持续占用云端资源以保持在线可访问，因此会产生约会员额度 0.08% 的扣费。如果不再需要该网站在线，点击「取消发布」后即可停止计费。"
+      ]
     },
     "https://www.kimi.com/membership/pricing": {
       "state": "ok",
       "hash": "22edab06b78817b7",
-      "priceLines": 17
+      "priceLines": 17,
+      "lines": [
+        "$0",
+        "$1,908 / year",
+        "$180 / year",
+        "$19",
+        "$199",
+        "$372 / year",
+        "$39",
+        "$948 / year",
+        "$99",
+        "10x agent credits",
+        "2x agent credits",
+        "5x agent credits",
+        "billed annually $1,908",
+        "billed annually $180",
+        "billed annually $372",
+        "billed annually $948",
+        "save up to $480"
+      ]
     },
     "https://www.tencentcloud.com/document/product/1300/81315": {
       "state": "ok",
       "hash": "d0914a70e3223ed2",
-      "priceLines": 13
+      "priceLines": 13,
+      "lines": [
+        "0 credits",
+        "1000 credits",
+        "15900 credits",
+        "1600 credits",
+        "2600 credits",
+        "7900 credits",
+        "assuming 1,000 credits have been used in the current subscription month",
+        "assuming 2,600 credits have been used in the current subscription month",
+        "example: a user purchases a standard plan, which includes 2,600 credits for the current subscription month (2026-06-23 to 2026-07-23). the user renews the plan for the next subscription month (2026-07-23 to 2026-08-23). the available quota under different scenarios is described as follows:",
+        "usd 103/month",
+        "usd 17/month",
+        "usd 51/month",
+        "usd 7/month"
+      ]
     },
     "https://x.ai/pricing": {
       "state": "ok",
       "hash": "c3911e85903491a8",
-      "priceLines": 11
+      "priceLines": 11,
+      "lines": [
+        "$0",
+        "$0/month",
+        "$100",
+        "$100/month",
+        "$200/month",
+        "$30",
+        "$30+/user/month",
+        "$30/month",
+        "$8",
+        "$8/month",
+        "3rd party models available in cursor, billed separately"
+      ]
     }
   }
 }
