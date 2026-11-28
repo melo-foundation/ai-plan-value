@@ -412,9 +412,10 @@ function getAllEntriesResolved() {
       const isApi = e.billing === "metered";
       const bill = billingView(e, state.billing);
       const reading = (state.fableCap === "own" && e.subsidyReadings ? e.subsidyReadings.own : e.subsidyMultiple) * bill.scale;
-      // Per-metric subsidy factors: Claude token mix; Agent SDK client weighting (T3 turn).
+      // Per-metric subsidy: own measurement per workload (subsidyByMode); Claude token mix; Agent SDK client weighting (T3 turn).
+      const readingFor = (m) => (e.subsidyByMode?.[m] > 0 ? (e.subsidyByMode[m] / e.subsidyMultiple) * reading : reading);
       const mixF = (m) => (e.quotaMix?.[m]?.f ?? 1) * (e.clientFactor?.[m]?.f ?? 1);
-      const subFor = (m) => (isApi ? 1 : e.unmetered ? Infinity : reading * mixF(m));
+      const subFor = (m) => (isApi ? 1 : e.unmetered ? Infinity : readingFor(m) * mixF(m));
       const subsidy = subFor(mode);
       const accessMeta = getPlanAccessMeta(e);
       const score = getScore(e, state.benchKey);

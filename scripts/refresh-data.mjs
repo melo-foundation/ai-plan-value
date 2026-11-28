@@ -68,6 +68,9 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 const OUTPUT_PATH = path.join(ROOT_DIR, "public", "data", "combined.json");
 const QUOTA_FIT_PATH = path.join(ROOT_DIR, "data", "quota-weights", "fit.json");
 const QUOTA_PRICES_PATH = path.join(ROOT_DIR, "data", "quota-weights", "prices.json");
+// Our own quota measurements (public copies of the kit results); docs/RELIABILITY.md "Own measurements".
+const QUOTA_MEASUREMENTS_DIR = path.join(ROOT_DIR, "data", "quota-measurements");
+const COST_MODES = ["task", "agent", "cursor", "turn", "tokens"];
 
 const SOURCES = {
   feiPointsCsv:
@@ -4313,6 +4316,76 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     }
   }
 
+  // ---- Our own quota measurements (data/quota-measurements) ----
+  // One file per workload. The file whose appliesTo.default is true sets subsidyMultiple; every
+  // file sets subsidyByMode for its appliesTo.modes (modes no file names take the default). The
+  // measured cell replaces whatever Fei / Priors / a transfer gave that plan × model.
+  const ownMeasurementStats = { files: 0, cells: [] };
+  {
+    const files = fs.existsSync(QUOTA_MEASUREMENTS_DIR)
+      ? fs.readdirSync(QUOTA_MEASUREMENTS_DIR).filter((f) => f.endsWith(".json")).sort()
+      : [];
+    const groups = new Map();
+    for (const f of files) {
+      const m = JSON.parse(fs.readFileSync(path.join(QUOTA_MEASUREMENTS_DIR, f), "utf8"));
+      if (m.schema !== "ai-plan-value.quota-measurement/1") continue;
+      ownMeasurementStats.files++;
+      const k = `${m.plan}|${m.siteModelId}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push({ ...m, file: f });
+    }
+    const WORKLOAD_WORDS = { "agentic coding": "coding-agent work", "single long prompts": "single-question work" };
+    for (const [k, ms] of groups) {
+      const def = ms.find((m) => m.appliesTo?.default) || ms[0];
+      const byMode = {};
+      for (const mode of COST_MODES) byMode[mode] = REL.r4((ms.find((m) => m.appliesTo?.modes?.includes(mode)) || def).subsidy.est);
+      const targets = entries.filter((e) => e.billing === "subscription" && `${e.plan}|${e.modelId}` === k && !e._drop);
+      if (!targets.length) {
+        log(`Own quota measurement ${k}: no row to apply it to`);
+        ownMeasurementStats.cells.push({ cell: k, applied: 0 });
+        continue;
+      }
+      const accounts = Math.max(...ms.map((m) => m.accounts || 1));
+      const pp = ms.reduce((a, m) => a + (m.meter?.ppConsumed || 0), 0);
+      const date = ms.map((m) => m.date).sort().at(-1);
+      const harness = String(def.harness || "").replace(/\s+CLI$/, "");
+      const srcKind = accounts > 1 ? "S3" : "S4";
+      const lines = [`Our measurement: ${accounts} account${accounts === 1 ? "" : "s"}, ${harness}, ${pp}% of the weekly limit, ${date}`];
+      if (ms.length > 1) {
+        const parts = [...ms].sort((a, b) => b.subsidy.est - a.subsidy.est).map((m) => `${WORKLOAD_WORDS[m.workload] || m.workload} gets ${m.subsidy.est.toFixed(m.subsidy.est >= 10 ? 1 : 2)}×`); // same digits as the page's fmtMult
+        const s = parts.join(" and ");
+        lines.push(`${s[0].toUpperCase()}${s.slice(1)}.`);
+      }
+      for (const e of targets) {
+        const prev = e.subsidyMultiple;
+        e.id = e.id.replace(/^[^:]+::/, "own-measurement::");
+        e.origin = "own-measurement";
+        e.isPreliminary = false;
+        e.estimateType = null;
+        e.confidence = "medium";
+        e.subsidyMultiple = REL.r4(def.subsidy.est);
+        e.subsidyByMode = byMode;
+        if (e.listBlendedUsdPerMtok > 0) e.realUsdPerMtok = e.listBlendedUsdPerMtok / byMode.tokens;
+        e.monthlyTokens = null;
+        e.dataDate = date;
+        e.sourceNote = `Own quota measurement: ${ms.map((m) => `data/quota-measurements/${m.file}`).join(", ")}`;
+        e.decisionNote = null;
+        e.preliminary = null;
+        e.ownMeasurement = ms.map((m) => ({
+          file: `data/quota-measurements/${m.file}`,
+          workload: m.workload,
+          modes: m.appliesTo?.modes || [],
+          subsidy: m.subsidy.est,
+          ci95: m.subsidy.ci95,
+          pp: m.meter?.ppConsumed ?? null,
+        }));
+        e._chain = REL.makeChain({ steps: [{ k: srcKind, s: REL.STEP_SIGMA[srcKind], t: `${accounts} account${accounts === 1 ? "" : "s"}, own logs` }], lines: [...lines] });
+        ownMeasurementStats.cells.push({ cell: k, id: e.id, previous: prev, byMode });
+      }
+      log(`Own quota measurement ${k}: ${JSON.stringify(byMode)} on ${targets.length} row(s)`);
+    }
+  }
+
   // ---- Reliability: deterministic sources (API list price, published credit pools) ----
   for (const e of entries) {
     if (e._chain) continue;
@@ -5034,7 +5107,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
     // Default view: AA Intelligence task cost, Intelligence Index score, Shared reading.
     const sigma = REL.qsum(rel.s, w.task, c.task);
     const level = REL.worseLevel(REL.levelFromSigma(sigma), REL.levelFromScore(rel.score.ii), rel.cap);
-    const S = e.billing === "metered" ? 1 : (e.subsidyMultiple || 0) * (quotaMix?.task?.f ?? 1);
+    const S = e.billing === "metered" ? 1 : (e.subsidyByMode?.task ?? e.subsidyMultiple ?? 0) * (quotaMix?.task?.f ?? 1);
     const real = e.unmetered ? 0 : S > 0 ? e.aaCostPerTaskUsd / S : null;
     rel.level = level;
     rel.sigma = REL.r4(sigma);
@@ -5101,6 +5174,7 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   const unresolved = feiDerivedRows.filter((r) => feiCtx.memo.get(r.id)?.flags.includes("unresolved")).map((r) => r.id);
   const reliabilityStats = {
     claudeMixCorrection,
+    ownMeasurements: ownMeasurementStats,
     levels: REL.LEVELS,
     levelSigma: REL.LEVEL_SIGMA,
     levelScorePts: REL.LEVEL_SCORE_PTS,
@@ -5171,8 +5245,8 @@ export async function refreshData({ fromLocal = false, silent = false } = {}) {
   for (const e of expandedEntries) for (const k of Object.keys(e)) if (k.startsWith("_")) delete e[k];
 
   expandedEntries.sort((a, b) => {
-    const effA = a.unmetered ? 0 : a.aaCostPerTaskUsd / (a.subsidyMultiple || 1);
-    const effB = b.unmetered ? 0 : b.aaCostPerTaskUsd / (b.subsidyMultiple || 1);
+    const effA = a.unmetered ? 0 : a.aaCostPerTaskUsd / (a.subsidyByMode?.task || a.subsidyMultiple || 1);
+    const effB = b.unmetered ? 0 : b.aaCostPerTaskUsd / (b.subsidyByMode?.task || b.subsidyMultiple || 1);
     return effA - effB;
   });
 

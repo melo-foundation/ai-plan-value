@@ -782,7 +782,7 @@ test("Chain arithmetic: rel.s² = Σ step σ²; default level and range follow �
     const lvl = REL.worseLevel(REL.levelFromSigma(sigma), REL.levelFromScore(e.rel.score.ii), e.rel.cap);
     assert.equal(e.rel.level, lvl, `${e.id}: level ${e.rel.level} != ${lvl}`);
     if (c.steps.some((x) => x.k === "M4" || x.k === "M5")) assert.equal(e.rel.level, "speculative", `${e.id}: M4/M5 step must be Speculative`);
-    const S = e.billing === "metered" ? 1 : e.subsidyMultiple * (e.quotaMix?.task?.f ?? 1);
+    const S = e.billing === "metered" ? 1 : (e.subsidyByMode?.task ?? e.subsidyMultiple) * (e.quotaMix?.task?.f ?? 1);
     if (!e.unmetered && S > 0 && Number.isFinite(e.rel.lo)) {
       const real = e.aaCostPerTaskUsd / S;
       assert.ok(Math.abs(e.rel.lo / (real * Math.exp(-REL.Z80 * sigma)) - 1) < 2e-3, `${e.id}: rel.lo off`);
@@ -1830,7 +1830,7 @@ test("App: each cost metric uses its own API cost, subsidy factor and σ; headin
       const api = API_OF[m](e) ?? null;
       assert.equal(r.apiMetric, api, `${m}: ${e.id} apiMetric ${r.apiMetric} != ${api}`);
       if (api > 0 && e.billing === "subscription" && !e.unmetered && e.subsidyMultiple > 0) {
-        const S = e.subsidyMultiple * billingView(e, "monthly").scale * (e.quotaMix?.[m]?.f ?? 1) * (e.clientFactor?.[m]?.f ?? 1);
+        const S = (e.subsidyByMode?.[m] ?? e.subsidyMultiple) * billingView(e, "monthly").scale * (e.quotaMix?.[m]?.f ?? 1) * (e.clientFactor?.[m]?.f ?? 1);
         assert.ok(near(r.effectiveCost, api / S), `${m}: ${e.id} real ${r.effectiveCost} != ${api} / ${S}`);
         assert.ok(near(r.subsidy, S), `${m}: ${e.id} subsidy ${r.subsidy} != ${S}`);
         priced++;
@@ -2633,6 +2633,129 @@ test("Fable 5.2 on Claude Max / Ultra does not reuse the Fable 5.1 multiplier", 
     if (f51.length) assert.ok(Math.abs(f52[0] / f51[0] - 1) > 0.05, `${plan}: Fable 5.2 ${f52[0]}× equals Fable 5.1 ${f51[0]}×`);
     assert.ok(!entries.some((e) => e.plan === plan && e.baseModelId === "claude-fable-5-2" && chains[e.rel.chain].steps.some((x) => x.k === "M4" || x.k === "M5")), `${plan}: Fable 5.2 still on a placeholder step`);
   }
+});
+
+// Own quota measurement: ChatGPT Plus × GPT-6.2 Sol (data/quota-measurements, docs/RELIABILITY.md)
+const MEAS_DIR = path.join(ROOT, "data", "quota-measurements");
+const OWN_TASK = 9.6498;
+const OWN_AGENT = 13.2188;
+const plusSol62 = entries.filter((e) => e.plan === "ChatGPT Plus" && e.baseModelId === "gpt-6-2-sol");
+
+test("Own measurement: ChatGPT Plus GPT-6.2 Sol uses 9.65× for AA task and 13.2× for the other cost metrics", () => {
+  assert.ok(plusSol62.length >= 3, `only ${plusSol62.length} Plus GPT-6.2 Sol rows`);
+  const want = { task: OWN_TASK, agent: OWN_AGENT, cursor: OWN_AGENT, turn: OWN_AGENT, tokens: OWN_AGENT };
+  for (const e of plusSol62) {
+    assert.equal(e.origin, "own-measurement", `${e.id} origin ${e.origin}`);
+    assert.ok(near(e.subsidyMultiple, OWN_AGENT, 1e-4), `${e.id} subsidyMultiple ${e.subsidyMultiple}`);
+    for (const [m, v] of Object.entries(want)) assert.ok(near(e.subsidyByMode?.[m], v, 1e-4), `${e.id} subsidyByMode.${m} = ${e.subsidyByMode?.[m]}`);
+    assert.ok(near(e.rel.lo * e.rel.hi, (e.aaCostPerTaskUsd / OWN_TASK) ** 2, 1e-2), `${e.id} build range not centred on the task subsidy`);
+  }
+  for (const [m, v] of Object.entries(want)) {
+    const app = appWithData();
+    app.state.costMode = m;
+    const rows = app.getAllEntriesResolved().filter((r) => r.plan === "ChatGPT Plus" && r.baseModelId === "gpt-6-2-sol");
+    assert.equal(rows.length, plusSol62.length);
+    for (const r of rows) {
+      assert.ok(near(r.subsidy, v, 1e-4), `${m}: ${r.id} subsidy ${r.subsidy}`);
+      const api = API_OF[m](r);
+      if (api > 0) assert.ok(near(r.effectiveCost, api / v, 1e-6), `${m}: ${r.id} real cost ${r.effectiveCost} ≠ ${api} / ${v}`);
+      if (r.effectiveCost > 0) assert.ok(near(r.relLo * r.relHi, r.effectiveCost ** 2, 1e-6), `${m}: ${r.id} range not centred on its real cost`);
+    }
+  }
+});
+
+test("Own measurement: graded S4 (σ 0.2), no †, provenance in plain words", () => {
+  for (const e of plusSol62) {
+    const ch = chains[e.rel.chain];
+    assert.deepEqual(ch.steps.map((x) => x.k), ["S4"], `${e.id} steps ${ch.steps.map((x) => x.k)}`);
+    assert.ok(near(e.rel.s, REL.STEP_SIGMA.S4), `${e.id} σ_S ${e.rel.s}`);
+    assert.equal(e.rel.sd, false, `${e.id} still marked derived`);
+    assert.ok(!REL.chainDerived(ch), `${e.id} chain has a transfer step`);
+    assert.equal(e.rel.cap, null, `${e.id} cap ${e.rel.cap}`);
+    assert.equal(e.dataDate, "2026-11-27");
+    assert.equal(ch.lines[0], "Our measurement: 1 account, Codex, 20% of the weekly limit, 2026-11-27");
+    assert.equal(ch.lines.filter((l) => /Coding-agent work gets 13\.2× and single-question work gets 9\.65×/.test(l)).length, 1, ch.lines.join(" | "));
+    for (const l of ch.lines) assert.ok(!/\bpp\b|σ|\bS4\b|\barm\b/.test(l), `jargon in source line: ${l}`);
+  }
+  for (const mode of ["task", "agent"]) {
+    const app = appWithData();
+    app.state.costMode = mode;
+    const all = app.getAllEntriesResolved();
+    const rows = all.filter((r) => r.plan === "ChatGPT Plus" && r.baseModelId === "gpt-6-2-sol");
+    assert.ok(rows.every((r) => !r.subDerived), `${mode}: † on a Plus GPT-6.2 Sol row`);
+    const tip = app.relTooltip(rows[0]);
+    assert.ok(tip.includes(mode === "task" ? "9.65×" : "13.2×") && tip.includes("Our measurement: 1 account, Codex, 20% of the weekly limit"), tip);
+    const prov = app.renderProvenance(all.filter((r) => r.plan === "ChatGPT Plus"), []);
+    assert.ok(prov.includes("Our measurement: 1 account, Codex, 20% of the weekly limit") && prov.includes("2026-11-27"), "drawer lacks the measurement source");
+    assert.ok(prov.includes(`<td class="prov-num">${mode === "task" ? "9.65×" : "13.2×"}</td>`), `${mode}: drawer subsidy not the ${mode} value`);
+  }
+});
+
+test("Own measurement: GPT-6.1 Sol Plus, Pro plans and other models keep their own values", () => {
+  const own = entries.filter((e) => e.subsidyByMode || e.origin === "own-measurement" || e.ownMeasurement);
+  assert.deepEqual([...new Set(own.map((e) => `${e.plan}|${e.baseModelId}`))], ["ChatGPT Plus|gpt-6-2-sol"]);
+  const sol61 = entries.filter((e) => e.plan === "ChatGPT Plus" && e.baseModelId === "gpt-6-1-sol");
+  assert.ok(sol61.length > 0, "GPT-6.1 Sol Plus missing");
+  for (const e of sol61) {
+    assert.ok(!near(e.subsidyMultiple, OWN_AGENT, 1e-3) && !near(e.subsidyMultiple, OWN_TASK, 1e-3), `${e.id} took the measured value`);
+    assert.ok(!chains[e.rel.chain].lines.some((l) => /Our measurement/.test(l)), `${e.id} cites our measurement`);
+  }
+  // Pro GPT-6.2 Sol stays a transfer from its own plan's GPT-6.1 Sol, not from the Plus measurement.
+  const pro62 = entries.filter((e) => /^ChatGPT Pro/.test(e.plan) && e.baseModelId === "gpt-6-2-sol");
+  assert.ok(pro62.length > 0, "Pro GPT-6.2 Sol rows missing");
+  for (const e of pro62) {
+    assert.ok(e.rel.sd, `${e.id} lost its †`);
+    const anchors = chains[e.rel.chain].anchors || [];
+    assert.ok(!anchors.some((a) => /own-measurement/.test(a)), `${e.id} anchored on the Plus measurement`);
+  }
+  // Page side: rows without subsidyByMode get subsidyMultiple × billing scale × mix factors in every metric.
+  const rawById = new Map(entries.map((e) => [e.id, e]));
+  const app = appWithData();
+  for (const m of ["task", "agent", "cursor", "turn", "tokens"]) {
+    app.state.costMode = m;
+    for (const r of app.getAllEntriesResolved()) {
+      if (r.subsidyByMode || r.isApi || r.unmetered || r.subsidyReadings || !(r.subsidyMultiple > 0)) continue;
+      const raw = rawById.get(r.id);
+      const scale = raw.priceUsd > 0 && raw.priceUsdMonthly > 0 ? raw.priceUsd / raw.priceUsdMonthly : 1;
+      const f = (r.quotaMix?.[m]?.f ?? 1) * (r.clientFactor?.[m]?.f ?? 1);
+      assert.ok(near(r.subsidy, r.subsidyMultiple * scale * f, 1e-9), `${m}: ${r.id} subsidy ${r.subsidy} ≠ ${r.subsidyMultiple} × ${scale} × ${f}`);
+    }
+  }
+});
+
+test("Own measurement: public JSON carries no identifying fields", () => {
+  const files = fs.readdirSync(MEAS_DIR).filter((f) => f.endsWith(".json"));
+  assert.ok(files.length >= 3, `files: ${files}`);
+  const BAD_KEY = /account.?id|session|user|email|path|cwd|home|host|prompt|resets?at|^start$|^end$|generatedAt|hash|token.?id|org/i;
+  const BAD_VAL = /\/home\/|\/Users\/|[A-Za-z]:\\|@|\b[0-9a-f]{8}-[0-9a-f]{4}-|\d{4}-\d{2}-\d{2}T\d{2}:|\bsk-|meow/i;
+  const walk = (o, where) => {
+    if (Array.isArray(o)) return o.forEach((x, i) => walk(x, `${where}[${i}]`));
+    if (o && typeof o === "object") {
+      for (const [k, v] of Object.entries(o)) {
+        assert.ok(!BAD_KEY.test(k), `${where}.${k}: identifying key`);
+        walk(v, `${where}.${k}`);
+      }
+      return;
+    }
+    if (typeof o === "string") assert.ok(!BAD_VAL.test(o), `${where}: identifying value ${o}`);
+  };
+  for (const f of files) {
+    const j = JSON.parse(fs.readFileSync(path.join(MEAS_DIR, f), "utf8"));
+    walk(j, f);
+    if (j.schema === "ai-plan-value.quota-measurement/1") {
+      for (const k of ["plan", "model", "effort", "harness", "harnessVersion", "date", "meter", "tokens", "apiUsd", "usdPerPp", "subsidy", "flags", "verdict", "appliesTo"]) assert.ok(j[k] != null, `${f} lacks ${k}`);
+      assert.ok(Array.isArray(j.subsidy.ci95) && j.subsidy.ci95[0] < j.subsidy.est && j.subsidy.est < j.subsidy.ci95[1], `${f} subsidy CI`);
+    }
+  }
+});
+
+test("Methodology names our ChatGPT Plus measurement and links the kit", () => {
+  const dlg = html.match(/<dialog id="methodDialog"[\s\S]*?<\/dialog>/)?.[0] || "";
+  assert.ok(/ChatGPT Plus with GPT-6\.2 Sol ourselves/.test(dlg), "Methodology lacks the measurement sentence");
+  assert.ok(
+    dlg.includes('Have some spare inference this week? Consider contributing by using our <a href="https://github.com/melo-foundation/ai-plan-value/tree/main/kits" target="_blank" rel="noopener noreferrer">subsidy measuring kit</a>.'),
+    "Methodology lacks the kit line"
+  );
 });
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);

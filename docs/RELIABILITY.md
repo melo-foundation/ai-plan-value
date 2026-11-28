@@ -132,6 +132,25 @@ clamped to 0.15–0.35; 0.2 with fewer than 2 groups
 - The reports measure the 5-hour bar. Two of them see no change on the weekly bar.
 - Data: `entry.clientFactor.turn { f, lo, hi, k }`, `entry.rel.x.turn`, `stats.reliability.sdkClient`.
 
+## Own measurements
+
+Files: `data/quota-measurements/*.json` (schema `ai-plan-value.quota-measurement/1`), public copies of the quota kit results. One file per workload.
+
+| Cell | Workload | Weekly limit used | $/pp (95% CI) | Subsidy (95% CI) | Cost metrics |
+|---|---|---|---|---|---|
+| ChatGPT Plus × GPT-6.2 Sol, all levels | agentic coding, 643 calls, 80% of input cached | 19 → 31% (12 pp) | 0.6609 (0.6165–0.7054) | 13.22× (12.33–14.11) | AA Coding Agent, CursorBench, T3 turn, per 1M tokens |
+| ChatGPT Plus × GPT-6.2 Sol, all levels | single long prompts, little caching | 31 → 39% (8 pp) | 0.4825 (0.4660–0.4989) | 9.65× (9.32–9.98) | AA Intelligence task |
+
+- Run: 1 account, Codex CLI 0.172.0, GPT-6.2 Sol medium, 2026-11-27; API prices $2 input, $0.10 cached, $10 output per 1M tokens.
+- Subsidy = 100 × weekly $/pp × 4 weeks ÷ $20.
+- $/pp ratio agentic ÷ single: 1.37 (1.28–1.46), `chatgpt-plus-gpt-6-2-sol-compare.json`.
+- Agentic run verdict `contaminated`: the 5-hour meter moved 1 pp in the idle check before the run; the weekly meter did not move. Used as is.
+- Grade: S4 (one account, own token logs + first-party meter), σ_S 0.2, no transfer step (no †), no upstream cap. The measured CI (σ 0.014–0.030) is inside σ_S.
+- Replaces: 14.93× = GPT-6.1 Sol Plus via M2 (Priors, 2026-11-09).
+- Not applied: ChatGPT Pro plans, other GPT models.
+- Build: the file with `appliesTo.default` sets `subsidyMultiple`; each file sets `subsidyByMode[metric]` for its `appliesTo.modes`. Row id prefix `own-measurement::`. The page uses `subsidyByMode[metric]` for real cost, sort and ranges.
+- To add a cell: commit the kit's result as a new file with `plan`, `siteModelId`, `accounts`, `meter.ppConsumed`, `subsidy { est, ci95 }`, `appliesTo { modes, default }`. Strip account and session ids, paths, timestamps and prompts.
+
 ## Consistency checks
 
 | Check | Rule | Action |
@@ -221,7 +240,7 @@ Credits and products a plan bundles outside its quota (API credits, cloud credit
 - Intelligence Index, cost per task, the six capability indices, token prices and output speed, per model and reasoning level: [Artificial Analysis](https://artificialanalysis.ai/) free API (`/api/v2/language/models/free`). Status in `sources.aaApi`, provenance per row in `entry.aaSource` (`api`, `fei`, `priors`, `scrape`, `estimate`), counts in `stats.aaApi`.
 - Key: repo secret `AA_API_KEY` in CI. Local build: `AA_API_KEY="$(cat ~/.config/ai-plan-value/aa-api-key)" node scripts/refresh-data.mjs`.
 - Levels the API does not list: Fei2411 benchmark configurations or Priors, newest observation first, then the artificialanalysis.ai/models page.
-- Per-test scores (HLE, Terminal-Bench, FrontierCode and the rest) and subscription subsidies: Priors and Fei2411.
+- Per-test scores (HLE, Terminal-Bench, FrontierCode and the rest) and subscription subsidies: Priors and Fei2411. ChatGPT Plus × GPT-6.2 Sol: own measurement (Own measurements).
 - Coding Agent Index: the artificialanalysis.ai/agents/coding-agents page (the free API tier returns 403).
 - Key missing or API down: `sources.aaApi.error` names the failure, the build uses the fallbacks above, and the data alert lists the source.
 - Read every pricing page with headless Chrome: `node scripts/check-pricing-pages.mjs --url URL --text`. Add `--click 年付` (or `Yearly`, `连续包年`) to read an annual tab.
@@ -295,6 +314,7 @@ The bar chart and the table both show rows at or above the Min confidence settin
 - `entry.rel`: `level`, `sigma`, `lo`, `hi` (AA task cost, Intelligence Index, Shared); `s`; `w` and `c` per cost metric; `x` per cost metric (metric-only subsidy steps); `score { ii, agent }`; `cap`; `chain`; `flags`; `sd` (subsidy derived); `ce` (metrics with an estimated cost); `cl` (cost source labels).
 - `entry.quotaMix[metric]`: `{ f, lo, hi }` on corrected Claude rows.
 - `entry.clientFactor[metric]`: `{ f, lo, hi, k }`; the page multiplies the subsidy by `f`.
+- `entry.subsidyByMode[metric]`: measured subsidy per cost metric on own-measurement rows; the page uses it instead of `subsidyMultiple`. `entry.ownMeasurement`: `[{ file, workload, modes, subsidy, ci95, pp }]`. `stats.reliability.ownMeasurements`: files read, cells applied.
 - Subscription rows: `priceUsdMonthly`; `priceUsdYearly` (annual fee ÷ 12, or null); `billingYearly` (`official`, `none`, `unknown`, `variant`); `billingOnly: "yearly"` on annual-variant rows; `hideYearly` on their monthly twins; `rel.y` (0.03) on rows with an official annual price.
 - Subscription rows: `includedCredits` (`[{ kind, usdPerMonth, text, url, checked }]`); `includedCreditsStatus` (`listed`, `none`, `unknown`).
 - `stats.includedCredits`: row counts per status, `unmatched` plans, `subsidyUnchanged`.

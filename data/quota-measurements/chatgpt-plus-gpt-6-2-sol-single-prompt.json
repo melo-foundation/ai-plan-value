@@ -1,0 +1,84 @@
+{
+  "schema": "ai-plan-value.quota-measurement/1",
+  "tag": "plus-B1",
+  "workload": "single long prompts",
+  "plan": "ChatGPT Plus",
+  "planPriceUsd": 20,
+  "model": "gpt-6.2-sol",
+  "siteModelId": "gpt-6-2-sol",
+  "effort": "medium",
+  "harness": "Codex CLI",
+  "harnessVersion": "0.172.0",
+  "accounts": 1,
+  "date": "2026-11-27",
+  "calls": 32,
+  "window": "weekly",
+  "meter": {
+    "from": 31,
+    "to": 39,
+    "ppConsumed": 8
+  },
+  "prices": {
+    "unit": "USD per 1M tokens",
+    "input": 2,
+    "cachedInput": 0.1,
+    "output": 10,
+    "asOf": "2026-11-26"
+  },
+  "tokens": {
+    "input": 1483934,
+    "cachedInput": 347264,
+    "uncachedInput": 1136670,
+    "output": 169370,
+    "reasoning": 166870
+  },
+  "apiUsd": {
+    "uncachedInput": 2.27334,
+    "cachedInput": 0.034726,
+    "output": 1.6937,
+    "total": 4.001766
+  },
+  "usdPerPp": {
+    "est": 0.482489,
+    "ci95": [
+      0.466045,
+      0.498934
+    ],
+    "relSe": 0.013929
+  },
+  "monthlyApiUsd": {
+    "est": 192.995778,
+    "ci95": [
+      186.418058,
+      199.573497
+    ]
+  },
+  "subsidy": {
+    "est": 9.649789,
+    "ci95": [
+      9.320903,
+      9.978675
+    ],
+    "sigmaLn": 0.013929,
+    "definition": "monthly API value = 100 × weekly $/pp × 4 weeks; multiple = monthly ÷ $20"
+  },
+  "appliesTo": {
+    "modes": [
+      "task"
+    ],
+    "default": false
+  },
+  "flags": [
+    {
+      "code": "window_reset",
+      "severity": "info",
+      "detail": "5h window reset 1× during the run; one intercept per window"
+    },
+    {
+      "code": "idle_unchecked",
+      "severity": "warning",
+      "detail": "idle check after has no readings on both sides"
+    }
+  ],
+  "verdict": "check"
+}

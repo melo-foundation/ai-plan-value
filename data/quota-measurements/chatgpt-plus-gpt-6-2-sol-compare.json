@@ -1,0 +1,15 @@
+{
+  "schema": "ai-plan-value.quota-comparison/1",
+  "a": "plus-A1",
+  "b": "plus-B1",
+  "usdPerPpRatio": {
+    "est": 1.369855,
+    "ci95": [
+      1.283419,
+      1.462113
+    ],
+    "z": 9.463728
+  },
+  "verdict": "not price-proportional",
+  "date": "2026-11-27"
+}

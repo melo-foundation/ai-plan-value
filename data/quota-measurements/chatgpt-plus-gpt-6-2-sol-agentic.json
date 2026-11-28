@@ -1,0 +1,98 @@
+{
+  "schema": "ai-plan-value.quota-measurement/1",
+  "tag": "plus-A1",
+  "workload": "agentic coding",
+  "plan": "ChatGPT Plus",
+  "planPriceUsd": 20,
+  "model": "gpt-6.2-sol",
+  "siteModelId": "gpt-6-2-sol",
+  "effort": "medium",
+  "harness": "Codex CLI",
+  "harnessVersion": "0.172.0",
+  "accounts": 1,
+  "date": "2026-11-27",
+  "calls": 643,
+  "window": "weekly",
+  "meter": {
+    "from": 19,
+    "to": 31,
+    "ppConsumed": 12
+  },
+  "prices": {
+    "unit": "USD per 1M tokens",
+    "input": 2,
+    "cachedInput": 0.1,
+    "output": 10,
+    "asOf": "2026-11-26"
+  },
+  "tokens": {
+    "input": 10672683,
+    "cachedInput": 8564736,
+    "uncachedInput": 2107947,
+    "output": 236097,
+    "reasoning": 29355
+  },
+  "apiUsd": {
+    "uncachedInput": 4.215894,
+    "cachedInput": 0.856474,
+    "output": 2.36097,
+    "total": 7.433338
+  },
+  "usdPerPp": {
+    "est": 0.66094,
+    "ci95": [
+      0.616472,
+      0.705409
+    ],
+    "relSe": 0.030196
+  },
+  "monthlyApiUsd": {
+    "est": 264.376199,
+    "ci95": [
+      246.588618,
+      282.163779
+    ]
+  },
+  "subsidy": {
+    "est": 13.21881,
+    "ci95": [
+      12.329431,
+      14.108189
+    ],
+    "sigmaLn": 0.030196,
+    "definition": "monthly API value = 100 × weekly $/pp × 4 weeks; multiple = monthly ÷ $20"
+  },
+  "appliesTo": {
+    "modes": [
+      "agent",
+      "cursor",
+      "turn",
+      "tokens"
+    ],
+    "default": true
+  },
+  "flags": [
+    {
+      "code": "not_exactly_linear",
+      "severity": "info",
+      "detail": "5h: no single line through every step; the meter does not follow API $ exactly"
+    },
+    {
+      "code": "not_exactly_linear",
+      "severity": "info",
+      "detail": "weekly: no single line through every step; the meter does not follow API $ exactly"
+    },
+    {
+      "code": "meter_moved_idle",
+      "severity": "error",
+      "detail": "5h moved 0 → 1 during idle check (before)"
+    },
+    {
+      "code": "idle_unchecked",
+      "severity": "warning",
+      "detail": "idle check after has no readings on both sides"
+    }
+  ],
+  "verdict": "contaminated",
+  "verdictNote": "contaminated: the 5-hour meter moved 1 point during the idle check before the run; the weekly meter did not move"
+}
