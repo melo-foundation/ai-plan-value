@@ -2,3 +2,4 @@
 node_modules/
 *.tmp
 kits/codex/results/
+kits/api-plan/results/

@@ -41,6 +41,12 @@ const MEASURED_STEPS = new Set(["S3", "S4", "S5", "S6", "T", "prelim", "priors",
 const PRICED_TEXT = new Set(["official credits", "list price"]);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
 
+/** The API plan kit, named with its meter mode (kits/api-plan/scripts/adapters.mjs, meter.default). */
+const API_KIT = {
+  automatic: { name: "API plans (automatic)", href: "api-plan/README.md" },
+  manual: { name: "API plans (manual)", href: "api-plan/README.md" },
+};
+
 /**
  * Kit per plan family. `kit` links are relative to kits/. Methods per family: kits/METHODS.md.
  */
@@ -55,16 +61,18 @@ export const FAMILIES = [
   { id: "droid", test: (p) => /^Droid\b/.test(p), kit: null },
   { id: "command-code", test: (p) => /^Command Code\b/.test(p), kit: null },
   { id: "kilo", test: (p) => /^Kilo Pass\b/.test(p), kit: null },
-  { id: "kimi", test: (p) => /^Kimi\b/.test(p), kit: null },
-  { id: "glm", test: (p) => /^GLM Coding\b/.test(p), kit: null },
-  { id: "minimax", test: (p) => /^MiniMax\b/.test(p), kit: null },
-  { id: "mimo", test: (p) => /^MiMo\b/.test(p), kit: null },
+  { id: "kimi", test: (p) => /^Kimi\b/.test(p), kit: API_KIT.manual },
+  { id: "glm", test: (p) => /^GLM Coding\b/.test(p), kit: API_KIT.automatic },
+  { id: "minimax", test: (p) => /^MiniMax\b/.test(p), kit: API_KIT.automatic },
+  { id: "mimo", test: (p) => /^MiMo\b/.test(p), kit: API_KIT.automatic },
   { id: "grok", test: (p) => /^(SuperGrok|X (Plus|Ultra))\b/.test(p), kit: null },
-  { id: "ollama", test: (p) => /^Ollama\b/.test(p), kit: null },
+  { id: "ollama", test: (p) => /^Ollama\b/.test(p), kit: API_KIT.automatic },
   { id: "mistral", test: (p) => /^Mistral Vibe\b/.test(p), kit: null },
-  { id: "deeprelay", test: (p) => /^DeepRelay\b/.test(p), kit: null },
+  { id: "deeprelay", test: (p) => /^DeepRelay\b/.test(p), kit: API_KIT.automatic },
   { id: "opencode", test: (p) => /^OpenCode Go\b/.test(p), kit: null },
-  { id: "token-plans", test: (p) => /Token Plan|^Step Plan|阿里云百炼/.test(p), kit: null },
+  { id: "bailian", test: (p) => /阿里云百炼|^Qwen Token Plan\b/.test(p), kit: API_KIT.automatic },
+  { id: "step", test: (p) => /^Step Plan\b/.test(p), kit: API_KIT.manual },
+  { id: "token-plans", test: (p) => /Token Plan/.test(p), kit: null },
 ];
 
 export const familyOf = (plan) => FAMILIES.find((f) => f.test(plan)) || null;
