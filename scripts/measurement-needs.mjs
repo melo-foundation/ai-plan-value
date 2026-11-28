@@ -110,7 +110,7 @@ export const UNTESTED_SUFFIX = " · untested";
 export function statusKeyFor(plan) {
   const f = familyOf(plan);
   if (f?.kit) {
-    if (f.id === "claude") return { kit: "claude-code", id: "claude-code" };
+    if (f.id === "claude") return { kit: "claude-code", id: /^Claude (Pro|Max|Ultra|Team)\b/.exec(plan)[1].toLowerCase() };
     if (f.id === "chatgpt-plus" || f.id === "chatgpt-pro") return { kit: "codex", id: codexIdForPlan(plan) };
     if (f.kit.href === "api-plan/README.md") return { kit: "api-plan", id: f.id };
     throw new Error(`no kits/status.json key for ${plan}`);

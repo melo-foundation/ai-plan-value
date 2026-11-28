@@ -1,32 +1,44 @@
 # Subsidy measuring kits
 
+Download the kits (no git needed) and run every command from the folder:
+
+    curl -fsSL https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz | tar -xz
+    cd ai-plan-value-main
+
+Windows: `curl.exe -fsSLo kits.tar.gz https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz`, then `tar -xzf kits.tar.gz` and `cd ai-plan-value-main`. Browser: [main.zip](https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.zip).
+
 Run the smoke check first; it uses one short prompt and gives a report to send:
 
     node kits/codex/scripts/codex-quota.mjs smoke --plan plus
     node kits/harness/scripts/harness-quota.mjs smoke --harness grok --plan "SuperGrok"
     node kits/api-plan/scripts/api-plan.mjs smoke --provider glm --model glm-5.3
+    node scripts/quota-probe.mjs probe --ping
 
 Open the link it prints and press Create. If it says the link is too long, open a [Kit check](https://github.com/melo-foundation/ai-plan-value/issues/new?template=kit-check.yml) issue and attach `kits/<kit>/results/smoke-<harness>-<date>.json`.
 
-Claude Code has no smoke check.
+The last line is the Claude Code check: it prints the meters it read; send them in a Kit check issue.
 
 [Most needed](NEEDED.md): plans ranked by need for a measurement, with the model to measure first.
 
 [Methods](METHODS.md): where each plan's usage meter is and how a kit reads it.
 
-| Plan family | Harness | Instructions | One run uses | Status |
-|---|---|---|---|---|
-| Claude (Pro, Max, Ultra, Team) | Claude Code | [docs/QUOTA-WEIGHTS.md](../docs/QUOTA-WEIGHTS.md) | about 12% of the weekly limit (weekly run); about 30% of one 5-hour window (5h run) | Tested (2026-11-28) |
-| ChatGPT Plus, Pro 10x / 20x / 500 | Codex CLI | [kits/codex/README.md](codex/README.md) | Plus: 12% of the weekly limit (run A) + 8% (run B); Pro: 3–4% (A) + 3% (B) | Plus: Tested (2026-11-27); Pro 10x, Pro 20x, Pro 500: Untested: run `smoke` first |
-| Google AI (Pro, Ultra 5x / 20x) | Gemini CLI | [kits/harness/README.md](harness/README.md) | meter typed by hand from the Gemini app; `--auto-meter` reads it automatically | Untested: run `smoke` first |
-| SuperGrok (Lite, Plus, Heavy), X Plus / Ultra | Grok Build | [kits/harness/README.md](harness/README.md) | meter typed by hand from grok.com Settings > Usage; `--auto-meter` reads it automatically | Untested: run `smoke` first |
-| Factory Droid (Pro, Max) | Droid | [kits/harness/README.md](harness/README.md) | meter typed by hand from `/limits` | Untested: run `smoke` first |
-| Mistral Vibe Pro | Mistral Vibe | [kits/harness/README.md](harness/README.md) | meter typed by hand; `--auto-meter` optional | Untested: run `smoke` first |
-| Kimi, 百炼 / Qwen Token Plan | Kimi Code, Qwen Code | [kits/harness/README.md](harness/README.md) | meter typed by hand; `--auto-meter` optional | Untested: run `smoke` first |
-| Cursor (Pro, Pro+, Ultra) | Cursor CLI | [kits/harness/README.md](harness/README.md) | included-usage $ typed by hand from the dashboard | Untested: run `smoke` first |
-| Devin (Pro, Max) | Devin | [kits/harness/README.md](harness/README.md) | ACUs per task; quota typed by hand | Untested: run `smoke` first |
-| Muse Code (not on the site yet) | Muse Code | [kits/harness/README.md](harness/README.md) | meter typed by hand from `muse usage`; `--auto-meter` optional | Untested: run `smoke` first |
-| Kimi, GLM Coding, MiniMax, 百炼 / Qwen Token Plan, DeepRelay, Ollama Cloud, Step Plan, MiMo Token Plan | API key, no harness | [kits/api-plan/README.md](api-plan/README.md) | 1% of the monthly pool; GLM 5% of the weekly limit; MiniMax 3% of the weekly limit | Untested: run `smoke` first |
+| Plans | Tool | Instructions | Usage reading | One run uses | Status |
+|---|---|---|---|---|---|
+| Claude Pro, Max, Ultra, Team | Claude Code | [docs/QUOTA-WEIGHTS.md](../docs/QUOTA-WEIGHTS.md) | automatic | 12% of the weekly limit | Tested: Ultra (2026-11-28). Untested: Pro, Max, Team |
+| ChatGPT Plus, Pro 10x, Pro 20x, Pro 500 | Codex CLI | [kits/codex/README.md](codex/README.md) | automatic | Plus 20% of the weekly limit; Pro 6% | Tested: Plus (2026-11-27). Untested: Pro 10x, Pro 20x, Pro 500 |
+| Google AI Pro, Ultra 5x, Ultra 20x | Gemini CLI | [kits/harness/README.md](harness/README.md) | typed in¹ | 25% of one day's limit | Untested |
+| SuperGrok, X Plus, X Ultra | Grok Build | [kits/harness/README.md](harness/README.md) | typed in¹ | 10% of the weekly limit | Untested |
+| Droid Pro, Max | Droid | [kits/harness/README.md](harness/README.md) | typed in | 10% of the weekly limit | Untested |
+| Mistral Vibe Pro | Mistral Vibe | [kits/harness/README.md](harness/README.md) | typed in¹ | 5% of the monthly limit | Untested |
+| Kimi, 百炼 / Qwen Token Plan | Kimi Code, Qwen Code | [kits/harness/README.md](harness/README.md) | typed in¹ | 2% of the monthly limit | Untested |
+| Cursor Pro, Pro+, Ultra | Cursor CLI | [kits/harness/README.md](harness/README.md) | typed in | 10% of the monthly included usage | Untested |
+| Devin Pro, Max | Devin | [kits/harness/README.md](harness/README.md) | typed in | 10% of one day's (Pro) or week's (Max) limit | Untested |
+| Muse Code (not on the site yet) | Muse Code | [kits/harness/README.md](harness/README.md) | typed in¹ | 10% of the weekly limit | Untested |
+| Kimi, GLM Coding, MiniMax, 百炼 / Qwen Token Plan, DeepRelay, Ollama Cloud, Step Plan, MiMo Token Plan | API key, no harness | [kits/api-plan/README.md](api-plan/README.md) | automatic; typed in for Kimi and Step | 1% of the monthly limit; GLM 5% and MiniMax 3% of the weekly limit | Untested |
+
+¹ `--auto-meter` reads it automatically through an unofficial route.
+
+Usage reading: automatic means the kit reads the meter itself; typed in means you read the plan's usage page when the kit asks and type the number. One run uses: estimates; harness kit runs are untested.
 
 Published results: [data/quota-measurements/](../data/quota-measurements/).
 

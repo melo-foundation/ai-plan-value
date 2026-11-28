@@ -2913,7 +2913,7 @@ test("kit status: kits/status.json lists every kit adapter, with date and eviden
   const keys = (k) => Object.keys(KIT_STATUS.kits[k].adapters).sort();
   assert.equal(KIT_STATUS.schema, "kit-status/1");
   assert.deepEqual(Object.keys(KIT_STATUS.kits).sort(), ["api-plan", "claude-code", "codex", "harness"]);
-  assert.deepEqual(keys("claude-code"), ["claude-code"]);
+  assert.deepEqual(keys("claude-code"), ["max", "pro", "team", "ultra"]);
   assert.deepEqual(keys("codex"), PLANS.filter((p) => planFee(p) != null).map((p) => p.id).sort());
   assert.deepEqual(keys("api-plan"), Object.keys(API).sort());
   assert.deepEqual(keys("harness"), Object.keys(HARNESS).sort());
@@ -2937,9 +2937,12 @@ test("kit status: kits/status.json lists every kit adapter, with date and eviden
   // Only real kit runs count: seed files converted from outside sources ("seed": true) do not.
   const dir = path.join(ROOT, "data", "quota-weights", "submissions", "anthropic");
   const kitRuns = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl")).filter((f) => !fs.readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).some((l) => { try { return JSON.parse(l).seed === true; } catch { return false; } }));
-  const cc = KIT_STATUS.kits["claude-code"].adapters["claude-code"];
-  // Tested needs a real kit run: a non-seed submission, or a recorded probe --ping
-  assert.equal(cc.status === "tested", kitRuns.length > 0 || /probe --ping/.test(cc.evidence || ""));
+  // Per plan: tested needs a real kit run on that plan (a non-seed submission, or a recorded probe --ping)
+  for (const [id, cc] of Object.entries(KIT_STATUS.kits["claude-code"].adapters)) {
+    if (cc.status !== "tested") continue;
+    assert.ok(kitRuns.length > 0 || /probe --ping/.test(cc.evidence || ""), `claude-code/${id}: tested without a kit run`);
+    assert.match(cc.evidence, new RegExp(`Claude ${id[0].toUpperCase()}${id.slice(1)}`), `claude-code/${id}: evidence is not from this plan`);
+  }
 });
 
 test("kit status: README Status cells match kits/status.json (node scripts/kit-status.mjs)", () => {
@@ -2952,13 +2955,12 @@ test("kit status: README Status cells match kits/status.json (node scripts/kit-s
   assert.equal(all["kits/api-plan/README.md"].filled, Object.keys(KIT_STATUS.kits["api-plan"].adapters).length, "a provider without a Status cell");
   assert.equal(all["kits/codex/README.md"].filled, Object.keys(KIT_STATUS.kits.codex.adapters).length, "a Codex plan without a Status cell");
   const idx = fs.readFileSync(path.join(ROOT, "kits", "README.md"), "utf8");
-  const cc = KIT_STATUS.kits["claude-code"].adapters["claude-code"].status === "tested";
-  assert.match(idx, cc ? /\| Claude Code \| .* \| Tested \(\d{4}-\d{2}-\d{2}\) \|/ : /\| Claude Code \| .* \| Untested/);
-  assert.match(idx, /\| Codex CLI \| .* \| Plus: Tested \(2026-11-27\); Pro 10x, Pro 20x, Pro 500: Untested: run `smoke` first \|/);
+  assert.match(idx, /\| Claude Code \| .* \| Tested: Ultra \(2026-11-28\)\. Untested: Pro, Max, Team \|/);
+  assert.match(idx, /\| Codex CLI \| .* \| Tested: Plus \(2026-11-27\)\. Untested: Pro 10x, Pro 20x, Pro 500 \|/);
   // a flipped status changes the cell
   const flipped = structuredClone(KIT_STATUS);
   flipped.kits.harness.adapters.grok = { status: "tested", date: "2026-12-01", evidence: "x" };
-  assert.match(KS.renderAll(flipped)["kits/harness/README.md"].rendered, /\| Status \| Untested: run `smoke` first \| Tested \(2026-12-01\) \|/);
+  assert.match(KS.renderAll(flipped)["kits/harness/README.md"].rendered, /\| Status \| Untested \| Tested \(2026-12-01\) \|/);
 });
 
 test("kit status: NEEDED.md kit cells say untested exactly for untested adapters", () => {

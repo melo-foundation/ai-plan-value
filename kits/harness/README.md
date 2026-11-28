@@ -27,7 +27,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 
 | | Gemini CLI | Grok Build |
 |---|---|---|
-| Status | Untested: run `smoke` first | Untested: run `smoke` first |
+| Status | Untested | Untested |
 | Plans (`--plan`) | `Google AI Pro`, `Google AI Ultra 5x`, `Google AI Ultra 20x` | `SuperGrok Lite`, `SuperGrok`, `SuperGrok Plus`, `SuperGrok Heavy`, `X Plus`, `X Ultra`, and the `, legacy` variants |
 | Install | `npm install -g @google/gemini-cli`, plus Docker or Podman on Linux | `curl -fsSL https://x.ai/cli/install.sh \| bash`, plus `bubblewrap` on Linux |
 | Login | run `gemini`, choose Sign in with Google | `grok login` (`grok login --device-auth` over SSH); subscription billing for a CLI login is unverified |
@@ -43,7 +43,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 
 | | Factory Droid | Kimi Code | Qwen Code | Mistral Vibe |
 |---|---|---|---|---|
-| Status | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first |
+| Status | Untested | Untested | Untested | Untested |
 | `--harness` | `factory` | `kimi` | `qwen` | `mistral` |
 | Plans (`--plan`) | `Droid Pro`, `Droid Max` | `Kimi Plus`, `Kimi Pro`, `Kimi Max`, `Kimi Ultra`, `Kimi Moderato`, `Kimi Allegretto`, `Kimi Allegro`, and the `, legacy` variants | `阿里云百炼 Token Plan Lite (¥39)`, `… Essential (¥79)`, `… Standard (¥139)`, `… Pro (¥312)`, `Qwen Token Plan Standard` | `Mistral Vibe Pro` |
 | Install | `curl -fsSL https://app.factory.ai/cli \| sh`, plus `bubblewrap` on Linux | `curl -fsSL https://code.kimi.com/kimi-code/install.sh \| bash` or `npm install -g @moonshot-ai/kimi-code` | `npm install -g @qwen-code/qwen-code@latest` (Node 22+), plus Docker or Podman on Linux | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` |
@@ -61,7 +61,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 
 | | Muse Code | Cursor CLI | Devin |
 |---|---|---|---|
-| Status | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first |
+| Status | Untested | Untested | Untested |
 | Plans (`--plan`) | `Muse Code Everyday Usage` ($5), `Muse Code High Usage` ($15), `Muse Code Power Usage` ($50), `Muse Code Maximum Usage` ($200); not on the site yet, fees from `kit.json` | `Cursor Pro`, `Cursor Pro+`, `Cursor Ultra` | `Devin Pro`, `Devin Max` |
 | Install | `curl -fsSL https://dev.meta.ai/install.sh \| bash` | `curl https://cursor.com/install -fsS \| bash` | nothing (paste mode); `--devin-api`: a personal access token (`cog_…`, Settings > Devin API > PATs) in `DEVIN_API_KEY` and the organization id (`org-…`) in `DEVIN_ORG_ID`; tokens and org ids on individual Pro / Max accounts unverified |
 | Login | run `muse`, sign in with the Meta Model API account that holds the subscription; unset `META_API_KEY` | `agent login`; unset `CURSOR_API_KEY` | [app.devin.ai](https://app.devin.ai) |
@@ -81,10 +81,12 @@ Devin result: ACUs per task, ACUs per 1% of the quota, monthly ACUs, and $ at `-
 
 ## 1. Set up
 
-Clone the repo and run every command from its root:
+Download the kits (no git needed) and run every command from the folder:
 
-    git clone https://github.com/melo-foundation/ai-plan-value.git
-    cd ai-plan-value
+    curl -fsSL https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz | tar -xz
+    cd ai-plan-value-main
+
+Windows: `curl.exe -fsSLo kits.tar.gz https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz`, then `tar -xzf kits.tar.gz` and `cd ai-plan-value-main`. Browser: [main.zip](https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.zip).
 
 Check the setup; it must end with `ok`:
 

@@ -5,10 +5,25 @@
       "name": "Claude Code",
       "readme": "docs/QUOTA-WEIGHTS.md",
       "adapters": {
-        "claude-code": {
+        "pro": {
+          "status": "untested",
+          "date": null,
+          "evidence": null
+        },
+        "max": {
+          "status": "untested",
+          "date": null,
+          "evidence": null
+        },
+        "ultra": {
           "status": "tested",
           "date": "2026-11-28",
           "evidence": "data/kit-checks/2026-11-28-claude-code-ultra.json: probe --ping on Claude Ultra (Claude Code 2.1.332); 7-day meter read, no 5-hour meter on Ultra"
+        },
+        "team": {
+          "status": "untested",
+          "date": null,
+          "evidence": null
         }
       }
     },

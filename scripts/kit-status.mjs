@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const STATUS_PATH = path.join(ROOT, "kits", "status.json");
-export const UNTESTED_TEXT = "Untested: run `smoke` first";
+export const UNTESTED_TEXT = "Untested";
 
 export function loadStatus(file = STATUS_PATH) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -36,16 +36,18 @@ export function entryOf(status, kit, id) {
 export const isTested = (e) => e?.status === "tested";
 export const cellText = (e) => (isTested(e) ? `Tested (${e.date})` : UNTESTED_TEXT);
 
-/** One cell for several adapters: one text when they agree, else "label: text; label: text". */
+/** One cell for several adapters: "Tested (date)" / "Untested" when they agree, else "Tested: Ultra (date). Untested: Pro, Max". */
 export function groupCell(items) {
-  const groups = [];
-  for (const it of items) {
-    const t = cellText(it.entry);
-    const g = groups.find((x) => x.text === t);
-    if (g) g.labels.push(it.label);
-    else groups.push({ text: t, labels: [it.label] });
+  const tested = items.filter((it) => isTested(it.entry));
+  const untested = items.filter((it) => !isTested(it.entry));
+  if (!untested.length) {
+    const dates = [...new Set(tested.map((it) => it.entry.date))];
+    if (dates.length === 1) return `Tested (${dates[0]})`;
   }
-  return groups.length === 1 ? groups[0].text : groups.map((g) => `${g.labels.join(", ")}: ${g.text}`).join("; ");
+  if (!tested.length) return UNTESTED_TEXT;
+  const parts = [`Tested: ${tested.map((it) => `${it.label} (${it.entry.date})`).join(", ")}`];
+  if (untested.length) parts.push(`Untested: ${untested.map((it) => it.label).join(", ")}`);
+  return parts.join(". ");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -53,6 +55,7 @@ export function groupCell(items) {
 // ---------------------------------------------------------------------------------------------
 
 const CODEX_LABELS = { plus: "Plus", "pro-10x": "Pro 10x", "pro-20x": "Pro 20x", "pro-500": "Pro 500" };
+const CLAUDE_LABELS = { pro: "Pro", max: "Max", ultra: "Ultra", team: "Team" };
 const HARNESS_ALIASES = { Droid: "factory" };
 
 function harnessIds() {
@@ -64,7 +67,7 @@ function harnessIds() {
 /** kits/README.md Harness cell → [{ kit, id, label }]. */
 export function itemsForIndexHarness(cell, status) {
   const c = cell.trim();
-  if (c === "Claude Code") return [{ kit: "claude-code", id: "claude-code", label: "Claude Code" }];
+  if (c === "Claude Code") return Object.keys(status.kits["claude-code"].adapters).map((id) => ({ kit: "claude-code", id, label: CLAUDE_LABELS[id] || id }));
   if (c === "Codex CLI") return Object.keys(status.kits.codex.adapters).map((id) => ({ kit: "codex", id, label: CODEX_LABELS[id] || id }));
   if (/^API key\b/.test(c)) return Object.keys(status.kits["api-plan"].adapters).map((id) => ({ kit: "api-plan", id, label: id }));
   const ids = harnessIds();
@@ -148,7 +151,7 @@ const firstCode = (cell) => (/`([^`]+)`/.exec(cell) || [])[1] || cell.trim();
 
 /** README file → its rendered text with Status cells from `status`. */
 export const READMES = {
-  "kits/README.md": (md, s) => fillColumn(md, (x) => x === "Harness", (c) => itemsForIndexHarness(c, s), s),
+  "kits/README.md": (md, s) => fillColumn(md, (x) => x === "Tool", (c) => itemsForIndexHarness(c, s), s),
   "kits/codex/README.md": (md, s) => fillColumn(md, (x) => x === "`--plan`", (c) => [{ kit: "codex", id: firstCode(c), label: firstCode(c) }], s),
   "kits/api-plan/README.md": (md, s) => fillColumn(md, (x) => x === "`--provider`", (c) => [{ kit: "api-plan", id: firstCode(c), label: firstCode(c) }], s),
   "kits/harness/README.md": (md, s) => fillHarnessRows(md, s),

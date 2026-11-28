@@ -6,10 +6,10 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 
 | # | Plan | Harness | What's wrong | Measure first | Kit |
 |---|---|---|---|---|---|
-| 1 | Claude Max | Claude Code / Web | sources disagree on Claude Opus 5; 5 of 6 models borrowed; Claude Opus 5 from Claude Opus 5 on Claude Ultra (1 account, Aug); all 6 models low confidence; 2 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
+| 1 | Claude Max | Claude Code / Web | sources disagree on Claude Opus 5; 5 of 6 models borrowed; Claude Opus 5 from Claude Opus 5 on Claude Ultra (1 account, Aug); all 6 models low confidence; 2 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) · untested |
 | 2 | SuperGrok Heavy | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
 | 3 | SuperGrok Plus | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
-| 4 | Claude Pro | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 4 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (2 accounts, Sept); Claude Opus 5: 2 accounts, Sept; 2 of 4 models low confidence; 3 of 4 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
+| 4 | Claude Pro | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 4 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (2 accounts, Sept); Claude Opus 5: 2 accounts, Sept; 2 of 4 models low confidence; 3 of 4 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) · untested |
 | 5 | Claude Ultra | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 6 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (1 account, Sept); Claude Opus 5: 1 account, Aug; 2 of 6 models low confidence; 5 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 6 | Kimi Allegretto | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) · untested |
 | 7 | Kimi Allegro | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) · untested |
@@ -29,7 +29,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
 | 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | Not needed (sold as $ at API prices) |
 | 23 | Devin Max | Devin Agent | 6 of 11 models borrowed; Claude Opus 5.5 from Gemini 4 Carbon (1 account, Nov); 6 of 11 models low confidence | Claude Opus 5.5 | [Kit: Devin, meter typed by hand](harness/README.md) · untested |
-| 24 | Claude Team Premium | Claude Code / Web | 1 gateway panel, Oct; low confidence | Claude Opus 5.5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
+| 24 | Claude Team Premium | Claude Code / Web | 1 gateway panel, Oct; low confidence | Claude Opus 5.5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) · untested |
 | 25 | Cursor Ultra (Other Models) | Cursor IDE | 1 tweet, Oct; low confidence | Claude Opus 5.5 | No kit yet |
 | 26 | X Plus | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
 | 27 | X Ultra | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |

@@ -20,6 +20,13 @@ Requirements: Claude Pro, Max, Ultra or Team; Claude Code ≥ 2.1.300; Node ≥ 
        unset CLAUDE_CODE_ENTRYPOINT
        export DISABLE_AUTOUPDATER=1
 
+   Download the kit and run every command from the folder:
+
+       curl -fsSL https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz | tar -xz
+       cd ai-plan-value-main
+
+   Check it works first (one short prompt): `node scripts/quota-probe.mjs probe --ping`.
+
    `DISABLE_AUTOUPDATER=1` applies to this terminal only; it keeps `claude -p` runs on one version. Every file records the client version.
 
 1. Check the setup (`--oauth` also prints both bars from `api.anthropic.com/api/oauth/usage`):

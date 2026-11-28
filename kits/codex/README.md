@@ -21,9 +21,9 @@ On Pro, pass `--plan pro-10x`, `pro-20x` or `pro-500`. Open the link it prints a
 | Plan | `--plan` | Fee | Status |
 |---|---|---|---|
 | ChatGPT Plus | `plus` (optional) | $20 | Tested (2026-11-27) |
-| ChatGPT Pro 10x | `pro-10x` (required) | $100 | Untested: run `smoke` first |
-| ChatGPT Pro 20x | `pro-20x` (required) | $200 | Untested: run `smoke` first |
-| ChatGPT Pro 500 | `pro-500` (required) | $500 | Untested: run `smoke` first |
+| ChatGPT Pro 10x | `pro-10x` (required) | $100 | Untested |
+| ChatGPT Pro 20x | `pro-20x` (required) | $200 | Untested |
+| ChatGPT Pro 500 | `pro-500` (required) | $500 | Untested |
 
 Pass `--plan` on Pro: its `plan_type` (`pro`, `prolite` or `promax`) does not name the tier. A `--plan` that does not match the account's `plan_type` stops the run after the first ping.
 
@@ -48,10 +48,12 @@ If the 5-hour limit reaches 95%, the run pauses until its reset and prints the t
 
 ## 1. Set up
 
-Clone the repo and run every command from its root:
+Download the kits (no git needed) and run every command from the folder:
 
-    git clone https://github.com/melo-foundation/ai-plan-value.git
-    cd ai-plan-value
+    curl -fsSL https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz | tar -xz
+    cd ai-plan-value-main
+
+Windows: `curl.exe -fsSLo kits.tar.gz https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.tar.gz`, then `tar -xzf kits.tar.gz` and `cd ai-plan-value-main`. Browser: [main.zip](https://github.com/melo-foundation/ai-plan-value/archive/refs/heads/main.zip).
 
 Check the setup; it must end with `ok` (Pro: add `--plan pro-20x` or your tier):
 
