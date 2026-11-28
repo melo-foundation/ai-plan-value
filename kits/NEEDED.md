@@ -7,8 +7,8 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | # | Plan | Harness | What's wrong | Measure first | Kit |
 |---|---|---|---|---|---|
 | 1 | Claude Max | Claude Code / Web | sources disagree on Claude Opus 5; 5 of 6 models borrowed; Claude Opus 5 from Claude Opus 5 on Claude Ultra (1 account, Aug); all 6 models low confidence; 2 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
-| 2 | SuperGrok Heavy | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | No kit yet |
-| 3 | SuperGrok Plus | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | No kit yet |
+| 2 | SuperGrok Heavy | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
+| 3 | SuperGrok Plus | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 4 | Claude Pro | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 4 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (2 accounts, Sept); Claude Opus 5: 2 accounts, Sept; 2 of 4 models low confidence; 3 of 4 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 5 | Claude Ultra | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 6 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (1 account, Sept); Claude Opus 5: 1 account, Aug; 2 of 6 models low confidence; 5 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 6 | Kimi Allegretto | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | No kit yet |
@@ -22,19 +22,19 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 14 | Kimi Plus | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | No kit yet |
 | 15 | Kimi Pro | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | No kit yet |
 | 16 | Kimi Ultra | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | No kit yet |
-| 17 | Google AI Pro | Gemini CLI / Web | sources disagree on Gemini 3.8 Flash; 3 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); Gemini 3.8 Flash: 3 accounts, Sept; 1 of 5 models older than 60 days | Gemini 3.8 Flash | No kit yet |
+| 17 | Google AI Pro | Gemini CLI / Web | sources disagree on Gemini 3.8 Flash; 3 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); Gemini 3.8 Flash: 3 accounts, Sept; 1 of 5 models older than 60 days | Gemini 3.8 Flash | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
 | 18 | Droid Pro | Factory Droid CLI | 1 tweet, Sept; low confidence; older than 60 days | Claude Opus 5.5 | No kit yet |
 | 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | No kit yet |
 | 20 | Cursor Ultra (Fast) | Cursor IDE | 1 screenshot, Sept; low confidence; older than 60 days | Grok 4.6 | No kit yet |
-| 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | No kit yet |
+| 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | No kit yet |
 | 23 | Devin Max | Devin Agent | 6 of 11 models borrowed; Claude Opus 5.5 from Gemini 4 Carbon (1 account, Nov); 6 of 11 models low confidence | Claude Opus 5.5 | No kit yet |
 | 24 | Claude Team Premium | Claude Code / Web | 1 gateway panel, Oct; low confidence | Claude Opus 5.5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 25 | Cursor Ultra (Other Models) | Cursor IDE | 1 tweet, Oct; low confidence | Claude Opus 5.5 | No kit yet |
-| 26 | X Plus | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | No kit yet |
-| 27 | X Ultra | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | No kit yet |
-| 28 | Google AI Ultra 20x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | No kit yet |
-| 29 | Google AI Ultra 5x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | No kit yet |
+| 26 | X Plus | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
+| 27 | X Ultra | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
+| 28 | Google AI Ultra 20x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
+| 29 | Google AI Ultra 5x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
 | 30 | Ollama Max | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
 | 31 | Ollama Pro | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
 | 32 | OpenCode Go | OpenCode / API | no measurement, official quota table only; 1 of 19 models low confidence | Claude Haiku 5.5 | No kit yet |
@@ -62,7 +62,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 54 | MiniMax Token Plan Ultra | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
 | 55 | MiniMax Token Plan Ultra (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
 | 56 | ChatGPT Plus | Codex / Web | 1 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 account, July); GPT-6 Astra: 2 accounts, Sept; 1 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
-| 57 | SuperGrok | Grok Web / App | Grok 4.7: 1 account, Sept; both models older than 60 days | Grok 4.7 | No kit yet |
+| 57 | SuperGrok | Grok Web / App | Grok 4.7: 1 account, Sept; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 58 | Cursor Pro | Cursor IDE | 1 account, Aug; older than 60 days | Grok 4.6 | No kit yet |
 | 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | No kit yet |
 | 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | No kit yet |

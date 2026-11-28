@@ -8,6 +8,8 @@
 |---|---|---|---|
 | Claude (Pro, Max, Ultra, Team) | Claude Code | [docs/QUOTA-WEIGHTS.md](../docs/QUOTA-WEIGHTS.md) | about 12% of the weekly limit (weekly run); about 30% of one 5-hour window (5h run) |
 | ChatGPT Plus, Pro 10x / 20x / 500 | Codex CLI | [kits/codex/README.md](codex/README.md) | Plus: 12% of the weekly limit (run A) + 8% (run B); Pro: 3–4% (A) + 3% (B) |
+| Google AI (Pro, Ultra 5x / 20x) | Gemini CLI | [kits/harness/README.md](harness/README.md) | meter typed by hand from the Gemini app; `--auto-meter` reads it automatically |
+| SuperGrok (Lite, Plus, Heavy), X Plus / Ultra | Grok Build | [kits/harness/README.md](harness/README.md) | meter typed by hand from grok.com Settings > Usage; `--auto-meter` reads it automatically |
 
 Published results: [data/quota-measurements/](../data/quota-measurements/).
 

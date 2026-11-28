@@ -69,9 +69,36 @@ export const FAMILIES = [
 
 export const familyOf = (plan) => FAMILIES.find((f) => f.test(plan)) || null;
 
+/** Kits that declare their plans in kits/<kit>/kit.json (harnesses[].planTest), e.g. kits/harness. */
+export function kitRegistry(kitsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "kits")) {
+  const out = [];
+  let dirs = [];
+  try {
+    dirs = fs.readdirSync(kitsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  } catch {
+    return out;
+  }
+  for (const d of dirs) {
+    let k;
+    try {
+      k = JSON.parse(fs.readFileSync(path.join(kitsDir, d, "kit.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    for (const h of k.harnesses || []) {
+      if (!h.planTest) continue;
+      out.push({ re: new RegExp(h.planTest), name: h.harness, href: `${d}/README.md`, manual: h.meter === "manual" });
+    }
+  }
+  return out;
+}
+const KIT_REGISTRY = kitRegistry();
+
 export function kitText(plan) {
   const f = familyOf(plan);
   if (f?.kit) return `[Kit: ${f.kit.name}](${f.kit.href})`;
+  const r = KIT_REGISTRY.find((x) => x.re.test(plan));
+  if (r) return `[Kit: ${r.name}${r.manual ? ", meter typed by hand" : ""}](${r.href})`;
   return f?.note ? `No kit yet (${f.note})` : "No kit yet";
 }
 

@@ -2863,6 +2863,11 @@ test("Most needed: plans with a kit link to it; the rest say No kit yet", () => 
       linked++;
       assert.equal(r.kit, `[Kit: ${f.kit.name}](${f.kit.href})`, `${r.plan}: kit cell ${r.kit}`);
       assert.ok(fs.existsSync(path.join(ROOT, "kits", f.kit.href)), `${f.kit.href} does not exist`);
+    } else if (MN.kitRegistry().some((k) => k.re.test(r.plan))) {
+      linked++;
+      const m = /^\[Kit: [^\]]+\]\(([^)]+)\)$/.exec(r.kit);
+      assert.ok(m, `${r.plan}: kit cell ${r.kit}`);
+      assert.ok(fs.existsSync(path.join(ROOT, "kits", m[1])), `${m[1]} does not exist`);
     } else assert.match(r.kit, /^No kit yet/, `${r.plan}: kit cell ${r.kit}`);
   }
   assert.ok(rows.some((r) => r.plan === "ChatGPT Plus" && /Kit: Codex/.test(r.kit)), "ChatGPT Plus row has no Codex kit link");
