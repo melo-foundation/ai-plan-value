@@ -31,6 +31,62 @@
       "window": "weekly",
       "windowsPerMonth": 4,
       "tokens": "per task (JSON output)"
+    },
+    {
+      "id": "factory",
+      "harness": "Factory Droid",
+      "plans": ["Droid Pro", "Droid Max"],
+      "planTest": "^Droid (Pro|Max)$",
+      "defaultModel": "claude-opus-5-5",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": null,
+      "unit": "% of the 7-day Standard Credits window",
+      "window": "7d",
+      "windowsPerMonth": 4,
+      "tokens": "per task (JSON output)"
+    },
+    {
+      "id": "kimi",
+      "harness": "Kimi Code",
+      "plans": ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra", "Kimi Moderato", "Kimi Allegretto", "Kimi Allegro", "Kimi Moderato, legacy", "Kimi Allegretto, legacy", "Kimi Allegro, legacy"],
+      "planTest": "^Kimi (Plus|Pro|Max|Ultra|Moderato|Allegretto|Allegro)(, legacy)?$",
+      "defaultModel": "kimi-k3",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "undocumented",
+      "unit": "% of the monthly total",
+      "window": "monthly",
+      "windowsPerMonth": 1,
+      "tokens": "per call (session wire.jsonl)"
+    },
+    {
+      "id": "qwen",
+      "harness": "Qwen Code",
+      "plans": ["阿里云百炼 Token Plan Lite (¥39)", "阿里云百炼 Token Plan Essential (¥79)", "阿里云百炼 Token Plan Standard (¥139)", "阿里云百炼 Token Plan Pro (¥312)", "Qwen Token Plan Standard"],
+      "planTest": "^(阿里云百炼 Token Plan (Lite|Essential|Standard|Pro) \\(¥\\d+\\)|Qwen Token Plan Standard)$",
+      "defaultModel": "qwen4-max",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "documented command, undocumented fields",
+      "unit": "% of the monthly Token Plan quota",
+      "window": "monthly",
+      "windowsPerMonth": 1,
+      "tokens": "per call (telemetry file); per task (JSON output) as fallback"
+    },
+    {
+      "id": "mistral",
+      "harness": "Mistral Vibe",
+      "plans": ["Mistral Vibe Pro"],
+      "planTest": "^Mistral Vibe Pro$",
+      "defaultModel": "mistral-large-4-0",
+      "mode": "semi-manual",
+      "meter": "manual",
+      "autoMeter": "undocumented",
+      "unit": "% of the monthly Vibe budget",
+      "window": "monthly",
+      "windowsPerMonth": 1,
+      "tokens": "per task (export.json)"
     }
   ]
 }

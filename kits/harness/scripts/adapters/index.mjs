@@ -50,8 +50,13 @@
 
 import gemini from "./gemini.mjs";
 import grok from "./grok.mjs";
+import factory from "./factory.mjs";
+import kimi from "./kimi.mjs";
+import qwen from "./qwen.mjs";
+import mistral from "./mistral.mjs";
 
 export const ADAPTERS = { [gemini.id]: gemini, [grok.id]: grok };
+for (const a of [factory, kimi, qwen, mistral]) ADAPTERS[a.id] = a;
 
 export function getAdapter(id) {
   const a = ADAPTERS[String(id || "").toLowerCase()];

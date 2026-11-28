@@ -40,6 +40,15 @@ export function fakeGrokInstall(root) {
   return bin;
 }
 
+/** bin/<name> → a copy of test/<fake> (Factory Droid, Kimi Code, Qwen Code, Mistral Vibe, bl). */
+export function fakeBin(root, name, fake) {
+  fs.mkdirSync(path.join(root, "bin"), { recursive: true });
+  const bin = path.join(root, "bin", name);
+  fs.copyFileSync(path.join(here, fake), bin);
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+
 /**
  * Run the kit; answer each "% used: " prompt from `answer(meter, promptText, n)` (default: the
  * meter file's value, floored). Resolves { code, stdout, stderr, prompts }.
