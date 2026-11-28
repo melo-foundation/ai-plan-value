@@ -24,9 +24,9 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 16 | Kimi Ultra | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) · untested |
 | 17 | Google AI Pro | Gemini CLI / Web | sources disagree on Gemini 3.8 Flash; 3 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); Gemini 3.8 Flash: 3 accounts, Sept; 1 of 5 models older than 60 days | Gemini 3.8 Flash | [Kit: Gemini CLI, meter typed by hand](harness/README.md) · untested |
 | 18 | Droid Pro | Factory Droid CLI | 1 tweet, Sept; low confidence; older than 60 days | Claude Opus 5.5 | [Kit: Factory Droid, meter typed by hand](harness/README.md) · untested |
-| 19 | Cursor Ultra (Fast) | Cursor IDE | 1 screenshot, Sept; low confidence; older than 60 days | Grok 4.6 | No kit yet |
-| 20 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
-| 21 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 12 of 24 models low confidence | GPT-6 Astra | [Kit: Factory Droid, meter typed by hand](harness/README.md) · untested |
+| 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | [Kit: Factory Droid, meter typed by hand](harness/README.md) · untested |
+| 20 | Cursor Ultra (Fast) | Cursor IDE | 1 screenshot, Sept; low confidence; older than 60 days | Grok 4.6 | No kit yet |
+| 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) · untested |
 | 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | Not needed (sold as $ at API prices) |
 | 23 | Devin Max | Devin Agent | 6 of 11 models borrowed; Claude Opus 5.5 from Gemini 4 Carbon (1 account, Nov); 6 of 11 models low confidence | Claude Opus 5.5 | [Kit: Devin, meter typed by hand](harness/README.md) · untested |
 | 24 | Claude Team Premium | Claude Code / Web | 1 gateway panel, Oct; low confidence | Claude Opus 5.5 | [Kit: Claude Code](claude-code/README.md) · untested |
