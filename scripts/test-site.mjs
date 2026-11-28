@@ -857,7 +857,9 @@ test("Cross-plan consistency quads: fails are flagged and allow-listed", () => {
   assert.ok(quads.length >= 5, `Expected informative quads, got ${quads.length}`);
   // Known pending Fei2411 case: Opus 5 vs Opus 5.5 multiples move ×1.8–2.1 across Claude plans
   // (Fei notes it on claude_pro::claude-opus-5 as 张力 … 待裁定).
-  const ALLOW = [/^Claude:claude-opus-5\/claude-opus-5-5:/];
+  // Our ChatGPT Plus GPT-6.2 Sol measurement (data/quota-measurements) sits below the Priors-derived Pro values,
+  // so Sol/Astra quads across Plus and Pro move until Pro is measured too.
+  const ALLOW = [/^Claude:claude-opus-5\/claude-opus-5-5:/, /^ChatGPT:gpt-6-2-sol\/[^:]+:ChatGPT Plus\/ChatGPT Pro/];
   for (const q of cons) {
     if (q.verdict !== "fail") continue;
     const flagged = entries.find((e) => baseOf(e.id) === q.flagged);
@@ -2700,11 +2702,12 @@ test("Own measurement: GPT-6.1 Sol Plus, Pro plans and other models keep their o
     assert.ok(!near(e.subsidyMultiple, OWN_AGENT, 1e-3) && !near(e.subsidyMultiple, OWN_TASK, 1e-3), `${e.id} took the measured value`);
     assert.ok(!chains[e.rel.chain].lines.some((l) => /Our measurement/.test(l)), `${e.id} cites our measurement`);
   }
-  // Pro GPT-6.2 Sol stays a transfer from its own plan's GPT-6.1 Sol, not from the Plus measurement.
+  // Pro GPT-6.2 Sol never borrows from the Plus measurement (it is either Priors-direct or a transfer from its own plan).
   const pro62 = entries.filter((e) => /^ChatGPT Pro/.test(e.plan) && e.baseModelId === "gpt-6-2-sol");
   assert.ok(pro62.length > 0, "Pro GPT-6.2 Sol rows missing");
   for (const e of pro62) {
-    assert.ok(e.rel.sd, `${e.id} lost its †`);
+    assert.ok(!e.subsidyByMode, `${e.id} took the Plus per-metric values`);
+    assert.ok(!chains[e.rel.chain].lines.some((l) => /Our measurement/.test(l)), `${e.id} cites our measurement`);
     const anchors = chains[e.rel.chain].anchors || [];
     assert.ok(!anchors.some((a) => /own-measurement/.test(a)), `${e.id} anchored on the Plus measurement`);
   }
