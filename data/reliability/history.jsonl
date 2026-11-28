@@ -165,3 +165,4 @@
 {"d":"2026-11-28","id":"ChatGPT Pro 10x|gpt-6-2-sol","v":19.424,"s":0.1,"lo":17.09,"hi":22.08,"k":["priors"],"x":0}
 {"d":"2026-11-28","id":"Devin Max|gpt-6-2-sol","v":3.3495,"s":0.22,"lo":2.527,"hi":4.44,"k":["priors"],"x":0}
 {"t":"deploy","d":"2026-11-28T05:52:17.419Z","counts":{"high":919,"medium":1016,"low":638,"speculative":132},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
+{"t":"deploy","d":"2026-11-28T06:16:39.054Z","counts":{"high":919,"medium":1016,"low":638,"speculative":132},"quadFails":3,"t3":{"codex":0.6745,"antigravity-cli":0.2365,"claude-code":0.1778,"opencode":0.1771},"t3Sigma":0.15}
