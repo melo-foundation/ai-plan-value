@@ -14,6 +14,14 @@ body:
         - Claude Max
         - Claude Ultra
         - Claude Team
+        - Kimi
+        - GLM Coding
+        - MiniMax
+        - 阿里云百炼 / Qwen Token Plan
+        - DeepRelay
+        - Ollama Cloud
+        - Step Plan
+        - MiMo Token Plan
         - Other
     validations:
       required: true
@@ -24,6 +32,7 @@ body:
       options:
         - Claude Code
         - Codex
+        - API plan kit
         - Other
     validations:
       required: true

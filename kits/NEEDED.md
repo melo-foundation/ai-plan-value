@@ -11,17 +11,17 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 3 | SuperGrok Plus | Grok Web / App | borrowed from Grok 4.7 on SuperGrok (1 account, Sept); both models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 4 | Claude Pro | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 4 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (2 accounts, Sept); Claude Opus 5: 2 accounts, Sept; 2 of 4 models low confidence; 3 of 4 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
 | 5 | Claude Ultra | Claude Code / Web | sources disagree on Claude Opus 5; 2 of 6 models borrowed; Claude Sonnet 5.5 from Claude Opus 5.5 (1 account, Sept); Claude Opus 5: 1 account, Aug; 2 of 6 models low confidence; 5 of 6 models older than 60 days | Claude Opus 5 | [Kit: Claude Code](../docs/QUOTA-WEIGHTS.md) |
-| 6 | Kimi Allegretto | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | No kit yet |
-| 7 | Kimi Allegro | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); low confidence | Kimi K3 | No kit yet |
-| 8 | Kimi Moderato | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | No kit yet |
+| 6 | Kimi Allegretto | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
+| 7 | Kimi Allegro | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
+| 8 | Kimi Moderato | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 9 | ChatGPT Pro 20x | Codex / Web | sources disagree on GPT-6 Astra; 2 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 gateway panel, Sept); GPT-6 Astra: 1 screenshot, Sept; 3 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
-| 10 | MiniMax M Plan Build (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | No kit yet |
-| 11 | MiniMax M Plan Explore (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | No kit yet |
+| 10 | MiniMax M Plan Build (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
+| 11 | MiniMax M Plan Explore (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
 | 12 | Cursor Pro+ | Cursor IDE | borrowed from Grok 4.6 on Cursor Ultra (1 account, Sept); older than 60 days | Grok 4.6 | No kit yet |
-| 13 | Kimi Max | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | No kit yet |
-| 14 | Kimi Plus | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | No kit yet |
-| 15 | Kimi Pro | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | No kit yet |
-| 16 | Kimi Ultra | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | No kit yet |
+| 13 | Kimi Max | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
+| 14 | Kimi Plus | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
+| 15 | Kimi Pro | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
+| 16 | Kimi Ultra | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 17 | Google AI Pro | Gemini CLI / Web | sources disagree on Gemini 3.8 Flash; 3 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); Gemini 3.8 Flash: 3 accounts, Sept; 1 of 5 models older than 60 days | Gemini 3.8 Flash | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
 | 18 | Droid Pro | Factory Droid CLI | 1 tweet, Sept; low confidence; older than 60 days | Claude Opus 5.5 | No kit yet |
 | 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | No kit yet |
@@ -35,37 +35,37 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 27 | X Ultra | Grok Web / App | Grok 4.7: Priors, Sept; 1 of 2 models low confidence; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 28 | Google AI Ultra 20x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
 | 29 | Google AI Ultra 5x | Gemini CLI / Web | 4 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); 1 of 5 models low confidence; 1 of 5 models older than 60 days | Gemini 4 Carbon | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
-| 30 | Ollama Max | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
-| 31 | Ollama Pro | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
+| 30 | Ollama Max | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 31 | Ollama Pro | Any CLI / API | no measurement, official quota table only; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 32 | OpenCode Go | OpenCode / API | no measurement, official quota table only; 1 of 19 models low confidence | Claude Haiku 5.5 | No kit yet |
 | 33 | Command Code Max 10× | Command Code CLI | no measurement, official quota table only | Muse Wonder | No kit yet |
-| 34 | MiniMax M Plan Go (CN) | Any CLI / API | 1 screenshot, Oct; low confidence | MiniMax-M3.1-Flash | No kit yet |
-| 35 | 阿里云百炼 Token Plan Essential (¥79) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | No kit yet |
-| 36 | 阿里云百炼 Token Plan Pro (¥312) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | No kit yet |
-| 37 | 阿里云百炼 Token Plan Standard (¥139) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | No kit yet |
-| 38 | GLM Coding Lite ¥118 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
-| 39 | GLM Coding Max ¥1078 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
-| 40 | GLM Coding Pro ¥538 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
+| 34 | MiniMax M Plan Go (CN) | Any CLI / API | 1 screenshot, Oct; low confidence | MiniMax-M3.1-Flash | [Kit: API plans (automatic)](api-plan/README.md) |
+| 35 | 阿里云百炼 Token Plan Essential (¥79) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 36 | 阿里云百炼 Token Plan Pro (¥312) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 37 | 阿里云百炼 Token Plan Standard (¥139) | Any CLI / API | no measurement, official quota table only | DeepSeek V4.1 Flash 1017 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 38 | GLM Coding Lite ¥118 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 39 | GLM Coding Max ¥1078 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 40 | GLM Coding Pro ¥538 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 41 | ChatGPT Pro 10x | Codex / Web | 3 of 8 models borrowed; GPT-6 Astra from GPT 5.6 Sol; 2 of 8 models low confidence; 2 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
-| 42 | MiMo Token Plan Lite | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
-| 43 | MiMo Token Plan Max | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
-| 44 | MiMo Token Plan Pro | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
-| 45 | MiMo Token Plan Standard | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
-| 46 | Step Plan Max (¥699) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | No kit yet |
-| 47 | Step Plan Mini (¥49) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | No kit yet |
-| 48 | Step Plan Plus (¥99) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | No kit yet |
-| 49 | Step Plan Pro (¥199) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | No kit yet |
-| 50 | MiniMax Token Plan Max | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
-| 51 | MiniMax Token Plan Max (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
-| 52 | MiniMax Token Plan Plus | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
-| 53 | MiniMax Token Plan Plus (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
-| 54 | MiniMax Token Plan Ultra | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
-| 55 | MiniMax Token Plan Ultra (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | No kit yet |
+| 42 | MiMo Token Plan Lite | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | [Kit: API plans (automatic)](api-plan/README.md) |
+| 43 | MiMo Token Plan Max | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | [Kit: API plans (automatic)](api-plan/README.md) |
+| 44 | MiMo Token Plan Pro | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | [Kit: API plans (automatic)](api-plan/README.md) |
+| 45 | MiMo Token Plan Standard | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | [Kit: API plans (automatic)](api-plan/README.md) |
+| 46 | Step Plan Max (¥699) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | [Kit: API plans (manual)](api-plan/README.md) |
+| 47 | Step Plan Mini (¥49) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | [Kit: API plans (manual)](api-plan/README.md) |
+| 48 | Step Plan Plus (¥99) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | [Kit: API plans (manual)](api-plan/README.md) |
+| 49 | Step Plan Pro (¥199) | Any CLI / API | no measurement, official quota table only | Step 5 Preview | [Kit: API plans (manual)](api-plan/README.md) |
+| 50 | MiniMax Token Plan Max | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 51 | MiniMax Token Plan Max (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 52 | MiniMax Token Plan Plus | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 53 | MiniMax Token Plan Plus (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 54 | MiniMax Token Plan Ultra | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
+| 55 | MiniMax Token Plan Ultra (Global) | Any CLI / API | no measurement, official quota table only | MiniMax-M3 | [Kit: API plans (automatic)](api-plan/README.md) |
 | 56 | ChatGPT Plus | Codex / Web | 1 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 account, July); GPT-6 Astra: 2 accounts, Sept; 1 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 57 | SuperGrok | Grok Web / App | Grok 4.7: 1 account, Sept; both models older than 60 days | Grok 4.7 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 58 | Cursor Pro | Cursor IDE | 1 account, Aug; older than 60 days | Grok 4.6 | No kit yet |
 | 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | No kit yet |
-| 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | No kit yet |
+| 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | [Kit: API plans (automatic)](api-plan/README.md) |
 | 61 | ChatGPT Pro 500 | Codex / Web | GPT-6 Astra: Priors, Sept; 1 of 8 models low confidence; 4 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 62 | Mistral Vibe Pro | Le Chat / Vibe | DeepSeek V4.1 Flash 1017: Priors, 1 user, Nov; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
 | 63 | Devin Pro | Devin Agent | Claude Haiku 5.5: 1 account, Oct; 1 of 5 models low confidence | Claude Haiku 5.5 | No kit yet |

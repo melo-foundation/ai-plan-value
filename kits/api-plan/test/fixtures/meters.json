@@ -1,0 +1,97 @@
+{
+  "_about": "Meter responses in their recorded shapes. Sources: glm = zai-org/zai-coding-plugins query-usage.mjs + CodexBar Plugins/zai.js; minimax = CodexBar MiniMaxModelRemains.swift; bailian = CodexBar OneConsoleTokenPlanSnapshot.swift; deeprelay = deeprelay.ai/docs/cli/deeprelay_billing_subscription; ollama = docs.ollama.com/api/balance; mimo = mimo.mi.com/docs/en-US/api/asset/credits-get. Values are made up.",
+  "glm": {
+    "code": 200,
+    "msg": "Operation successful",
+    "data": {
+      "limits": [
+        { "type": "TIME_LIMIT", "unit": 5, "number": 1, "usage": 1000, "currentValue": 12, "remaining": 988, "percentage": 1, "usageDetails": [{ "modelCode": "search-prime", "usage": 12 }] },
+        { "type": "TOKENS_LIMIT", "unit": 6, "number": 1, "percentage": 41, "nextResetTime": 1764806400000 },
+        { "type": "TOKENS_LIMIT", "unit": 3, "number": 5, "percentage": 23, "nextResetTime": 1764337200000 }
+      ],
+      "planName": "Lite"
+    },
+    "success": true
+  },
+  "glmNoUnits": {
+    "data": { "limits": [{ "type": "TOKENS_LIMIT", "percentage": 7 }, { "type": "TOKENS_LIMIT", "percentage": 2 }] }
+  },
+  "minimax": {
+    "model_remains": [
+      { "model_name": "speech-2.8-hd", "current_interval_total_count": 0, "current_interval_usage_count": 0 },
+      {
+        "model_name": "MiniMax-M*",
+        "start_time": 1764316800000,
+        "end_time": 1764334800000,
+        "remains_time": 9120000,
+        "current_interval_total_count": 1500,
+        "current_interval_usage_count": 1137,
+        "current_weekly_total_count": 15000,
+        "current_weekly_usage_count": 13650,
+        "weekly_start_time": 1764028800000,
+        "weekly_end_time": 1764633600000,
+        "weekly_remains_time": 316800000
+      }
+    ],
+    "base_resp": { "status_code": 0, "status_msg": "success" }
+  },
+  "minimaxPercent": {
+    "data": {
+      "model_remains": [{ "model_name": "MiniMax-M*", "current_interval_used_percent": "12%", "end_time": 1764334800000, "current_weekly_used_percent": 7.5, "weekly_end_time": 1764633600000 }]
+    },
+    "base_resp": { "status_code": 0, "status_msg": "success" }
+  },
+  "minimaxBadKey": { "base_resp": { "status_code": 1004, "status_msg": "invalid api key" } },
+  "bailian": {
+    "requestId": "0F1E2D3C-0000-0000-0000-000000000000",
+    "hasQuotaData": true,
+    "data": {
+      "specCode": "lite",
+      "usage": "{\"per5HourPercentage\":0.1234,\"per5HourResetTime\":1764334800000,\"per1WeekPercentage\":0.0567,\"per1WeekResetTime\":1764633600000,\"per1MonthPercentage\":0.021,\"per1MonthResetTime\":\"2026-12-01T00:00:00Z\"}"
+    }
+  },
+  "bailianNoPlan": { "hasQuotaData": false },
+  "deeprelay": {
+    "subscribed": true,
+    "status": "active",
+    "cancel_at_period_end": false,
+    "plan": { "id": "base", "name": "Base" },
+    "quota": { "input_tokens_monthly": 500000000, "output_tokens_monthly": 50000000, "input_tokens_weekly": 125000000, "output_tokens_weekly": 12500000 },
+    "plans": [],
+    "usage": {
+      "weighted_input_tokens": 41250000,
+      "week_start": "2026-11-24T10:00:00Z",
+      "week_resets_at": "2026-12-01T10:00:00Z",
+      "by_model": [
+        { "model": "deepseek-v4.1-flash", "input_tokens": 40000000, "cached_input_tokens": 30000000, "output_tokens": 900000, "usage_factor_milli": 1000, "weighted_input_tokens": 40000000, "weighted_output_tokens": 900000 },
+        { "model": "glm-5.3", "input_tokens": 500000, "cached_input_tokens": 0, "output_tokens": 20000, "usage_factor_milli": 2500, "weighted_input_tokens": 1250000, "weighted_output_tokens": 50000 }
+      ],
+      "weekly_by_model": [
+        { "model": "deepseek-v4.1-flash", "input_tokens": 9000000, "cached_input_tokens": 7000000, "output_tokens": 200000, "usage_factor_milli": 1000, "weighted_input_tokens": 9000000, "weighted_output_tokens": 200000 }
+      ]
+    },
+    "renew_via_checkout": false,
+    "renew_from_balance": false,
+    "balance_payment": { "balance_cents": 0, "spendable_cents": 0, "free_credit_cents": 0, "pending_deposit_cents": 0, "pending_until": null }
+  },
+  "deeprelayUnsubscribed": { "subscribed": false, "status": "none", "quota": null, "usage": null },
+  "ollama": {
+    "included": { "balance_usd": 72.5, "allowance_usd": 100, "period": { "from": "2026-09-15T09:30:00Z", "until": "2026-10-15T09:30:00Z" } },
+    "purchased": { "balance_usd": 25 }
+  },
+  "ollamaLegacy": {
+    "included": {
+      "session": { "remaining_percent": 75, "resets_at": "2026-10-01T07:00:00Z" },
+      "weekly": { "remaining_percent": 40, "resets_at": "2026-10-05T00:00:00Z" }
+    },
+    "purchased": { "balance_usd": 25 }
+  },
+  "mimo": {
+    "object": "token_plan",
+    "plan_code": "standard",
+    "period": { "start_at": "2026-11-01 00:00:00", "end_at": "2026-12-01 00:00:00" },
+    "quota": { "total_credits": 60000000, "used_credits": 4500000, "remaining_credits": 55500000 },
+    "auto_renew": true,
+    "claw_enabled": false
+  }
+}
