@@ -6,11 +6,12 @@
 
 import os from "node:os";
 import { fitReadings, idleMoves, priceUsage } from "./fit.mjs";
+import { MIN_STOP_STEPS, relHalfWidth } from "./stop.mjs";
 import { roundDeep, SECRET_RES } from "./util.mjs";
 
 export const RESULT_SCHEMA = "harness-quota.result/1";
 export const RUN_SCHEMA = "harness-quota.run/1";
-export const MIN_STEPS = 6;
+export const MIN_STEPS = MIN_STOP_STEPS;
 
 /** Cumulative API $ after each task, and token / $ totals. */
 export function priceTasks(tasks, price, expectedModel, sameModel = (a, b) => a === b) {
@@ -95,6 +96,11 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
   if (win.epochs > 1) flag("window_reset", "warning", `${win.window} window reset ${win.epochs - 1}× during the run; one intercept per window`);
   for (const s of win.shortSteps || []) flag("meter_jump", "error", `meter ran ${s.extraPp} pp ahead of usage at ${s.ts}`);
   if (win.usable && win.usdPerPp.bounds === null) flag("not_exactly_linear", "info", "no single line through every step; the meter does not follow API $ exactly");
+
+  // stopping rule (runs from kit 1.1.0): the cap stopped the run before ±precision
+  const rule = m.stopRule || null;
+  const pctOf = (x) => `±${Math.round(x * 1000) / 10}%`;
+  if (rule && !rule.reached && (m.tasks || []).length) flag("low_precision", "warning", `95% interval ${rule.halfWidth == null ? "not reached" : pctOf(rule.halfWidth)} of the estimate on the ${rule.stopWindow ?? rule.window} meter at the stop; target ${pctOf(rule.precision)}`);
 
   const idle = idleMoves(m.idle, readings, win.readingStep || 0);
   for (const it of idle) if (it.moved) flag("meter_moved_idle", "error", `meter moved ${it.before} → ${it.after} during idle check (${it.phase})`);
@@ -185,6 +191,7 @@ export function analyse({ manifest: m, price, fee, site = null, sameModel }) {
     usd: priced.usd,
     usdShare: priced.usd.total > 0 ? { uncachedInput: priced.usd.uncachedInput / priced.usd.total, cachedInput: priced.usd.cachedInput / priced.usd.total, output: priced.usd.output / priced.usd.total } : null,
     models: Object.fromEntries(Object.entries(priced.byModel).map(([k, v]) => [k, { calls: v.calls, usd: v.usd }])),
+    precision: rule ? { target: rule.precision, maxPct: rule.maxPct, reached: !!rule.reached, halfWidthAtStop: rule.halfWidth, stopWindow: rule.stopWindow ?? rule.window, usedPp: rule.usedPp, halfWidth: relHalfWidth(win) } : null,
     readings: readings.map((r) => ({ ts: new Date(r.ts).toISOString(), pct: r.pct, usd: r.usd, mode: r.mode })),
     fit: win,
     subsidy,

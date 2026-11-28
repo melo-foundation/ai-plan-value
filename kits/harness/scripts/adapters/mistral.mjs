@@ -152,6 +152,5 @@ export default {
       },
     },
   },
-  pacing: { targetPp: 5, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+5 pp of the monthly budget" },
+  pacing: { every: 5 },
 };

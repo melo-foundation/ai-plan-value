@@ -164,6 +164,7 @@ export default {
     unit: "% of the monthly Token Plan quota",
     windows: { monthly: { perMonth: 1 }, weekly: { perMonth: 4 }, "5h": { perMonth: null } },
     window: "monthly",
+    fineWindow: "5h",
     note: "Token Plan windows are 5-hour, 7-day and monthly; the subsidy uses 100 × monthly $/pp (or 7-day × 4).",
     manual: {
       where: "the monthly % in the Bailian console Token Plan page",
@@ -179,6 +180,5 @@ export default {
       },
     },
   },
-  pacing: { targetPp: 2, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+2 pp of the monthly quota" },
+  pacing: { every: 5 },
 };

@@ -26,14 +26,14 @@ The last line is the Claude Code check: it prints the meters it read; send them 
 |---|---|---|---|---|
 | Claude Pro, Max, Ultra, Team | [Claude Code](claude-code/README.md) | automatic | 12% of the weekly limit | Tested: Ultra (2026-11-28). Untested: Pro, Max, Team |
 | ChatGPT Plus, Pro 10x, Pro 20x, Pro 500 | [Codex CLI](codex/README.md) | automatic | Plus 20% of the weekly limit; Pro 6% | Tested: Plus (2026-11-27). Untested: Pro 10x, Pro 20x, Pro 500 |
-| Google AI Pro, Ultra 5x, Ultra 20x | [Gemini CLI](harness/README.md) | typed in¹ | 25% of one day's limit | Untested |
-| SuperGrok, X Plus, X Ultra | [Grok Build](harness/README.md) | typed in¹ | 10% of the weekly limit | Untested |
-| Droid Pro, Max | [Droid](harness/README.md) | typed in | 10% of the weekly limit | Untested |
-| Mistral Vibe Pro | [Mistral Vibe](harness/README.md) | typed in¹ | 5% of the monthly limit | Untested |
-| Kimi, 百炼 / Qwen Token Plan | [Kimi Code, Qwen Code](harness/README.md) | typed in¹ | 2% of the monthly limit | Untested |
-| Cursor Pro, Pro+, Ultra | [Cursor CLI](harness/README.md) | typed in | 10% of the monthly included usage | Untested |
-| Devin Pro, Max | [Devin](harness/README.md) | typed in | 10% of one day's (Pro) or week's (Max) limit | Untested |
-| Muse Code (not on the site yet) | [Muse Code](harness/README.md) | typed in¹ | 10% of the weekly limit | Untested |
+| Google AI Pro, Ultra 5x, Ultra 20x | [Gemini CLI](harness/README.md) | typed in¹ | up to 5% of the limit | Untested |
+| SuperGrok, X Plus, X Ultra | [Grok Build](harness/README.md) | typed in¹ | up to 5% of the limit | Untested |
+| Droid Pro, Max | [Droid](harness/README.md) | typed in | up to 5% of the limit | Untested |
+| Mistral Vibe Pro | [Mistral Vibe](harness/README.md) | typed in¹ | up to 5% of the limit | Untested |
+| Kimi, 百炼 / Qwen Token Plan | [Kimi Code, Qwen Code](harness/README.md) | typed in¹ | up to 5% of the limit | Untested |
+| Cursor Pro, Pro+, Ultra | [Cursor CLI](harness/README.md) | typed in | up to 5% of the limit | Untested |
+| Devin Pro, Max | [Devin](harness/README.md) | typed in | up to 5% of the limit | Untested |
+| Muse Code (not on the site yet) | [Muse Code](harness/README.md) | typed in¹ | up to 5% of the limit | Untested |
 | Kimi, GLM Coding, MiniMax, 百炼 / Qwen Token Plan, DeepRelay, Ollama Cloud, Step Plan, MiMo Token Plan | [API key, no harness](api-plan/README.md) | automatic; typed in for Kimi and Step | 1% of the monthly limit; GLM 5% and MiniMax 3% of the weekly limit | Untested |
 
 ¹ `--auto-meter` reads it automatically through an unofficial route.

@@ -183,7 +183,7 @@ test("vibe command: -p, --workdir, accept-edits, --output-dir per task; --thinki
 
 test("droid, manual meter: β recovered, tasks in their folders, clean result", async () => {
   const s = setup("droid-manual", "droid", "fake-droid.mjs", 10.2);
-  const r = await drive(["run", "--harness", "factory", "--plan", "Droid Pro", "--bin", s.bin, "--tag", "dm", "--every", "2", "--target-pp", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.15" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "factory", "--plan", "Droid Pro", "--bin", s.bin, "--tag", "dm", "--every", "2", "--max-pct", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.15" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("dm");
   assert.equal(res.meter.mode, "manual");
@@ -207,7 +207,7 @@ test("droid: --auto-meter is refused (no machine-readable meter)", async () => {
 test("kimi, manual meter: per-call tokens from the session wire.jsonl (main + subagent)", async () => {
   const s = setup("kimi-manual", "kimi", "fake-kimi.mjs", 20.1);
   const home = path.join(s.root, "kimi-home");
-  const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "km", "--every", "2", "--target-pp", "12", ...common], { env: { ...s.env, KIMI_CODE_HOME: home, FAKE_BETA: "0.2" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "km", "--every", "2", "--max-pct", "12", ...common], { env: { ...s.env, KIMI_CODE_HOME: home, FAKE_BETA: "0.2" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("km");
   assert.ok(!codes(res).includes("tokens_per_task"), JSON.stringify(res.flags));
@@ -221,15 +221,37 @@ test("kimi, --auto-meter through /usages with $KIMI_CODE_API_KEY: key sent, neve
   const home = path.join(s.root, "kimi-home");
   const api = await fakeApi(s.meter, { path: "/coding/v1/usages", body: (used) => ({ usages: { limit_5h: { used_ratio: 0.01 }, limit_month_total: { used_ratio: used / 100, reset_time: new Date(Date.now() + 9 * 86400000).toISOString() } } }) });
   try {
-    const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "ka", "--auto-meter", "--target-pp", "4", ...common], { env: { ...s.env, KIMI_CODE_HOME: home, KIMI_CODE_BASE_URL: `${api.url}/coding/v1`, KIMI_CODE_API_KEY: SECRET, FAKE_BETA: "0.2" }, meter: s.meter });
+    const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "ka", "--auto-meter", "--max-pct", "4", ...common], { env: { ...s.env, KIMI_CODE_HOME: home, KIMI_CODE_BASE_URL: `${api.url}/coding/v1`, KIMI_CODE_API_KEY: SECRET, FAKE_BETA: "0.2" }, meter: s.meter });
     assert.equal(r.code, 0, r.stderr + r.stdout);
     assert.equal(r.prompts.length, 0, r.stdout);
     assert.ok(api.auth.length > 0 && api.auth.every((h) => h === `Bearer ${SECRET}`));
     const res = s.result("ka");
     assert.equal(res.meter.mode, "auto");
-    assert.ok(within(res.fit.usdPerPp.est, 0.2, 0.05), String(res.fit.usdPerPp.est));
+    assert.ok(res.fit.usdPerPp.ci95[0] <= 0.2 && 0.2 <= res.fit.usdPerPp.ci95[1] && within(res.fit.usdPerPp.est, 0.2, 0.1), JSON.stringify(res.fit.usdPerPp));
+    assert.equal(res.precision.reached, true, JSON.stringify(res.precision));
+    assert.equal(res.run.stopReason, "precision reached");
     for (const t of [r.stdout, r.stderr, s.resultText("ka"), s.manifestText("ka")]) assert.ok(!t.includes(SECRET), "token leaked");
     assertClean(s.resultText("ka"), s.root);
+  } finally {
+    await api.close();
+  }
+});
+
+test("kimi, --auto-meter: whole-% monthly meter, decimal 5h meter → the stop test uses 5h; the subsidy stays monthly", async () => {
+  const s = setup("kimi-fine", "kimi", "fake-kimi.mjs", 20.1);
+  const home = path.join(s.root, "kimi-home");
+  const api = await fakeApi(s.meter, { path: "/coding/v1/usages", body: (used) => ({ usages: { limit_5h: { used_ratio: ((used - 20.1) * 5 + 2) / 100 }, limit_month_total: { used_ratio: Math.floor(used) / 100 } } }) });
+  try {
+    const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "kn", "--auto-meter", ...common], { env: { ...s.env, KIMI_CODE_HOME: home, KIMI_CODE_BASE_URL: `${api.url}/coding/v1`, KIMI_CODE_API_KEY: SECRET, FAKE_BETA: "0.4" }, meter: s.meter });
+    assert.equal(r.code, 0, r.stderr + r.stdout);
+    assert.match(r.stdout, /\(5h or monthly meter\)/);
+    const res = s.result("kn");
+    assert.equal(res.run.stopReason, "precision reached", JSON.stringify(res.precision));
+    assert.equal(res.precision.stopWindow, "5h");
+    assert.ok(res.precision.usedPp < 5);
+    assert.equal(res.meter.window, "monthly");
+    const manifest = JSON.parse(s.manifestText("kn"));
+    assert.ok(manifest.readings.every((x) => Number.isFinite(x.fine?.pct)));
   } finally {
     await api.close();
   }
@@ -239,7 +261,7 @@ test("kimi, --auto-meter HTTP 401 falls back to manual with what to run", async 
   const s = setup("kimi-401", "kimi", "fake-kimi.mjs", 20.1);
   const api = await fakeApi(s.meter, { path: "/coding/v1/usages", status: 401, body: () => ({ error: `bad token ${SECRET}` }) });
   try {
-    const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "kf", "--auto-meter", "--every", "2", "--target-pp", "3", ...common], { env: { ...s.env, KIMI_CODE_HOME: path.join(s.root, "h"), KIMI_CODE_BASE_URL: `${api.url}/coding/v1`, KIMI_CODE_API_KEY: SECRET, FAKE_BETA: "0.2" }, meter: s.meter });
+    const r = await drive(["run", "--harness", "kimi", "--plan", "Kimi Pro", "--bin", s.bin, "--tag", "kf", "--auto-meter", "--every", "2", "--max-pct", "3", ...common], { env: { ...s.env, KIMI_CODE_HOME: path.join(s.root, "h"), KIMI_CODE_BASE_URL: `${api.url}/coding/v1`, KIMI_CODE_API_KEY: SECRET, FAKE_BETA: "0.2" }, meter: s.meter });
     assert.equal(r.code, 0, r.stderr + r.stdout);
     assert.match(r.stdout, /auto meter failed: Kimi \/usages HTTP 401: run `kimi login`.*switching to manual/);
     assert.ok(!r.stdout.includes(SECRET));
@@ -251,7 +273,7 @@ test("kimi, --auto-meter HTTP 401 falls back to manual with what to run", async 
 
 test("qwen, manual meter: per-call tokens from telemetry; CNY plan fee from the site in USD", async () => {
   const s = setup("qwen-manual", "qwen", "fake-qwen.mjs", 3.4);
-  const r = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Standard (¥139)", "--bin", s.bin, "--tag", "qm", "--every", "2", "--target-pp", "12", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Standard (¥139)", "--bin", s.bin, "--tag", "qm", "--every", "2", "--max-pct", "12", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("qm");
   assert.ok(!codes(res).includes("tokens_per_task"), JSON.stringify(res.flags));
@@ -262,7 +284,7 @@ test("qwen, manual meter: per-call tokens from telemetry; CNY plan fee from the 
 
 test("qwen: no telemetry file → tokens from the JSON stats, flagged per task", async () => {
   const s = setup("qwen-json", "qwen", "fake-qwen.mjs", 3.4);
-  const r = await drive(["run", "--harness", "qwen", "--plan", "Qwen Token Plan Standard", "--bin", s.bin, "--tag", "qj", "--every", "2", "--target-pp", "6", "--qwen-sandbox", "docker", ...common], { env: { ...s.env, FAKE_NO_TELEMETRY: "1", FAKE_BETA: "0.2" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "qwen", "--plan", "Qwen Token Plan Standard", "--bin", s.bin, "--tag", "qj", "--every", "2", "--max-pct", "6", "--qwen-sandbox", "docker", ...common], { env: { ...s.env, FAKE_NO_TELEMETRY: "1", FAKE_BETA: "0.2" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("qj");
   assert.ok(codes(res).includes("tokens_per_task"));
@@ -272,15 +294,15 @@ test("qwen: no telemetry file → tokens from the JSON stats, flagged per task",
 test("qwen, --auto-meter through bl usage token-plan; bl failure falls back to manual, redacted", async () => {
   const s = setup("qwen-auto", "qwen", "fake-qwen.mjs", 3.4);
   const bl = fakeBin(s.root, "bl", "fake-bl.mjs");
-  const r = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Lite (¥39)", "--bin", s.bin, "--bl", bl, "--tag", "qa", "--auto-meter", "--target-pp", "4", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Lite (¥39)", "--bin", s.bin, "--bl", bl, "--tag", "qa", "--auto-meter", "--max-pct", "4", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   assert.equal(r.prompts.length, 0, r.stdout);
   const res = s.result("qa");
   assert.equal(res.meter.mode, "auto");
-  assert.ok(within(res.fit.usdPerPp.est, 0.2, 0.05), String(res.fit.usdPerPp.est));
+  assert.ok(within(res.fit.usdPerPp.est, 0.2, 0.1) && res.fit.usdPerPp.ci95[0] <= 0.2 && 0.2 <= res.fit.usdPerPp.ci95[1], JSON.stringify(res.fit.usdPerPp));
   assert.ok(!codes(res).includes("period_mismatch"));
 
-  const f = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Lite (¥39)", "--bin", s.bin, "--bl", bl, "--tag", "qf", "--auto-meter", "--every", "2", "--target-pp", "3", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2", FAKE_BL_FAIL: "1" }, meter: s.meter });
+  const f = await drive(["run", "--harness", "qwen", "--plan", "阿里云百炼 Token Plan Lite (¥39)", "--bin", s.bin, "--bl", bl, "--tag", "qf", "--auto-meter", "--every", "2", "--max-pct", "3", "--qwen-sandbox", "sandbox-exec", ...common], { env: { ...s.env, FAKE_BETA: "0.2", FAKE_BL_FAIL: "1" }, meter: s.meter });
   assert.equal(f.code, 0, f.stderr + f.stdout);
   assert.match(f.stdout, /auto meter failed: bl usage token-plan --output json exited 1: .*\[redacted\].*switching to manual/);
   assert.ok(!/sk-sp-|user@example\.com/.test(f.stdout + s.resultText("qf") + s.manifestText("qf")), "secret leaked");
@@ -288,7 +310,7 @@ test("qwen, --auto-meter through bl usage token-plan; bl failure falls back to m
 
 test("vibe, manual meter: per-task tokens from export.json (root + subagent)", async () => {
   const s = setup("vibe-manual", "vibe", "fake-vibe.mjs", 5.3);
-  const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "vm", "--every", "2", "--target-pp", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.1" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "vm", "--every", "2", "--max-pct", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.1" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("vm");
   assert.ok(codes(res).includes("tokens_per_task"));
@@ -302,20 +324,20 @@ test("vibe, --auto-meter through billing/budget with $MISTRAL_API_KEY; 403 falls
   const s = setup("vibe-auto", "vibe", "fake-vibe.mjs", 5.3);
   const ok = await fakeApi(s.meter, { path: "/v1/billing/budget", body: (used) => ({ vibe_budget: { usage_percentage: used, initial_budget: 25, reset_at: new Date(Date.now() + 9 * 86400000).toISOString(), payg_enabled: false } }) });
   try {
-    const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "va", "--auto-meter", "--target-pp", "4", ...common], { env: { ...s.env, HARNESS_QUOTA_MISTRAL_BASE: `${ok.url}/v1`, MISTRAL_API_KEY: SECRET, FAKE_BETA: "0.1" }, meter: s.meter });
+    const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "va", "--auto-meter", "--max-pct", "4", ...common], { env: { ...s.env, HARNESS_QUOTA_MISTRAL_BASE: `${ok.url}/v1`, MISTRAL_API_KEY: SECRET, FAKE_BETA: "0.1" }, meter: s.meter });
     assert.equal(r.code, 0, r.stderr + r.stdout);
     assert.equal(r.prompts.length, 0, r.stdout);
     assert.ok(ok.auth.every((h) => h === `Bearer ${SECRET}`));
     const res = s.result("va");
     assert.equal(res.meter.mode, "auto");
-    assert.ok(within(res.fit.usdPerPp.est, 0.1, 0.05), String(res.fit.usdPerPp.est));
+    assert.ok(within(res.fit.usdPerPp.est, 0.1, 0.1) && res.fit.usdPerPp.ci95[0] <= 0.1 && 0.1 <= res.fit.usdPerPp.ci95[1], JSON.stringify(res.fit.usdPerPp));
     for (const t of [r.stdout, s.resultText("va"), s.manifestText("va")]) assert.ok(!t.includes(SECRET), "key leaked");
   } finally {
     await ok.close();
   }
   const no = await fakeApi(s.meter, { path: "/v1/billing/budget", status: 403, body: () => ({ detail: "forbidden" }) });
   try {
-    const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "vf", "--auto-meter", "--every", "2", "--target-pp", "3", ...common], { env: { ...s.env, HARNESS_QUOTA_MISTRAL_BASE: `${no.url}/v1`, MISTRAL_API_KEY: SECRET, FAKE_BETA: "0.1" }, meter: s.meter });
+    const r = await drive(["run", "--harness", "mistral", "--plan", "Mistral Vibe Pro", "--bin", s.bin, "--tag", "vf", "--auto-meter", "--every", "2", "--max-pct", "3", ...common], { env: { ...s.env, HARNESS_QUOTA_MISTRAL_BASE: `${no.url}/v1`, MISTRAL_API_KEY: SECRET, FAKE_BETA: "0.1" }, meter: s.meter });
     assert.equal(r.code, 0, r.stderr + r.stdout);
     assert.match(r.stdout, /auto meter failed: Mistral billing\/budget HTTP 403: the key lacks see_org_inference_usage; switching to manual/);
   } finally {

@@ -97,7 +97,7 @@ test("every adapter plan has a fee and every default model a price; kit.json mat
     assert.ok(priceFor(site, ad.siteModelId(ad.models.default)).input > 0);
     const need = ad.runTask ? ["id", "name", "install", "login", "version", "procMatch", "preflight", "siteModelId", "sameModel", "runTask", "describeTask"] : ["id", "name", "bin", "install", "login", "version", "procMatch", "preflight", "siteModelId", "sameModel", "command", "parseUsage"];
     for (const k of need) assert.ok(ad[k] != null, `${h.id}.${k}`);
-    assert.ok(ad.meter.manual.where && ad.meter.unit && ad.pacing.targetPp > 0);
+    assert.ok(ad.meter.manual.where && ad.meter.unit && ad.pacing.every > 0 && !("targetPp" in ad.pacing));
   }
 });
 

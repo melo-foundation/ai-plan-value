@@ -186,6 +186,7 @@ export default {
     unit: "% of the monthly total",
     windows: { monthly: { perMonth: 1 }, weekly: { perMonth: 5 }, "5h": { perMonth: null } },
     window: "monthly",
+    fineWindow: "5h",
     note: "Kimi plans: rolling 5-hour window and a monthly pool (legacy plans: weekly); the subsidy uses 100 × monthly $/pp, or weekly × 5 on legacy plans (the API plan kit's convention).",
     manual: {
       where: "the Monthly limit % in `/usage` in an interactive `kimi` session",
@@ -200,6 +201,5 @@ export default {
       },
     },
   },
-  pacing: { targetPp: 2, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+2 pp of the monthly total" },
+  pacing: { every: 5 },
 };

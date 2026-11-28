@@ -19,7 +19,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 - Node.js 20 or newer.
 - The harness installed and logged in with that plan's account.
 - A plain terminal, not one inside Claude Code, Codex or an IDE agent.
-- Meter below 85% minus the target at the start.
+- Meter below 80% at the start.
 
 ## Harnesses
 
@@ -39,7 +39,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 | Where to read it (manual) | `/stats model` in an interactive `gemini` session: the model's usage (screen format unverified) | [grok.com](https://grok.com) > Settings > Usage: the weekly % |
 | Tokens | per call from the telemetry file; per task from `--output-format json` when the file is missing | per task from `--output-format json` |
 | Sandbox | `--sandbox` with `GEMINI_SANDBOX` = `docker`, `podman` or `sandbox-exec` (macOS), `--approval-mode yolo` | `--sandbox strict`, `--permission-mode bypassPermissions` |
-| Typical run (unverified) | 1–3 h, +25 pp of one day | 1–3 h, +10 pp of one week |
+| Run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run |
 
 | | Factory Droid | Kimi Code | Qwen Code | Mistral Vibe |
 |---|---|---|---|---|
@@ -57,7 +57,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 | Where to read it (manual) | `/limits` in an interactive `droid` session: the 7-day % (screen format unverified) | `/usage` in an interactive `kimi` session: Monthly limit | [Bailian console](https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/token-plan) > Token Plan: the monthly % | [console](https://console.mistral.ai) > Code > CLI > View organization usage, or the usage gauge in the `vibe` footer (menu path unverified) |
 | Tokens | per task from `-o json` (`input_tokens` read as uncached, unverified); the requested model is recorded | per call from `~/.kimi-code/sessions/*/<session>/agents/*/wire.jsonl` | per call from the telemetry file; per task from `--output-format json` when the file is missing (always missing with Docker or Podman, unverified) | per task from `--output-dir` `export.json`; the requested model is recorded |
 | Sandbox | `--settings` file with `sandbox.enabled: true`, `mode: "whole-process"`; `--auto medium` | none: writes are not confined to the task folder; `-p` runs with `auto` permission | `--sandbox` with `QWEN_SANDBOX` = `docker`, `podman` or `sandbox-exec` (macOS), `--approval-mode yolo` | none on the host; `--approval-policy accept-edits` approves file edits inside the task folder and denies everything that asks (shell commands, paths outside) |
-| Typical run (unverified) | 1–3 h, +10 pp of one week | 1–3 h, +2 pp of one month | 1–3 h, +2 pp of one month | 1–3 h, +5 pp of one month |
+| Run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run |
 
 | | Muse Code | Cursor CLI | Devin |
 |---|---|---|---|
@@ -75,7 +75,7 @@ Use your `--harness` and `--plan` from the tables below, plus the Required input
 | Tokens | per call or per task from `muse exec --json` (field names unverified) | per task from the `usage` object of `--output-format json` (undocumented; reported on the Cursor forum) | none |
 | Cost per task | API $ from tokens | API $ from tokens | ACUs per session: typed by hand (paste mode) or `acus_consumed` from the v3 API (`--devin-api`) |
 | Sandbox | default sandbox (writes to the task folder and temp only), `--disable-approval`, `--trust-workspace` (unverified) | `--sandbox enabled`, `--force`, `--trust`, `--workspace <task folder>` | Devin's cloud machine |
-| Typical run (unverified) | 1–3 h, +10 pp of one week | 1–3 h, +10 pp of one month | 2–5 h, +10 pp of one day (Pro) or week (Max) |
+| Run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run | Stops at ±10% precision or 5% of the limit, whichever comes first; time unknown until the first real run |
 
 Devin result: ACUs per task, ACUs per 1% of the quota, monthly ACUs, and $ at `--acu-usd`. It reports no API-$ subsidy.
 
@@ -116,13 +116,15 @@ Run the command from the table, with a tag:
 
     node kits/harness/scripts/harness-quota.mjs run --harness grok --plan "SuperGrok" --tag supergrok-1
 
+The run stops when the 95% interval of API $ per meter point is within ±10% of the estimate (3 meter steps or more), or after +5 points of the plan's meter since the start. A run stopped by the 5-point cap carries the `low_precision` flag.
+
 Gemini CLI: run inside one day.
 
 Cursor CLI: close the Cursor editor too. Muse Code: no image or 3D generation on the account. Devin: no other sessions, Devin CLI or Devin Desktop on the account.
 
 ### Manual readings
 
-The kit asks for the meter before the run, after 5 minutes idle, after every 5 tasks, at the end and after 5 more idle minutes.
+The kit asks for the meter before the run, after 5 minutes idle, after every 5 tasks until the run stops, and after 5 more idle minutes.
 
 | Type | Means |
 |---|---|
@@ -155,7 +157,7 @@ Paste mode (default): the kit prints each task between `==== task … ====` line
 
 ### Automatic readings
 
-With `--auto-meter` the kit reads the meter after every task. If a reading fails, it prints `auto meter failed: <reason>; switching to manual` and asks for manual readings from then on.
+With `--auto-meter` the kit reads the meter after every task; Kimi Code, Qwen Code and Muse Code also read the 5-hour meter for the ±10% test. If a reading fails, it prints `auto meter failed: <reason>; switching to manual` and asks for manual readings from then on.
 
 Press `Ctrl-C` once to stop after the current task, give the final reading and analyse; press it again to quit at once.
 
@@ -173,6 +175,7 @@ Each run writes `kits/harness/results/<tag>.json` and prints a summary. To analy
 | `monthly API value` | 100 × $/pp × 30 (daily) or × 4 (weekly) |
 | `subsidy` | monthly API value ÷ the plan's monthly fee |
 | `measured ÷ site` | your multiple ÷ the site's multiple for the plan and model |
+| `low precision: ±x% at the stop` | the 5-point cap stopped the run before ±10% |
 | `verdict` | `clean`, `check` (warnings) or `contaminated` (errors) |
 
 Devin:
@@ -201,14 +204,16 @@ The result file records `--contributor`, `--included-usd` and `--acu-usd` under 
 | `auto meter failed: Kimi /usages HTTP 401` or `export KIMI_CODE_API_KEY` | export a valid `KIMI_CODE_API_KEY`, or run without `--auto-meter` |
 | `auto meter failed: bl … exited`, `hasQuotaData is false` | run `bl auth login --console` with the account that holds the plan, or pass `--bl <path>` |
 | `auto meter failed: MISTRAL_API_KEY is not set`, `HTTP 403` | export `MISTRAL_API_KEY` with a key that has `see_org_inference_usage`, or type the readings |
-| `meter at N%: +T pp would pass 85%` | run after the reset, or pass a smaller `--target-pp` |
+| `meter at N%: +5 pp would pass 85%` | run after the reset, or pass a smaller `--max-pct` |
 | `auto meter failed: …` | type the readings by hand; send the message with your result |
 | `run <tag> exists` | pick another `--tag` |
 | `no aaPricing for <model>` | pick a `--model` the site prices |
 | `first task made no calls`, `3 failed tasks in a row` | send the `stderr` lines with your result |
 | `meter_moved_idle`, `meter_jump` | close everything else on the account; rerun with a new `--tag` |
 | `window_reset` | rerun inside one window |
-| `window_unusable`, `too_few_steps` | rerun with a larger `--target-pp` or a smaller `--every` |
+| `window_unusable`, `too_few_steps` | rerun with a smaller `--every`, or `--auto-meter` |
+| `low_precision` | send the result as is; for a tighter result rerun with `--auto-meter` or `--every 1` |
+| `--target-pp is gone` | drop `--target-pp`; use `--max-pct` or `--precision` |
 | `model_mismatch` | send the result as is |
 | `plan_mismatch` | rerun with the `--plan` the meter reports |
 | `on_demand` | turn off on-demand credits; rerun after the reset |
@@ -230,8 +235,9 @@ The result file records `--contributor`, `--included-usd` and `--acu-usd` under 
 | `--effort` | Grok Build, Factory Droid, Mistral Vibe: see the tables | `medium`; Mistral `default` |
 | `--auto-meter` | on / off | off |
 | `--every` | tasks between manual readings | 5 |
-| `--target-pp` | meter points to use | Gemini 25, Grok 10, Factory 10, Kimi 2, Qwen 2, Mistral 5 |
-| `--max-pct` | meter % to stop at | 85 |
+| `--precision` | 95% half-width ÷ estimate to stop at | 0.1 |
+| `--max-pct` | meter points since the start to stop at | 5 |
+| `--ceiling-pct` | meter % never passed | 85 |
 | `--window` | Gemini `daily`; Grok `weekly`, `monthly`; Factory `7d`, `30d`, `5h`; Kimi and Qwen `monthly`, `weekly`, `5h`; Mistral `monthly` | Gemini `daily`, Grok `weekly`, Factory `7d`, others `monthly` |
 | `--idle-min` | minutes | 5 |
 | `--task-timeout-min` | minutes | 25 |
@@ -248,7 +254,6 @@ The result file records `--contributor`, `--included-usd` and `--acu-usd` under 
 | `--dry-run` | print commands only | off |
 | `--harness` (more) | `muse`, `cursor`, `devin` | none |
 | `--effort` (Muse Code) | see the table | `high` |
-| `--target-pp` (Muse Code, Cursor CLI, Devin) | meter points to use | 10 |
 | `--window` (Muse Code, Cursor CLI, Devin) | Muse Code `weekly`; Cursor CLI `monthly`; Devin `daily`, `weekly` | Muse Code `weekly`, Cursor CLI `monthly`, Devin Pro `daily`, Devin Max `weekly` |
 | `--bin` (Muse Code, Cursor CLI) | path | `muse`, `agent` (older installs: `cursor-agent`) |
 | `--contributor` | Muse Code: `on`, `off` | none (required) |

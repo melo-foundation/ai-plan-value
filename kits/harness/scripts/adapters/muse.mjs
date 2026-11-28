@@ -117,7 +117,8 @@ export function readingFromUsage(stdout, window = "weekly") {
     throw new Error("muse usage --json: output is not JSON");
   }
   if (j?.allowance == null) throw new Error(j?.reason === "no_allowance" ? "muse usage: no Muse Code allowance on this login" : `muse usage: no allowance (${j?.reason ?? "no reason given"})`);
-  const w = j.allowance[window];
+  // the 5-hour allowance is under "window"
+  const w = j.allowance[window === "5h" ? "window" : window];
   if (!w || num(w.usedPercent) == null) throw new Error(`muse usage: no ${window} usedPercent`);
   const reset = num(w.resetsAtMs);
   return { pct: w.usedPercent, resetsAt: reset != null ? Math.floor(reset / 1000) : null, periodType: window, plan: planFromMeter(j.allowance.tier) };
@@ -187,8 +188,9 @@ export default {
 
   meter: {
     unit: "% of the weekly allowance",
-    windows: { weekly: { perMonth: 4 } },
+    windows: { weekly: { perMonth: 4 }, "5h": { perMonth: null } },
     window: "weekly",
+    fineWindow: "5h",
     note: "Muse Code has a 5-hour and a weekly allowance; the kit reads the weekly one and the subsidy uses 100 × weekly $/pp × 4 weeks (site convention). The allowance depends on contributor mode (inputs.contributor).",
     manual: {
       where: "the weekly % in `muse usage`",
@@ -197,16 +199,15 @@ export default {
     },
     auto: {
       route: "muse usage --json (command documented; JSON fields from aqua5230/usage, unverified)",
-      async read({ bin, dir, timeoutMs }) {
+      async read({ bin, dir, timeoutMs, window }) {
         const out = await runUsage({ bin, dir, timeoutMs });
         let fields = [];
         try {
           fields = Object.keys(JSON.parse(String(out).trim()) || {});
         } catch {}
-        return { ...readingFromUsage(out), fields };
+        return { ...readingFromUsage(out, window || "weekly"), fields };
       },
     },
   },
-  pacing: { targetPp: 10, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+10 pp of the weekly allowance (unverified)" },
+  pacing: { every: 5 },
 };
