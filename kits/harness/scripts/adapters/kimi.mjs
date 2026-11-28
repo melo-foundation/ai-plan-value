@@ -33,7 +33,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { dotsToHyphens, splitJsonStream, versionOf } from "../lib/util.mjs";
+import { dotsToHyphens, loginFile, splitJsonStream, versionOf } from "../lib/util.mjs";
 
 const PLANS = ["Kimi Plus", "Kimi Pro", "Kimi Max", "Kimi Ultra", "Kimi Moderato", "Kimi Allegretto", "Kimi Allegro", "Kimi Moderato, legacy", "Kimi Allegretto, legacy", "Kimi Allegro, legacy"];
 const DEFAULT_BASE = "https://api.kimi.com/coding/v1";
@@ -146,6 +146,9 @@ export default {
   version(bin) {
     return versionOf(bin, ["--version"]);
   },
+  loginCheck() {
+    return loginFile(path.join(kimiHome(), "credentials"), "Kimi Code credentials folder", "run kimi login");
+  },
   procMatch(cmd) {
     const base = (s) => path.basename(s || "");
     return cmd.slice(0, 2).some((x) => base(x) === "kimi") || cmd.join(" ").includes("@moonshot-ai/kimi-code/");
@@ -175,6 +178,9 @@ export default {
     }
     return { usage, tokenSource: usage.length ? (perCall ? "per-call" : "per-task") : "none" };
   },
+  usageSources({ stdout }) {
+    return wireFiles(sessionIdFrom(stdout));
+  },
 
   meter: {
     unit: "% of the monthly total",
@@ -189,7 +195,8 @@ export default {
     auto: {
       route: "GET api.kimi.com/coding/v1/usages with $KIMI_CODE_API_KEY (undocumented)",
       async read({ window, timeoutMs }) {
-        return readingFromUsages(await fetchUsages({ timeoutMs }), window || "monthly");
+        const j = await fetchUsages({ timeoutMs });
+        return { ...readingFromUsages(j, window || "monthly"), fields: Object.keys(j || {}) };
       },
     },
   },

@@ -110,6 +110,14 @@ export function redact(msg) {
   return s;
 }
 
+/**
+ * Login check for the smoke command: the CLI's stored login exists (it is never opened).
+ * `what` names it in the reason ("Grok login"), `how` is the command that creates it.
+ */
+export function loginFile(file, what, how) {
+  return fs.existsSync(file) ? { status: "pass", reason: `${what} present (not opened)` } : { status: "fail", reason: `no ${what}: ${how}` };
+}
+
 /** Dots to hyphens, the site's baseModelId convention ("gemini-3.8-flash" → "gemini-3-8-flash"). */
 export const dotsToHyphens = (m) => String(m).toLowerCase().replace(/\./g, "-");
 

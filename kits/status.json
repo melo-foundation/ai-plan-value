@@ -1,0 +1,59 @@
+{
+  "schema": "kit-status/1",
+  "kits": {
+    "claude-code": {
+      "name": "Claude Code",
+      "readme": "docs/QUOTA-WEIGHTS.md",
+      "adapters": {
+        "claude-code": {
+          "status": "tested",
+          "date": "2026-10-17",
+          "evidence": "data/quota-weights/submissions/anthropic/: 4 submissions (2026-10-03 Max 5x; 2026-10-17 Team, claude-vscode, sdk-cli, sdk-ts)"
+        }
+      }
+    },
+    "codex": {
+      "name": "Codex",
+      "readme": "kits/codex/README.md",
+      "adapters": {
+        "plus": {
+          "status": "tested",
+          "date": "2026-11-27",
+          "evidence": "data/quota-measurements/chatgpt-plus-gpt-6-2-sol-agentic.json, chatgpt-plus-gpt-6-2-sol-single-prompt.json, chatgpt-plus-gpt-6-2-sol-compare.json (our own runs A and B)"
+        },
+        "pro-10x": { "status": "untested", "date": null, "evidence": null },
+        "pro-20x": { "status": "untested", "date": null, "evidence": null },
+        "pro-500": { "status": "untested", "date": null, "evidence": null }
+      }
+    },
+    "api-plan": {
+      "name": "API plans",
+      "readme": "kits/api-plan/README.md",
+      "adapters": {
+        "kimi": { "status": "untested", "date": null, "evidence": null },
+        "glm": { "status": "untested", "date": null, "evidence": null },
+        "minimax": { "status": "untested", "date": null, "evidence": null },
+        "bailian": { "status": "untested", "date": null, "evidence": null },
+        "deeprelay": { "status": "untested", "date": null, "evidence": null },
+        "ollama": { "status": "untested", "date": null, "evidence": null },
+        "step": { "status": "untested", "date": null, "evidence": null },
+        "mimo": { "status": "untested", "date": null, "evidence": null }
+      }
+    },
+    "harness": {
+      "name": "Harness",
+      "readme": "kits/harness/README.md",
+      "adapters": {
+        "gemini": { "status": "untested", "date": null, "evidence": null },
+        "grok": { "status": "untested", "date": null, "evidence": null },
+        "factory": { "status": "untested", "date": null, "evidence": null },
+        "kimi": { "status": "untested", "date": null, "evidence": null },
+        "qwen": { "status": "untested", "date": null, "evidence": null },
+        "mistral": { "status": "untested", "date": null, "evidence": null },
+        "muse": { "status": "untested", "date": null, "evidence": null },
+        "cursor": { "status": "untested", "date": null, "evidence": null },
+        "devin": { "status": "untested", "date": null, "evidence": null }
+      }
+    }
+  }
+}

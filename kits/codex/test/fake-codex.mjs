@@ -9,7 +9,10 @@
  *      FAKE_CODEX_CALLS (calls per task; pings make 1), FAKE_CODEX_MODEL (model written to the
  *      rollout instead of -m, as if codex ignored it), FAKE_CODEX_PLAN (plan_type, default plus),
  *      FAKE_CODEX_WINDOWS ("both" default; "weekly": primary null, weekly in secondary;
- *      "weekly-primary": weekly in primary, no secondary), FAKE_CODEX_SLEEP_MS (per task).
+ *      "weekly-primary": weekly in primary, no secondary), FAKE_CODEX_SLEEP_MS (per task),
+ *      FAKE_CODEX_EXIT (exit with this code before writing anything, stderr names FAKE_CODEX_LEAK),
+ *      FAKE_CODEX_LEAK (a string written into session_meta, rate_limits and stderr, as an account
+ *      id or email would be), FAKE_CODEX_NO_RATE=1 (token_count events carry no rate_limits).
  */
 
 import fs from "node:fs";
@@ -34,6 +37,12 @@ const beta = JSON.parse(process.env.FAKE_CODEX_BETA || '{"5h":0.1,"weekly":0.66}
 const planType = process.env.FAKE_CODEX_PLAN || "plus";
 const windows = process.env.FAKE_CODEX_WINDOWS || "both";
 const prompt = fs.readFileSync(0, "utf8");
+const leak = process.env.FAKE_CODEX_LEAK || null;
+if (leak) process.stderr.write(`account ${leak}\n`);
+if (process.env.FAKE_CODEX_EXIT) {
+  process.stderr.write(`error: not logged in (${leak ?? "no account"})\n`);
+  process.exit(Number(process.env.FAKE_CODEX_EXIT));
+}
 const isPing = prompt.startsWith("Reply with the single word ok.");
 const calls = isPing ? 1 : Number(process.env.FAKE_CODEX_CALLS || 4);
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -66,7 +75,7 @@ const base = Math.max(Date.now() - 2 * (calls + 2), (st.lastTs ?? 0) + 2);
 let k = 0;
 const lines = [];
 const push = (type, payload) => lines.push(JSON.stringify({ timestamp: new Date(base + 2 * k++).toISOString(), type, payload }));
-push("session_meta", { session_id: sid, id: sid, cwd, originator: "codex_exec", cli_version: "0.172.0", source: "exec" });
+push("session_meta", { session_id: sid, id: sid, cwd, originator: "codex_exec", cli_version: "0.172.0", source: "exec", ...(leak ? { account_email: leak } : {}) });
 push("turn_context", { model, ...(effort ? { effort } : {}), cwd });
 const total = { input_tokens: 0, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 0, reasoning_output_tokens: 0, total_tokens: 0 };
 for (let c = 0; c < calls; c++) {
@@ -86,9 +95,10 @@ for (let c = 0; c < calls; c++) {
     credits: { has_credits: false, unlimited: false, balance: "0" },
     plan_type: planType,
     rate_limit_reached_type: null,
+    ...(leak ? { account_id: leak } : {}),
   };
   for (const w of ["5h", "weekly"]) st.u[w] += usd / beta[w];
-  push("event_msg", { type: "token_count", info: { total_token_usage: { ...total }, last_token_usage: last, last_usage_includes_reasoning: true, model_context_window: 475000 }, rate_limits: rate });
+  push("event_msg", { type: "token_count", info: { total_token_usage: { ...total }, last_token_usage: last, last_usage_includes_reasoning: true, model_context_window: 475000 }, ...(process.env.FAKE_CODEX_NO_RATE === "1" ? {} : { rate_limits: rate }) });
 }
 fs.writeFileSync(path.join(day, name), lines.join("\n") + "\n");
 st.lastTs = base + 2 * k;

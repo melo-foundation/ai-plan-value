@@ -26,9 +26,10 @@
  *              never opens ~/.grok/auth.json.
  */
 
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { dotsToHyphens, splitJsonStream, versionOf, whichBin } from "../lib/util.mjs";
+import { dotsToHyphens, loginFile, splitJsonStream, versionOf, whichBin } from "../lib/util.mjs";
 
 const PLANS = ["SuperGrok Lite", "SuperGrok", "SuperGrok Plus", "SuperGrok Heavy", "X Plus", "X Ultra", "SuperGrok Lite, legacy", "SuperGrok, legacy", "SuperGrok Plus, legacy", "SuperGrok Heavy, legacy"];
 
@@ -149,6 +150,9 @@ export default {
   version(bin) {
     return versionOf(bin, ["--version"]);
   },
+  loginCheck() {
+    return loginFile(path.join(os.homedir(), ".grok", "auth.json"), "Grok login file", "run grok login");
+  },
   procMatch(cmd) {
     const base = (s) => path.basename(s || "");
     return cmd.slice(0, 2).some((x) => ["grok", "xai-grok-pager"].includes(base(x)));
@@ -190,7 +194,8 @@ export default {
     auto: {
       route: "grok agent stdio → x.ai/billing → cli-chat-proxy.grok.com/v1/billing (undocumented)",
       async read({ bin, dir, timeoutMs }) {
-        return readingFromBilling(await billingViaAgent({ bin, dir, timeoutMs }));
+        const res = await billingViaAgent({ bin, dir, timeoutMs });
+        return { ...readingFromBilling(res), fields: Object.keys(res || {}) };
       },
     },
   },

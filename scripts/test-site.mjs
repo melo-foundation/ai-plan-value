@@ -2861,11 +2861,11 @@ test("Most needed: plans with a kit link to it; the rest say No kit yet", () => 
     const f = MN.familyOf(r.plan);
     if (f?.kit) {
       linked++;
-      assert.equal(r.kit, `[Kit: ${f.kit.name}](${f.kit.href})`, `${r.plan}: kit cell ${r.kit}`);
+      assert.match(r.kit, new RegExp(`^${`[Kit: ${f.kit.name}](${f.kit.href})`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( · untested)?$`), `${r.plan}: kit cell ${r.kit}`);
       assert.ok(fs.existsSync(path.join(ROOT, "kits", f.kit.href)), `${f.kit.href} does not exist`);
     } else if (MN.kitRegistry().some((k) => k.re.test(r.plan))) {
       linked++;
-      const m = /^\[Kit: [^\]]+\]\(([^)]+)\)$/.exec(r.kit);
+      const m = /^\[Kit: [^\]]+\]\(([^)]+)\)( · untested)?$/.exec(r.kit);
       assert.ok(m, `${r.plan}: kit cell ${r.kit}`);
       assert.ok(fs.existsSync(path.join(ROOT, "kits", m[1])), `${m[1]} does not exist`);
     } else if (f?.notNeeded) assert.match(r.kit, /^Not needed/, `${r.plan}: kit cell ${r.kit}`);
@@ -2896,6 +2896,112 @@ test("Most needed: refresh writes kits/NEEDED.md and CI commits it with the ledg
   const step = workflowYml.split(/\n      - name: /).find((s) => /^Commit reliability history/.test(s)) || "";
   assert.match(step, /N=kits\/NEEDED\.md/, "commit step does not name kits/NEEDED.md");
   assert.match(step, /git -C \/tmp\/hist-wt add "\$N"/, "commit step does not add kits/NEEDED.md");
+});
+
+// ---- kits/status.json, smoke check, Kit check issue form ----
+const KS = await import("./kit-status.mjs");
+const KIT_STATUS = KS.loadStatus();
+const { ADAPTERS: API_ADAPTERS } = await import("../kits/api-plan/scripts/adapters.mjs");
+const { ADAPTERS: HARNESS_ADAPTERS } = await import("../kits/harness/scripts/adapters/index.mjs");
+const CODEX_PLANS = await import("../kits/codex/scripts/plans.mjs");
+const SMOKE = await import("../kits/lib/smoke.mjs");
+
+test("kit status: kits/status.json lists every kit adapter, with date and evidence when tested", () => {
+  const API = API_ADAPTERS;
+  const HARNESS = HARNESS_ADAPTERS;
+  const { PLANS, planFee } = CODEX_PLANS;
+  const keys = (k) => Object.keys(KIT_STATUS.kits[k].adapters).sort();
+  assert.equal(KIT_STATUS.schema, "kit-status/1");
+  assert.deepEqual(Object.keys(KIT_STATUS.kits).sort(), ["api-plan", "claude-code", "codex", "harness"]);
+  assert.deepEqual(keys("claude-code"), ["claude-code"]);
+  assert.deepEqual(keys("codex"), PLANS.filter((p) => planFee(p) != null).map((p) => p.id).sort());
+  assert.deepEqual(keys("api-plan"), Object.keys(API).sort());
+  assert.deepEqual(keys("harness"), Object.keys(HARNESS).sort());
+  for (const [kit, k] of Object.entries(KIT_STATUS.kits)) {
+    assert.ok(fs.existsSync(path.join(ROOT, k.readme)), `${kit}: ${k.readme} missing`);
+    for (const [id, e] of Object.entries(k.adapters)) {
+      assert.ok(["tested", "untested"].includes(e.status), `${kit}/${id}: status ${e.status}`);
+      if (e.status === "tested") {
+        assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/, `${kit}/${id}: date`);
+        assert.ok(e.evidence, `${kit}/${id}: no evidence`);
+        const dir = /^(data\/[\w./-]+\/)/.exec(e.evidence)?.[1] || /^(data\/[\w-]+\/[\w-]+)\//.exec(e.evidence)?.[1];
+        assert.ok(dir && fs.existsSync(path.join(ROOT, dir)), `${kit}/${id}: evidence path ${dir} missing`);
+      } else assert.equal(e.date, null, `${kit}/${id}: untested with a date`);
+    }
+  }
+  assert.equal(KIT_STATUS.kits.codex.adapters.plus.status, "tested");
+  for (const f of ["chatgpt-plus-gpt-6-2-sol-agentic.json", "chatgpt-plus-gpt-6-2-sol-single-prompt.json", "chatgpt-plus-gpt-6-2-sol-compare.json"]) {
+    assert.ok(KIT_STATUS.kits.codex.adapters.plus.evidence.includes(f), f);
+    assert.ok(fs.existsSync(path.join(ROOT, "data", "quota-measurements", f)), f);
+  }
+  const subs = fs.readdirSync(path.join(ROOT, "data", "quota-weights", "submissions", "anthropic"));
+  assert.equal(KIT_STATUS.kits["claude-code"].adapters["claude-code"].status, subs.length ? "tested" : "untested");
+});
+
+test("kit status: README Status cells match kits/status.json (node scripts/kit-status.mjs)", () => {
+  const all = KS.renderAll(KIT_STATUS);
+  for (const [rel, v] of Object.entries(all)) {
+    assert.equal(v.current, v.rendered, `${rel}: Status cells are stale (node scripts/kit-status.mjs)`);
+    assert.ok(v.filled > 0, `${rel}: no Status cells`);
+  }
+  assert.equal(all["kits/harness/README.md"].filled, Object.keys(KIT_STATUS.kits.harness.adapters).length, "a harness without a Status cell");
+  assert.equal(all["kits/api-plan/README.md"].filled, Object.keys(KIT_STATUS.kits["api-plan"].adapters).length, "a provider without a Status cell");
+  assert.equal(all["kits/codex/README.md"].filled, Object.keys(KIT_STATUS.kits.codex.adapters).length, "a Codex plan without a Status cell");
+  const idx = fs.readFileSync(path.join(ROOT, "kits", "README.md"), "utf8");
+  assert.match(idx, /\| Claude Code \| .* \| Tested \(\d{4}-\d{2}-\d{2}\) \|/);
+  assert.match(idx, /\| Codex CLI \| .* \| Plus: Tested \(2026-11-27\); Pro 10x, Pro 20x, Pro 500: Untested: run `smoke` first \|/);
+  // a flipped status changes the cell
+  const flipped = structuredClone(KIT_STATUS);
+  flipped.kits.harness.adapters.grok = { status: "tested", date: "2026-12-01", evidence: "x" };
+  assert.match(KS.renderAll(flipped)["kits/harness/README.md"].rendered, /\| Status \| Untested: run `smoke` first \| Tested \(2026-12-01\) \|/);
+});
+
+test("kit status: NEEDED.md kit cells say untested exactly for untested adapters", () => {
+  const rows = neededRows(fs.readFileSync(NEEDED_FILE, "utf8"));
+  let checked = 0;
+  for (const r of rows) {
+    const k = MN.statusKeyFor(r.plan);
+    if (!k) {
+      assert.ok(!r.kit.includes("untested"), `${r.plan}: ${r.kit}`);
+      continue;
+    }
+    const e = KS.entryOf(KIT_STATUS, k.kit, k.id);
+    assert.equal(r.kit.endsWith(MN.UNTESTED_SUFFIX), !KS.isTested(e), `${r.plan} (${k.kit}/${k.id}): ${r.kit}`);
+    checked++;
+  }
+  assert.ok(checked > 20, `${checked} kit cells checked`);
+  assert.ok(rows.some((r) => r.plan === "ChatGPT Plus" && !r.kit.includes("untested")), "ChatGPT Plus marked untested");
+  assert.ok(rows.some((r) => r.plan === "ChatGPT Pro 20x" && r.kit.endsWith(" · untested")), "ChatGPT Pro 20x not marked untested");
+});
+
+test("smoke: Kit check issue form has the fields the prefilled URL fills, label kit-check", () => {
+  const p = path.join(ROOT, ".github", "ISSUE_TEMPLATE", "kit-check.yml");
+  assert.ok(fs.existsSync(p), "kit-check.yml missing");
+  const y = fs.readFileSync(p, "utf8");
+  assert.match(y, /^name:\s*Kit check\s*$/m);
+  assert.match(y, /^labels:\s*\["kit-check"\]\s*$/m);
+  for (const id of ["kit", "adapter", "plan", "result", "report", "notes"]) assert.match(y, new RegExp(`^\\s+id:\\s*${id}\\s*$`, "m"), `no field ${id}`);
+  for (const o of ["works", "partly", "fails"]) assert.match(y, new RegExp(`^\\s+- ${o}\\s*$`, "m"), `no result option ${o}`);
+  const S = SMOKE;
+  assert.equal(S.ISSUE_TEMPLATE, "kit-check.yml");
+  const { url } = S.issueUrl({ kit: "harness", adapter: "grok", plan: "SuperGrok", result: "works", steps: [] });
+  const u = new URL(url);
+  for (const k of u.searchParams.keys()) if (!["template", "title"].includes(k)) assert.match(y, new RegExp(`^\\s+id:\\s*${k}\\s*$`, "m"), `URL fills ${k}, the form has no such field`);
+  // too long → no report field, attach instead
+  const big = S.issueUrl({ kit: "harness", adapter: "grok", plan: null, result: "works", steps: Array.from({ length: 400 }, (_, i) => ({ id: `s${i}`, status: "pass", reason: "x".repeat(40) })) });
+  assert.equal(big.attach, true);
+  assert.ok(big.url.length < S.URL_LIMIT && !new URL(big.url).searchParams.has("report"));
+});
+
+test("smoke: every kit README starts with the smoke check and states its cost", () => {
+  const LINE = "Run the smoke check first; it uses one short prompt and gives a report to send";
+  for (const [rel, cmd] of [["kits/README.md", null], ["kits/codex/README.md", "codex-quota.mjs smoke"], ["kits/api-plan/README.md", "api-plan.mjs smoke"], ["kits/harness/README.md", "harness-quota.mjs smoke"]]) {
+    const md = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    const at = md.indexOf(LINE);
+    assert.ok(at > 0, `${rel}: no smoke line`);
+    assert.ok(at < md.indexOf("\n## "), `${rel}: smoke line is not before the first section`);
+    if (cmd) assert.ok(md.slice(at, at + 400).includes(cmd), `${rel}: no ${cmd} after the smoke line`);
+  }
 });
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);

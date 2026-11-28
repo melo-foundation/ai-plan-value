@@ -99,6 +99,11 @@ export default {
     if (a["devin-api"]) return process.env.DEVIN_API_KEY && process.env.DEVIN_ORG_ID ? "cloud (v3 API)" : null;
     return "cloud (paste)";
   },
+  loginCheck({ a = {} } = {}) {
+    if (!a["devin-api"]) return { status: "skipped", reason: "paste mode: log in at app.devin.ai" };
+    const ok = process.env.DEVIN_API_KEY && process.env.DEVIN_ORG_ID;
+    return ok ? { status: "pass", reason: "DEVIN_API_KEY and DEVIN_ORG_ID set (not printed)" } : { status: "fail", reason: "set DEVIN_API_KEY (cog_…) and DEVIN_ORG_ID" };
+  },
   procMatch: () => false,
   preflight({ a }) {
     const w = [];

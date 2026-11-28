@@ -1,0 +1,50 @@
+name: Kit check
+description: Send the report of a kit's smoke command (kits/README.md)
+title: "[kit-check] <kit> · <harness or provider> · <result>"
+labels: ["kit-check"]
+body:
+  - type: input
+    id: kit
+    attributes:
+      label: Kit
+      placeholder: harness
+    validations:
+      required: true
+  - type: input
+    id: adapter
+    attributes:
+      label: Harness or provider
+      placeholder: grok
+    validations:
+      required: true
+  - type: input
+    id: plan
+    attributes:
+      label: Plan
+      placeholder: SuperGrok
+    validations:
+      required: false
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - works
+        - partly
+        - fails
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      placeholder: kits/<kit>/results/smoke-<harness>-<date>.json
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+    validations:
+      required: false

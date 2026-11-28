@@ -22,6 +22,7 @@
  *   reject     true: every call gets 401 with the received key echoed in the body
  *   noUsage    true: responses carry no usage field
  *   shape      "bad": meter responses have an unknown shape
+ *   leak       a string added as account_email to every JSON response
  * Prints {"port": N} on stdout once listening.
  *
  * Test-only routes: GET /__requests (recorded request summaries), GET /__state (true usage),
@@ -169,7 +170,9 @@ function meterJson(kind) {
 
 function send(res, status, obj) {
   res.writeHead(status, { "content-type": "application/json" });
-  res.end(JSON.stringify(obj));
+  // leak: an account email / id on every response object, as a real API might return
+  const body = cfg.leak && obj && typeof obj === "object" && !Array.isArray(obj) ? { ...obj, account_email: cfg.leak } : obj;
+  res.end(JSON.stringify(body));
 }
 
 const server = http.createServer((req, res) => {

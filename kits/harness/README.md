@@ -2,6 +2,17 @@
 
 Measures the API dollars behind each percentage point of a subscription's usage meter by running the vendor's coding CLI on the Codex kit's fixed workload. It also gives the plan's monthly API value and subsidy multiple.
 
+Run the smoke check first; it uses one short prompt and gives a report to send:
+
+    node kits/harness/scripts/harness-quota.mjs smoke --harness grok --plan "SuperGrok"
+
+Use your `--harness` and `--plan` from the tables below, plus the Required input row (Muse Code, Cursor CLI). When asked, type one meter reading as in [Manual readings](#manual-readings); Devin: run the printed prompt in a new session and type its ACUs. Open the link it prints and press Create. The report is `kits/harness/results/smoke-<harness>-<date>.json`.
+
+| `smoke` option | Values | Default |
+|---|---|---|
+| `--manual` | on / off | off: the automatic meter where the harness has one |
+| `--task-timeout-min` | minutes | 10 |
+
 ## Requirements
 
 - A plan from the table below.
@@ -16,6 +27,7 @@ Measures the API dollars behind each percentage point of a subscription's usage 
 
 | | Gemini CLI | Grok Build |
 |---|---|---|
+| Status | Untested: run `smoke` first | Untested: run `smoke` first |
 | Plans (`--plan`) | `Google AI Pro`, `Google AI Ultra 5x`, `Google AI Ultra 20x` | `SuperGrok Lite`, `SuperGrok`, `SuperGrok Plus`, `SuperGrok Heavy`, `X Plus`, `X Ultra`, and the `, legacy` variants |
 | Install | `npm install -g @google/gemini-cli`, plus Docker or Podman on Linux | `curl -fsSL https://x.ai/cli/install.sh \| bash`, plus `bubblewrap` on Linux |
 | Login | run `gemini`, choose Sign in with Google | `grok login` (`grok login --device-auth` over SSH); subscription billing for a CLI login is unverified |
@@ -31,6 +43,7 @@ Measures the API dollars behind each percentage point of a subscription's usage 
 
 | | Factory Droid | Kimi Code | Qwen Code | Mistral Vibe |
 |---|---|---|---|---|
+| Status | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first |
 | `--harness` | `factory` | `kimi` | `qwen` | `mistral` |
 | Plans (`--plan`) | `Droid Pro`, `Droid Max` | `Kimi Plus`, `Kimi Pro`, `Kimi Max`, `Kimi Ultra`, `Kimi Moderato`, `Kimi Allegretto`, `Kimi Allegro`, and the `, legacy` variants | `阿里云百炼 Token Plan Lite (¥39)`, `… Essential (¥79)`, `… Standard (¥139)`, `… Pro (¥312)`, `Qwen Token Plan Standard` | `Mistral Vibe Pro` |
 | Install | `curl -fsSL https://app.factory.ai/cli \| sh`, plus `bubblewrap` on Linux | `curl -fsSL https://code.kimi.com/kimi-code/install.sh \| bash` or `npm install -g @moonshot-ai/kimi-code` | `npm install -g @qwen-code/qwen-code@latest` (Node 22+), plus Docker or Podman on Linux | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` |
@@ -48,6 +61,7 @@ Measures the API dollars behind each percentage point of a subscription's usage 
 
 | | Muse Code | Cursor CLI | Devin |
 |---|---|---|---|
+| Status | Untested: run `smoke` first | Untested: run `smoke` first | Untested: run `smoke` first |
 | Plans (`--plan`) | `Muse Code Everyday Usage` ($5), `Muse Code High Usage` ($15), `Muse Code Power Usage` ($50), `Muse Code Maximum Usage` ($200); not on the site yet, fees from `kit.json` | `Cursor Pro`, `Cursor Pro+`, `Cursor Ultra` | `Devin Pro`, `Devin Max` |
 | Install | `curl -fsSL https://dev.meta.ai/install.sh \| bash` | `curl https://cursor.com/install -fsS \| bash` | nothing (paste mode); `--devin-api`: a personal access token (`cog_…`, Settings > Devin API > PATs) in `DEVIN_API_KEY` and the organization id (`org-…`) in `DEVIN_ORG_ID`; tokens and org ids on individual Pro / Max accounts unverified |
 | Login | run `muse`, sign in with the Meta Model API account that holds the subscription; unset `META_API_KEY` | `agent login`; unset `CURSOR_API_KEY` | [app.devin.ai](https://app.devin.ai) |
@@ -176,6 +190,8 @@ The result file records `--contributor`, `--included-usd` and `--acu-usd` under 
 |---|---|
 | `check`: `<bin> not found` | install the harness or pass `--bin <path>` |
 | `check`: `close the processes listed above` | close them and run `check` again |
+| `smoke`: `close these first (or pass --force)` | close the other sessions of the harness and run `smoke` again |
+| `smoke`: `partly` or `fails` | send the report as is |
 | `check`: `no sandbox for Gemini CLI` | install Docker or Podman, or pass `--gemini-sandbox docker\|podman\|sandbox-exec` |
 | `check`: `bubblewrap (bwrap) not found` | install `bubblewrap` |
 | `check`: `no sandbox for Qwen Code` | install Docker or Podman, or pass `--qwen-sandbox docker\|podman\|sandbox-exec` |

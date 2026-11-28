@@ -4,6 +4,7 @@
  * running the vendor's own coding CLI headless on the fixed Codex-kit workload, and the monthly API
  * value and subsidy multiple the site uses. Usage: kits/harness/README.md.
  *
+ *   node kits/harness/scripts/harness-quota.mjs smoke   --harness <id> [--plan <plan>] [--manual]
  *   node kits/harness/scripts/harness-quota.mjs check   --harness <id> [--plan <plan>] [--auto-meter]
  *   node kits/harness/scripts/harness-quota.mjs plans   --harness <id> [--model <id>]
  *   node kits/harness/scripts/harness-quota.mjs run     --harness <id> --plan <plan> [options]
@@ -29,8 +30,9 @@ import { ADAPTERS, getAdapter } from "./adapters/index.mjs";
 import { analyse, RUN_SCHEMA, secretHits } from "./lib/analyse.mjs";
 import { askReading, lineReader } from "./lib/manual.mjs";
 import { DEFAULT_SITE, feeFor, loadSite, priceFor, siteMultiple } from "./lib/site.mjs";
-import { hhmm, nowIso, otherProcesses, parseArgs, redact, sleep, sq, whichBin } from "./lib/util.mjs";
+import { hhmm, nowIso, otherProcesses, parseArgs, redact, sleep, splitJsonStream, sq, whichBin } from "./lib/util.mjs";
 import { TASKS_A, taskB, WORKLOAD_VERSION, workloadHash, B_ROWS } from "../../codex/workload/tasks.mjs";
+import * as Smoke from "../../lib/smoke.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 export const KIT_VERSION = "1.0.0";
@@ -498,6 +500,161 @@ async function cmdRun(a) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// smoke
+// ---------------------------------------------------------------------------------------------
+
+/** Field names of usage-like objects (keys named *usage*, *tokens*) in parsed JSON values; names only. */
+export function usageFieldScan(values) {
+  const out = new Set();
+  const walk = (v, depth) => {
+    if (depth > 8 || !v || typeof v !== "object") return;
+    if (Array.isArray(v)) return v.slice(0, 200).forEach((x) => walk(x, depth + 1));
+    for (const [k, x] of Object.entries(v)) {
+      if (x && typeof x === "object" && !Array.isArray(x) && /usage|tokens/i.test(k)) for (const f of Smoke.fieldNames(x)) if (!(x[f] && typeof x[f] === "object")) out.add(f);
+      walk(x, depth + 1);
+    }
+  };
+  values.forEach((v) => walk(v, 0));
+  return [...out];
+}
+
+/** Parsed JSON values in stdout, every file under logDir (telemetry, export files) and `extra` files. */
+function jsonValues(stdout, logDir, extra = []) {
+  const vals = splitJsonStream(stdout).values;
+  const files = (d) => (fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(d, e.name)) : [path.join(d, e.name)])) : []);
+  for (const f of [...files(logDir), ...extra]) {
+    try {
+      if (fs.statSync(f).size < 5e6) vals.push(...splitJsonStream(fs.readFileSync(f, "utf8")).values);
+    } catch {}
+  }
+  return vals;
+}
+
+/**
+ * One headless run of a one-line prompt with the same command shape as a real task, in a throwaway
+ * folder, then one meter reading. Writes kits/harness/results/smoke-<harness>-<date>.json.
+ */
+async function cmdSmoke(a) {
+  let ad;
+  try {
+    ad = getAdapter(a.harness);
+  } catch (e) {
+    fail(e.message);
+  }
+  const plans = ad.plans.map((p) => p.plan);
+  const plan = typeof a.plan === "string" ? a.plan : null;
+  if (plan && !plans.includes(plan)) fail(`--plan ${plan} is not a ${ad.name} plan: ${plans.map((p) => `"${p}"`).join(", ")}`);
+  const model = typeof a.model === "string" ? a.model : ad.models.default;
+  if (!MODEL_SLUG.test(model)) fail("--model <id>, e.g. " + ad.models.default);
+  let effort = null;
+  if (ad.efforts) {
+    effort = typeof a.effort === "string" ? a.effort : ad.efforts.default;
+    if (!ad.efforts.values.includes(effort)) fail(`--effort ${ad.efforts.values.join(" | ")}`);
+  } else if (a.effort) fail(`${ad.name} takes no --effort`);
+  const window = typeof a.window === "string" ? a.window : (plan && ad.meter.windowFor?.(plan)) || ad.meter.window;
+  if (!ad.meter.windows[window]) fail(`--window ${Object.keys(ad.meter.windows).join(" | ")}`);
+  const inputs = adapterInputs(ad, a, { require: true });
+  const bin = typeof a.bin === "string" ? a.bin : ad.bin;
+  const timeoutMs = Number(a["task-timeout-min"] ?? 10) * 60000;
+  const meterTimeoutMs = Number(a["meter-timeout-s"] ?? 90) * 1000;
+  const clean = Smoke.cleaner(redact);
+  const S = Smoke.stepList();
+  const fields = { usage: [], meter: [] };
+
+  const version = harnessVersion(ad, bin, a);
+  S.add("binary", version ? "pass" : "fail", version ? version : ad.bin == null ? `${ad.name}: ${ad.install}` : `${ad.bin} not found: ${ad.install}, or pass --bin <path>`);
+  const pre = ad.preflight({ bin, a });
+  S.add("preflight", pre.length ? "fail" : "pass", pre.length ? pre.join("; ") : "sandbox and environment ok");
+  const login = ad.loginCheck ? ad.loginCheck({ a }) : { status: "skipped", reason: "no login check for this harness; the prompt step tests it" };
+  S.add("login", login.status, login.reason);
+
+  const io = lineReader();
+  let r = null;
+  let u = null;
+  let base = null;
+  if (version) {
+    const procs = otherProcesses(ad.procMatch);
+    if (procs.length && !a.force) fail(`close these first (or pass --force): ${procs.map((p) => `pid ${p.pid} (${p.cmd})`).join(", ")}`);
+    fs.mkdirSync(WORK_BASE, { recursive: true });
+    base = fs.mkdtempSync(path.join(WORK_BASE, "smoke-"));
+    const dir = path.join(base, "task");
+    const logDir = path.join(base, "logs");
+    fs.mkdirSync(dir);
+    fs.mkdirSync(logDir);
+    log(`smoke · ${ad.name} · ${model}${effort ? ` ${effort}` : ""} · one prompt: ${Smoke.SMOKE_PROMPT}`);
+    if (ad.runTask) {
+      r = await ad.runTask({ task: { id: "smoke", prompt: Smoke.SMOKE_PROMPT, files: {} }, dir, model, effort, inputs, io, logDir, timeoutMs, a, isInterrupted: () => false });
+      if (r.stop) S.add("prompt", "skipped", "stopped before the task ran");
+      else S.add("prompt", r.exit === 0 ? "pass" : "fail", r.exit === 0 ? "session finished" : `session failed (${r.exit})`);
+      if (!r.stop) u = { usage: r.usage || [], tokenSource: r.tokenSource || "none", acus: r.acus };
+    } else {
+      const cmd = ad.command({ dir, prompt: Smoke.SMOKE_PROMPT, model, effort, logDir, taskId: "smoke", a, inputs });
+      r = await runChild(bin, { ...cmd, cwd: cmd.cwd || dir }, { timeoutMs, logFile: path.join(base, "smoke.out") });
+      S.add("prompt", r.code === 0 && !r.timedOut ? "pass" : "fail", r.timedOut ? `timed out after ${timeoutMs / 60000} min` : `exit ${r.code ?? r.signal}`);
+      // model: null, so a model in the records comes from the harness's own output
+      u = ad.parseUsage({ stdout: r.stdout, logDir, taskId: "smoke", model: null });
+      fields.usage = usageFieldScan(jsonValues(r.stdout, logDir, ad.usageSources ? ad.usageSources({ stdout: r.stdout }) : []));
+    }
+  } else S.add("prompt", "skipped", "no harness binary");
+
+  if (u && ad.costUnit === "acu") {
+    S.add("usage", u.acus != null ? "pass" : "fail", u.acus != null ? "ACUs read for the session" : "no ACU count for the session");
+    if (u.acus != null) fields.usage = [a["devin-api"] ? "acus_consumed" : "acus"];
+    S.add("model", "skipped", `${ad.name} picks the model; none reported`);
+  } else if (u) {
+    const found = ["uncached", "cached", "cacheWrite", "output", "reasoning"].filter((k) => u.usage.some((x) => x[k] > 0));
+    const ok = u.usage.length && found.includes("output") && found.some((k) => ["uncached", "cached", "cacheWrite"].includes(k));
+    S.add("usage", ok ? "pass" : "fail", u.usage.length ? `parsed (${u.tokenSource}): ${found.join(", ") || "nothing"}` : "no token usage in the output");
+    const seen = [...new Set(u.usage.map((x) => x.model).filter((m) => m && m !== "unrecorded"))];
+    const same = seen.every((m) => ad.sameModel(m, model));
+    if (!seen.length) S.add("model", "skipped", "the output names no model");
+    else S.add("model", same ? "pass" : "fail", same ? `${seen.join(", ")} as requested` : `requested ${model}, output says ${seen.join(", ")}`);
+  } else for (const id of ["usage", "model"]) S.add(id, "skipped", "the prompt did not run");
+
+  let autoOk = false;
+  if (!ad.meter.auto) {
+    S.add("meter-auto", "skipped", "no automatic meter");
+    S.add("meter-fields", "skipped", "no automatic meter");
+  } else if (a.manual) {
+    S.add("meter-auto", "skipped", "--manual");
+    S.add("meter-fields", "skipped", "--manual");
+  } else if (!version) {
+    S.add("meter-auto", "skipped", "no harness binary");
+    S.add("meter-fields", "skipped", "no harness binary");
+  } else {
+    try {
+      const m = await ad.meter.auto.read({ bin, model, dir: base, timeoutMs: meterTimeoutMs, window, a, inputs });
+      autoOk = Number.isFinite(m.pct);
+      fields.meter = m.fields || [];
+      S.add("meter-auto", autoOk ? "pass" : "fail", autoOk ? `automatic: ${window} % parsed (unit ${ad.meter.unit})` : "automatic: no percentage in the response");
+      S.add("meter-fields", fields.meter.length ? "pass" : "fail", fields.meter.length ? "response field names recorded" : "no field names");
+      if (m.plan) S.add("plan", !plan || m.plan === plan ? "pass" : "fail", !plan || m.plan === plan ? `the meter reports ${m.plan}` : `the meter reports ${m.plan}, not ${plan}`);
+    } catch (e) {
+      S.add("meter-auto", "fail", `automatic: ${e.message}`);
+      S.add("meter-fields", "skipped", "no response");
+    }
+  }
+  if (autoOk) S.add("meter-manual", "skipped", "the automatic reading worked");
+  else {
+    const label = "smoke reading";
+    const res = ad.meter.manual.ask ? await ad.meter.manual.ask(io, label, { plan, inputs }) : await askReading(io, `${label} · ${ad.meter.manual.where}, % used: `, { allowLeft: ad.meter.manual.allowLeft });
+    if (res.stop || res.skip) S.add("meter-manual", "skipped", res.skip ? "skipped at the prompt" : "no reading typed");
+    else S.add("meter-manual", Number.isFinite(res.pct) ? "pass" : "fail", Number.isFinite(res.pct) ? `manual: reading parsed (unit ${ad.meter.unit})` : "manual: the reading did not parse");
+  }
+  io.close();
+  if (base) fs.rmSync(base, { recursive: true, force: true });
+
+  const secrets = ["DEVIN_API_KEY", "KIMI_CODE_API_KEY", "MISTRAL_API_KEY", "DEVIN_ORG_ID"].map((k) => process.env[k]).filter(Boolean);
+  const report = Smoke.buildReport({ kit: "harness", kitDir: KIT_DIR, adapter: ad.id, toolVersion: version, plan, model, steps: S.steps, fields, critical: ["binary", "prompt"], clean, secrets });
+  const hits = secretHits(report);
+  if (hits.length) fail(`report not written: ${hits.map((h) => `${h.path} (${h.kind})`).join(", ")}`);
+  const file = Smoke.writeReport(RESULTS_DIR, report);
+  Smoke.printReport(report, file, log);
+  if (report.result === "fails") process.exitCode = 1;
+  return report;
+}
+
+// ---------------------------------------------------------------------------------------------
 // analyse
 // ---------------------------------------------------------------------------------------------
 
@@ -569,6 +726,7 @@ function printSummary(r) {
 
 const HELP = `harness-quota ${KIT_VERSION}
 
+  node kits/harness/scripts/harness-quota.mjs smoke   --harness ${Object.keys(ADAPTERS).join("|")} [--plan <plan>] [--manual] [--bin <path>]
   node kits/harness/scripts/harness-quota.mjs check   --harness ${Object.keys(ADAPTERS).join("|")} [--plan <plan>] [--auto-meter] [--bin <path>]
   node kits/harness/scripts/harness-quota.mjs plans   --harness <id> [--model <id>]
   node kits/harness/scripts/harness-quota.mjs run     --harness <id> --plan <plan> [options]
@@ -598,12 +756,17 @@ run options
   --acu-usd           $ per ACU for the plan (Devin)
   --force             start with other harness processes open or preflight warnings, or reuse a tag
   --dry-run           print the commands; no calls
+
+smoke options
+  --manual            type the meter reading even where an automatic meter exists
+  --task-timeout-min  default 10
 `;
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const cmd = a._[0];
   if (!cmd || a.help || cmd === "help") return log(HELP);
+  if (cmd === "smoke") return cmdSmoke(a);
   if (cmd === "check") return cmdCheck(a);
   if (cmd === "plans") return cmdPlans(a);
   if (cmd === "run") return cmdRun(a);

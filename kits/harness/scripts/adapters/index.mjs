@@ -58,6 +58,10 @@
  *                 usage?, tokenSource?, stderr? } | { stop }, describeTask({ dir, a }) → string
  *                                                  cloud harness: the adapter runs each task
  *   costUnit      "acu"                            no tokens: fit ACUs per pp instead of API $
+ *   loginCheck({ a }) → { status: "pass" | "fail" | "skipped", reason }
+ *                                                  smoke check: the stored login exists (never opened)
+ *   usageSources({ stdout }) → [files]            smoke check: usage logs outside logDir (field names only)
+ *   meter.auto.read() may add fields: [names]      top-level field names of the raw response (smoke report)
  */
 
 import gemini from "./gemini.mjs";

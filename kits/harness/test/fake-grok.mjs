@@ -8,7 +8,9 @@
  *
  * env: FAKE_METER, FAKE_BETA (default 0.5), FAKE_PRICE (JSON), FAKE_CALLS, FAKE_MODEL,
  *      FAKE_TIER (subscription_tier, default "SuperGrok"), FAKE_BILLING_METHOD (only this method
- *      name answers; the other gets -32601), FAKE_BILLING_FAIL=1 (billing error).
+ *      name answers; the other gets -32601), FAKE_BILLING_FAIL=1 (billing error), FAKE_EXIT (a task
+ *      exits with this code, nothing on stdout), FAKE_LEAK (a string put in the billing result,
+ *      the task JSON and stderr, as an account email or id would be).
  */
 
 import fs from "node:fs";
@@ -37,7 +39,7 @@ if (argv[0] === "agent" && argv[1] === "stdio") {
       const st = load();
       const start = new Date(Date.now() - 2 * 86400000).toISOString();
       const end = new Date(Date.now() + 5 * 86400000).toISOString();
-      return send({ id: m.id, result: { config: { creditUsagePercent: st.used, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", start, end }, onDemandUsed: {}, prepaidBalance: { val: 0 } }, on_demand_enabled: false, subscription_tier: process.env.FAKE_TIER || "SuperGrok" } });
+      return send({ id: m.id, result: { config: { creditUsagePercent: st.used, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", start, end }, onDemandUsed: {}, prepaidBalance: { val: 0 } }, on_demand_enabled: false, subscription_tier: process.env.FAKE_TIER || "SuperGrok", ...(process.env.FAKE_LEAK ? { account_email: process.env.FAKE_LEAK } : {}) } });
     }
     send({ id: m.id, error: { code: -32601, message: "Method not found" } });
   });
@@ -49,6 +51,8 @@ if (argv[0] === "agent" && argv[1] === "stdio") {
   };
   if (opt("-p") == null) process.exit(1);
   if (opt("--sandbox") !== "strict" || opt("--cwd") !== process.cwd()) process.exit(3);
+  if (process.env.FAKE_LEAK) process.stderr.write(`signed in as ${process.env.FAKE_LEAK}\n`);
+  if (process.env.FAKE_EXIT) process.exit(Number(process.env.FAKE_EXIT));
   const model = process.env.FAKE_MODEL || opt("-m") || "grok-4.6";
   const price = JSON.parse(process.env.FAKE_PRICE || '{"input":2,"cachedInput":0.5,"output":6}');
   const beta = Number(process.env.FAKE_BETA || 0.5);
@@ -68,5 +72,5 @@ if (argv[0] === "agent" && argv[1] === "stdio") {
   st.used += usd / beta;
   if (meterPath) fs.writeFileSync(meterPath, JSON.stringify(st));
   fs.writeFileSync("done.txt", "ok\n");
-  console.log(JSON.stringify({ text: "Done.", stopReason: "end_turn", sessionId: "00000000-0000-4000-8000-000000000001", requestId: "req", num_turns: calls, usage: u, modelUsage: { [model]: { inputTokens: u.input_tokens, outputTokens: u.output_tokens, cacheReadInputTokens: u.cache_read_input_tokens, modelCalls: calls, costUSD: usd } }, total_cost_usd: usd, usage_is_incomplete: false, cost_is_partial: false }));
+  console.log(JSON.stringify({ ...(process.env.FAKE_LEAK ? { user: process.env.FAKE_LEAK } : {}), text: "Done.", stopReason: "end_turn", sessionId: "00000000-0000-4000-8000-000000000001", requestId: "req", num_turns: calls, usage: u, modelUsage: { [model]: { inputTokens: u.input_tokens, outputTokens: u.output_tokens, cacheReadInputTokens: u.cache_read_input_tokens, modelCalls: calls, costUSD: usd } }, total_cost_usd: usd, usage_is_incomplete: false, cost_is_partial: false }));
 }
