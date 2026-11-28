@@ -1,8 +1,8 @@
 {
   "source": "AI Plan Value public/data/combined.json, entries[].aaPricing (Artificial Analysis: price1mInputTokens → inputPer1M, cacheHitPrice → cacheHitPer1M, price1mOutputTokens → outputPer1M)",
-  "asOf": "2026-11-26",
-  "fetchedAt": "2026-11-26T08:28:17.753Z",
-  "siteGeneratedAt": "2026-11-26T08:28:17.753Z",
+  "asOf": "2026-11-28",
+  "fetchedAt": "2026-11-28T06:20:25.997Z",
+  "siteGeneratedAt": "2026-11-28T06:20:25.997Z",
   "unit": "USD per 1M tokens",
   "convention": "input_tokens includes cached_input_tokens (priced at cachedInput); uncached = input − cached (priced at input); output_tokens includes reasoning (priced at output)",
   "models": {
@@ -10,34 +10,41 @@
       "input": 2,
       "cachedInput": 0.1,
       "output": 10,
-      "asOf": "2026-11-26",
+      "asOf": "2026-11-28",
       "baseModelId": "gpt-6-2-sol"
     },
     "gpt-6.1-sol": {
       "input": 2,
       "cachedInput": 0.1,
       "output": 10,
-      "asOf": "2026-11-26",
+      "asOf": "2026-11-28",
       "baseModelId": "gpt-6-1-sol"
     },
     "gpt-6.2-astra": {
       "input": 8,
       "cachedInput": 0.4,
       "output": 40,
-      "asOf": "2026-11-26",
+      "asOf": "2026-11-28",
       "baseModelId": "gpt-6-2-astra"
+    },
+    "gpt-6-astra": {
+      "input": 10,
+      "cachedInput": 1,
+      "output": 50,
+      "asOf": "2026-11-28",
+      "baseModelId": "gpt-6-astra"
     }
   },
   "site": {
     "gpt-6.2-sol": {
-      "id": "priors-assumed::chatgpt-plus::gpt-6-2-sol",
-      "subsidy": 14.9326,
+      "id": "own-measurement::chatgpt-plus::gpt-6-2-sol",
+      "subsidy": 13.2188,
       "level": "medium",
-      "sigma": 0.3162,
-      "dataDate": "2026-11-17",
+      "sigma": 0.2,
+      "dataDate": "2026-11-27",
       "chain": [
-        "= GPT-6.1 Sol (same pool, rate card)",
-        "GPT-6.1 Sol Plus: 2 accounts, 31 pp, 2026-11-09"
+        "Our measurement: 1 account, Codex, 20% of the weekly limit, 2026-11-27",
+        "Coding-agent work gets 13.2× and single-question work gets 9.65×."
       ]
     },
     "gpt-6.1-sol": {
@@ -51,16 +58,197 @@
       ]
     },
     "gpt-6.2-astra": {
-      "id": "priors-assumed::chatgpt-plus::gpt-6-2-astra",
-      "subsidy": 6.2646,
+      "id": "priors-repo::chatgpt-plus::gpt-6-2-astra",
+      "subsidy": 7.656,
       "level": "medium",
-      "sigma": 0.364,
-      "dataDate": "2026-11-17",
+      "sigma": 0.22,
+      "dataDate": "2026-11-27",
       "chain": [
-        "= GPT-6 Astra (same pool, rate card)",
-        "GPT-6 Astra Plus: 2 accounts, 26 pp, 2026-09-11"
+        "Priors medium, 2026-11-27"
+      ]
+    },
+    "gpt-6-astra": {
+      "id": "chatgpt_plus::gpt-6-astra",
+      "subsidy": 11.6865,
+      "level": "medium",
+      "sigma": 0.2062,
+      "dataDate": "2026-09-11",
+      "chain": [
+        "2 accounts, 26 pp, 2026-09-11"
       ]
     },
     "definition": "subsidyMultiple = monthlyTokens × listBlendedUsdPerMtok ÷ priceUsd; Fei2411 monthly = weekly pool × 4"
+  },
+  "sites": {
+    "ChatGPT Plus": {
+      "gpt-6.2-sol": {
+        "id": "own-measurement::chatgpt-plus::gpt-6-2-sol",
+        "subsidy": 13.2188,
+        "level": "medium",
+        "sigma": 0.2,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Our measurement: 1 account, Codex, 20% of the weekly limit, 2026-11-27",
+          "Coding-agent work gets 13.2× and single-question work gets 9.65×."
+        ]
+      },
+      "gpt-6.1-sol": {
+        "id": "chatgpt_plus::gpt-6.1-sol",
+        "subsidy": 14.9326,
+        "level": "high",
+        "sigma": 0.1,
+        "dataDate": "2026-11-09",
+        "chain": [
+          "2 accounts, 31 pp, 2026-11-09"
+        ]
+      },
+      "gpt-6.2-astra": {
+        "id": "priors-repo::chatgpt-plus::gpt-6-2-astra",
+        "subsidy": 7.656,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors medium, 2026-11-27"
+        ]
+      },
+      "gpt-6-astra": {
+        "id": "chatgpt_plus::gpt-6-astra",
+        "subsidy": 11.6865,
+        "level": "medium",
+        "sigma": 0.2062,
+        "dataDate": "2026-09-11",
+        "chain": [
+          "2 accounts, 26 pp, 2026-09-11"
+        ]
+      }
+    },
+    "ChatGPT Pro 10x": {
+      "gpt-6.2-sol": {
+        "id": "priors-repo::chatgpt-pro-10x::gpt-6-2-sol",
+        "subsidy": 19.424,
+        "level": "high",
+        "sigma": 0.1,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors high, 2026-11-27"
+        ]
+      },
+      "gpt-6.1-sol": {
+        "id": "priors-repo::chatgpt-pro-10x::gpt-6-1-sol",
+        "subsidy": 29.8652,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-09",
+        "chain": [
+          "Priors medium, 2026-11-09"
+        ]
+      },
+      "gpt-6.2-astra": {
+        "id": "priors-repo::chatgpt-pro-10x::gpt-6-2-astra",
+        "subsidy": 15.312,
+        "level": "high",
+        "sigma": 0.1,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors high, 2026-11-27"
+        ]
+      },
+      "gpt-6-astra": {
+        "id": "chatgpt_pro_10x::gpt-6-astra",
+        "subsidy": 26.754,
+        "level": "low",
+        "sigma": 0.4,
+        "dataDate": "2026-07-30~2026-10-30",
+        "chain": [
+          "GPT 5.6 Sol tokens × 0.295 (price ratio)",
+          "GPT 5.6 Sol Pro 10x: derived (official plan ratio)"
+        ]
+      }
+    },
+    "ChatGPT Pro 20x": {
+      "gpt-6.2-sol": {
+        "id": "priors-repo::chatgpt-pro-20x::gpt-6-2-sol",
+        "subsidy": 19.424,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors medium, 2026-11-27"
+        ]
+      },
+      "gpt-6.1-sol": {
+        "id": "priors-repo::chatgpt-pro-20x::gpt-6-1-sol",
+        "subsidy": 29.8652,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-09",
+        "chain": [
+          "Priors medium, 2026-11-09"
+        ]
+      },
+      "gpt-6.2-astra": {
+        "id": "priors-repo::chatgpt-pro-20x::gpt-6-2-astra",
+        "subsidy": 15.312,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors medium, 2026-11-27"
+        ]
+      },
+      "gpt-6-astra": {
+        "id": "chatgpt_pro_20x::gpt-6-astra",
+        "subsidy": 28.0182,
+        "level": "low",
+        "sigma": 0.4848,
+        "dataDate": "2026-09-07~2026-09-21",
+        "chain": [
+          "1 screenshot, 2026-09-21"
+        ]
+      }
+    },
+    "ChatGPT Pro 500": {
+      "gpt-6.2-sol": {
+        "id": "priors-repo::chatgpt-pro-500::gpt-6-2-sol",
+        "subsidy": 19.424,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors medium, 2026-11-27"
+        ]
+      },
+      "gpt-6.1-sol": {
+        "id": "priors-repo::chatgpt-pro-500::gpt-6-1-sol",
+        "subsidy": 29.8652,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-09",
+        "chain": [
+          "Priors medium, 2026-11-09"
+        ]
+      },
+      "gpt-6.2-astra": {
+        "id": "priors-repo::chatgpt-pro-500::gpt-6-2-astra",
+        "subsidy": 15.312,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-11-27",
+        "chain": [
+          "Priors medium, 2026-11-27"
+        ]
+      },
+      "gpt-6-astra": {
+        "id": "priors-repo::chatgpt-pro-500::gpt-6-astra",
+        "subsidy": 23.373,
+        "level": "medium",
+        "sigma": 0.22,
+        "dataDate": "2026-09-07~2026-09-21",
+        "chain": [
+          "Priors medium, 2026-09-21"
+        ]
+      }
+    }
   }
 }

@@ -14,7 +14,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 6 | Kimi Allegretto | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | No kit yet |
 | 7 | Kimi Allegro | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); low confidence | Kimi K3 | No kit yet |
 | 8 | Kimi Moderato | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); low confidence | Kimi K3 | No kit yet |
-| 9 | ChatGPT Pro 20x | Codex / Web | sources disagree on GPT-6 Astra; 2 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 gateway panel, Sept); GPT-6 Astra: 1 screenshot, Sept; 3 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | No kit yet (Codex kit takes Plus only) |
+| 9 | ChatGPT Pro 20x | Codex / Web | sources disagree on GPT-6 Astra; 2 of 8 models borrowed; GPT-5.6 Terra from GPT 5.6 Sol (1 gateway panel, Sept); GPT-6 Astra: 1 screenshot, Sept; 3 of 8 models low confidence; 5 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 10 | MiniMax M Plan Build (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | No kit yet |
 | 11 | MiniMax M Plan Explore (CN) | Any CLI / API | borrowed from MiniMax-M3.1-Flash on MiniMax M Plan Go (CN) (1 screenshot, Oct); low confidence | MiniMax-M3.1-Flash | No kit yet |
 | 12 | Cursor Pro+ | Cursor IDE | borrowed from Grok 4.6 on Cursor Ultra (1 account, Sept); older than 60 days | Grok 4.6 | No kit yet |
@@ -46,7 +46,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 38 | GLM Coding Lite ¥118 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
 | 39 | GLM Coding Max ¥1078 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
 | 40 | GLM Coding Pro ¥538 | Any CLI / API | no measurement, official quota table only | GLM-5.3 | No kit yet |
-| 41 | ChatGPT Pro 10x | Codex / Web | 3 of 8 models borrowed; GPT-6 Astra from GPT 5.6 Sol; 2 of 8 models low confidence; 2 of 8 models older than 60 days | GPT-6 Astra | No kit yet (Codex kit takes Plus only) |
+| 41 | ChatGPT Pro 10x | Codex / Web | 3 of 8 models borrowed; GPT-6 Astra from GPT 5.6 Sol; 2 of 8 models low confidence; 2 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 42 | MiMo Token Plan Lite | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
 | 43 | MiMo Token Plan Max | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
 | 44 | MiMo Token Plan Pro | Any CLI / API | no measurement, official quota table only | MiMo-V2.6-Pro | No kit yet |
@@ -66,7 +66,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 58 | Cursor Pro | Cursor IDE | 1 account, Aug; older than 60 days | Grok 4.6 | No kit yet |
 | 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | No kit yet |
 | 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | No kit yet |
-| 61 | ChatGPT Pro 500 | Codex / Web | GPT-6 Astra: Priors, Sept; 1 of 8 models low confidence; 4 of 8 models older than 60 days | GPT-6 Astra | No kit yet (Codex kit takes Plus only) |
+| 61 | ChatGPT Pro 500 | Codex / Web | GPT-6 Astra: Priors, Sept; 1 of 8 models low confidence; 4 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
 | 62 | Mistral Vibe Pro | Le Chat / Vibe | DeepSeek V4.1 Flash 1017: Priors, 1 user, Nov; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
 | 63 | Devin Pro | Devin Agent | Claude Haiku 5.5: 1 account, Oct; 1 of 5 models low confidence | Claude Haiku 5.5 | No kit yet |
 | 64 | OpenCode Go Plus | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | No kit yet |

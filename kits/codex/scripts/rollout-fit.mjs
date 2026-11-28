@@ -25,13 +25,17 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { PLANS, DEFAULT_PLAN_ID, planById, planFee, plansForType } from "./plans.mjs";
 
 export const RESULT_SCHEMA = "codex-quota.result/1";
 export const COMPARE_SCHEMA = "codex-quota.compare/1";
 export const RUN_SCHEMA = "codex-quota.run/1";
 export const WINDOW_NAMES = { 300: "5h", 10080: "weekly" };
 export const WEEKS_PER_MONTH = 4; // site convention: Fei2411 "×4周", subsidy = 4 × weekly pool ÷ fee
-export const PLAN_PRICE_USD = { plus: 20 };
+/** Monthly fee per kit plan id, from scripts/billing-periods.mjs (null: no record). */
+export const PLAN_PRICE_USD = Object.fromEntries(PLANS.map((p) => [p.id, planFee(p)]));
+/** Fewest meter steps a window fit needs. */
+export const MIN_STEPS = 3;
 export const RESET_TOLERANCE_S = 600;
 export const LONG_CONTEXT_TOKENS = 272000;
 
@@ -733,7 +737,7 @@ export function fitWindow(priced, win) {
   const q = detectStep(readings);
   const epochs = epochsOf(readings);
   const fits = [0, 1].map((lag) => fitWindowAtLag(epochs, q, lag));
-  const ok = fits.filter((f) => f.fit && f.fit.beta > 0);
+  const ok = fits.filter((f) => f.fit && f.fit.beta > 0 && f.cr.length >= MIN_STEPS);
   const first = readings[0];
   const last = readings[readings.length - 1];
   const observedPp = epochs.reduce((s, ep) => s + (ep[ep.length - 1].r - ep[0].r), 0);
@@ -746,7 +750,7 @@ export function fitWindow(priced, win) {
     firstReading: first.r,
     lastReading: last.r,
   };
-  if (!ok.length) return { ...base, usable: false, reason: `fewer than 2 steps of ${q} pp inside one window epoch` };
+  if (!ok.length) return { ...base, usable: false, reason: `fewer than ${MIN_STEPS} steps of ${q} pp inside one window epoch` };
   ok.sort((a, b) => b.fit.reml - a.fit.reml);
   const chosen = ok[0];
   const other = ok[1] || null;
@@ -835,8 +839,10 @@ function roundDeep(o, d = 6) {
  * analyse({ sessions, prices, manifest?, expected: { model, effort }, root?, fromMs?, toMs?, site? })
  *   sessions: parsed rollouts (parseRolloutFile). prices: { asOf, source, models: { id: {input, cachedInput, output} } }.
  *   site: { subsidy, source } for comparison (optional).
+ *   plan: kit plan id or record (plans.mjs); default: the manifest's plan, else the one plan the
+ *   rollouts' plan_type names, else Plus.
  */
-export function analyse({ sessions, prices, manifest = null, expected = {}, root = null, fromMs = null, toMs = null, site = null, otherSessionsExtra = [] }) {
+export function analyse({ sessions, prices, manifest = null, expected = {}, root = null, fromMs = null, toMs = null, site = null, otherSessionsExtra = [], plan = null }) {
   const tl = buildTimeline(sessions, { root, fromMs, toMs });
   const model = expected.model || "gpt-6.2-sol";
   const priced = priceTimeline(tl.events, prices.models, model);
@@ -892,8 +898,20 @@ export function analyse({ sessions, prices, manifest = null, expected = {}, root
 
   // plan / limit / credits
   const rates = priced.filter((e) => e.rate).map((e) => e.rate);
-  const plans = [...new Set(rates.map((r) => r.planType).filter(Boolean))];
-  if (plans.some((p) => p !== "plus")) flag("plan_not_plus", "error", `plan_type ${plans.join(", ")}`);
+  const planTypes = [...new Set(rates.map((r) => r.planType).filter(Boolean))];
+  let P = typeof plan === "string" ? planById(plan) : plan;
+  if (!P && manifest?.plan?.id) P = planById(manifest.plan.id);
+  const typePlans = planTypes.length === 1 ? plansForType(planTypes[0]) : [];
+  if (!P && typePlans.length === 1) P = typePlans[0];
+  if (!P && typePlans.length > 1) flag("plan_ambiguous", "error", `plan_type ${planTypes[0]} is one of ${typePlans.map((p) => p.name).join(", ")}; analyse with --plan`);
+  const planKnown = !!P;
+  P ||= planById(DEFAULT_PLAN_ID);
+  const unknownTypes = planTypes.filter((t) => !plansForType(t).length);
+  if (unknownTypes.length) flag("plan_unknown", "error", `plan_type ${unknownTypes.join(", ")} is not a plan this kit measures`);
+  const wrongTypes = planTypes.filter((t) => plansForType(t).length && !P.planTypes.includes(t));
+  if (wrongTypes.length) flag("plan_mismatch", "error", `plan_type ${wrongTypes.join(", ")}; ${P.name} reports ${P.planTypes.join(" or ")}`);
+  const fee = planKnown ? planFee(P) : null;
+  if (planKnown && fee == null) flag("plan_fee_unknown", "warning", `no monthly fee for ${P.name} in scripts/billing-periods.mjs; no subsidy`);
   const limits = [...new Set(rates.map((r) => r.limitId).filter(Boolean))];
   if (limits.some((l) => l !== "codex")) flag("limit_id", "warning", `limit_id ${limits.join(", ")}`);
   const balances = [...new Set(rates.map((r) => r.credits?.balance).filter((b) => b != null))];
@@ -909,6 +927,7 @@ export function analyse({ sessions, prices, manifest = null, expected = {}, root
   const wins = [...new Set(priced.flatMap((e) => Object.keys(e.rate?.windows || {})))];
   const windows = {};
   for (const w of wins) windows[w] = fitWindow(priced, w);
+  if (calls.length && !windows.weekly) flag("window_missing", "error", "no weekly readings in the rollouts");
   for (const [w, r] of Object.entries(windows)) {
     if (r.epochs && r.epochs.length > 1) flag("window_reset", w === "weekly" ? "warning" : "info", `${w} window reset ${r.epochs.length - 1}× during the run; one intercept per window`);
     if (r.step && r.step !== 1) flag("meter_step", "info", `${w} readings move in steps of ${r.step} pp`);
@@ -924,13 +943,12 @@ export function analyse({ sessions, prices, manifest = null, expected = {}, root
 
   // subsidy (weekly window, site definition)
   const wk = windows.weekly;
-  const fee = PLAN_PRICE_USD.plus;
   let subsidy = null;
-  if (wk?.usable) {
+  if (wk?.usable && fee != null) {
     const b = wk.usdPerPp;
     const monthly = (x) => 100 * x * WEEKS_PER_MONTH;
     subsidy = {
-      definition: "monthly API value = 100 × weekly $/pp × 4 weeks; multiple = monthly ÷ $20",
+      definition: `monthly API value = 100 × weekly $/pp × 4 weeks; multiple = monthly ÷ $${fee}`,
       window: "weekly",
       monthlyApiUsd: { est: monthly(b.est), ci95: b.ci95 ? b.ci95.map(monthly) : null },
       multiple: { est: monthly(b.est) / fee, ci95: b.ci95 ? b.ci95.map((x) => monthly(x) / fee) : null, sigmaLn: b.relSe },
@@ -949,7 +967,9 @@ export function analyse({ sessions, prices, manifest = null, expected = {}, root
     schema: RESULT_SCHEMA,
     tag: manifest?.tag ?? null,
     arm: manifest?.arm ?? null,
-    plan: "plus",
+    plan: P.id,
+    planName: P.name,
+    planTypes,
     planPriceUsd: fee,
     model,
     effortExpected: expected.effort ?? null,
@@ -994,6 +1014,7 @@ export function compareResults(a, b, { draws = 4000, seed = 1 } = {}) {
   const wa = a.windows?.weekly;
   const wb = b.windows?.weekly;
   if (!wa?.usable || !wb?.usable) return { schema: COMPARE_SCHEMA, ok: false, reason: "weekly window unusable in one run" };
+  if ((a.plan ?? "plus") !== (b.plan ?? "plus")) return { schema: COMPARE_SCHEMA, ok: false, reason: `runs on different plans: ${a.plan} and ${b.plan}` };
   const ba = wa.usdPerPp.est;
   const bb = wb.usdPerPp.est;
   const sa = wa.usdPerPp.relSe;
