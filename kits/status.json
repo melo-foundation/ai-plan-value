@@ -8,7 +8,7 @@
         "claude-code": {
           "status": "tested",
           "date": "2026-11-28",
-          "evidence": "probe --ping on Claude Ultra (Claude Code 2.1.332): prompt ran through the SDK, 7-day meter read from rate_limit_event, no 5-hour meter on Ultra"
+          "evidence": "data/kit-checks/2026-11-28-claude-code-ultra.json: probe --ping on Claude Ultra (Claude Code 2.1.332); 7-day meter read, no 5-hour meter on Ultra"
         }
       }
     },

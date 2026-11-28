@@ -1,0 +1,17 @@
+{
+  "schema": "kit-smoke/1",
+  "kit": "claude-code",
+  "adapter": "claude-code",
+  "date": "2026-11-28",
+  "command": "node scripts/quota-probe.mjs probe --ping",
+  "toolVersion": "Claude Code 2.1.332",
+  "plan": "Claude Ultra",
+  "result": "works",
+  "steps": [
+    { "id": "binary", "status": "pass", "reason": "Claude Code 2.1.332" },
+    { "id": "entrypoint", "status": "pass", "reason": "CLAUDE_CODE_ENTRYPOINT unset; ping ran as sdk-cli" },
+    { "id": "prompt", "status": "pass", "reason": "one short prompt through the SDK" },
+    { "id": "meter-7d", "status": "pass", "reason": "7-day meter read from rate_limit_event" },
+    { "id": "meter-5h", "status": "skipped", "reason": "no 5-hour meter on Ultra" }
+  ]
+}
