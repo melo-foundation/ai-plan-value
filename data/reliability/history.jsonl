@@ -154,3 +154,4 @@
 {"t":"deploy","d":"2026-11-28T01:06:20.548Z","counts":{"high":909,"medium":1006,"low":648,"speculative":142},"quadFails":2,"t3":{"codex":0.6827,"antigravity-cli":0.2812,"claude-code":0.1742,"opencode":0.1771},"t3Sigma":0.153}
 {"d":"2026-11-28","id":"ChatGPT Plus|gpt-6-2-sol","v":13.219,"s":0.2,"lo":10.23,"hi":17.08,"k":["S4"],"x":0}
 {"t":"deploy","d":"2026-11-28T04:45:48.142Z","counts":{"high":909,"medium":1006,"low":648,"speculative":142},"quadFails":2,"t3":{"codex":0.6827,"antigravity-cli":0.2812,"claude-code":0.1742,"opencode":0.1771},"t3Sigma":0.153}
+{"t":"deploy","d":"2026-11-28T04:52:51.465Z","counts":{"high":909,"medium":1006,"low":648,"speculative":142},"quadFails":2,"t3":{"codex":0.6827,"antigravity-cli":0.2812,"claude-code":0.1742,"opencode":0.1771},"t3Sigma":0.153}
