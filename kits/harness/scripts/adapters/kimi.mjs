@@ -26,7 +26,7 @@
  *              limit_month_total, limit_month_code: { used_ratio, reset_time } } }. Undocumented;
  *              also in CodexBar docs/kimi.md (KIMI_CODE_API_KEY, or the CLI's
  *              ~/.kimi-code/credentials/kimi-code.json access token, read-only). --auto-meter uses
- *              $KIMI_CODE_API_KEY first, else that access token while it is fresh; the token goes
+ *              $KIMI_CODE_API_KEY only (credential files are never opened); the key goes
  *              into the request header only and is never printed, logged or stored.
  */
 
@@ -109,22 +109,10 @@ export function readingFromUsages(json, window = "monthly") {
   return { pct: Math.round(ratio * 100 * 1e6) / 1e6, resetsAt: Number.isFinite(t) ? Math.floor(t / 1000) : null, periodType: window };
 }
 
-/** Bearer token for /usages: $KIMI_CODE_API_KEY, else the CLI's fresh access token. Never logged. */
-export function usagesToken(home = kimiHome()) {
+/** Bearer token for /usages: $KIMI_CODE_API_KEY only. The kit never opens the CLI's credential files. Never logged. */
+export function usagesToken() {
   if (process.env.KIMI_CODE_API_KEY) return process.env.KIMI_CODE_API_KEY;
-  if (process.env.KIMI_CODE_BASE_URL) throw new Error("KIMI_CODE_BASE_URL is set: export KIMI_CODE_API_KEY for the automatic meter");
-  let c;
-  try {
-    c = JSON.parse(fs.readFileSync(path.join(home, "credentials", "kimi-code.json"), "utf8"));
-  } catch {
-    throw new Error("no Kimi Code login found: run `kimi login`, or export KIMI_CODE_API_KEY");
-  }
-  const tok = c.access_token ?? c.accessToken;
-  const exp = Number(c.expires_at ?? c.expiresAt ?? 0);
-  if (typeof tok !== "string" || !tok) throw new Error("Kimi Code login has no access token: run `kimi login`, or export KIMI_CODE_API_KEY");
-  const expMs = exp > 1e12 ? exp : exp * 1000;
-  if (exp && expMs < Date.now() + 60000) throw new Error("Kimi Code access token expired: run `kimi` once to renew it, or export KIMI_CODE_API_KEY");
-  return tok;
+  throw new Error("export KIMI_CODE_API_KEY for the automatic meter, or run without --auto-meter");
 }
 
 export async function fetchUsages({ timeoutMs = 30000 } = {}) {
@@ -199,7 +187,7 @@ export default {
       allowLeft: true,
     },
     auto: {
-      route: "GET api.kimi.com/coding/v1/usages with $KIMI_CODE_API_KEY or the CLI's access token (undocumented)",
+      route: "GET api.kimi.com/coding/v1/usages with $KIMI_CODE_API_KEY (undocumented)",
       async read({ window, timeoutMs }) {
         return readingFromUsages(await fetchUsages({ timeoutMs }), window || "monthly");
       },

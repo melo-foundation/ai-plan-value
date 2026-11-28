@@ -102,26 +102,20 @@ test("kimi /usages → % for the window; reset time; unexpected shape names keys
   assert.throws(() => readingFromUsages({ token: SECRET }), (e) => /top-level keys: token/.test(e.message) && !e.message.includes(SECRET));
 });
 
-test("kimi meter token: env key first; CLI access token while fresh; expired or missing say what to run", () => {
+test("kimi meter token: $KIMI_CODE_API_KEY only; a CLI credential file is never read", () => {
   const home = tmpdir("kimi-cred");
-  const keep = { k: process.env.KIMI_CODE_API_KEY, b: process.env.KIMI_CODE_BASE_URL };
+  const keep = process.env.KIMI_CODE_API_KEY;
   delete process.env.KIMI_CODE_API_KEY;
-  delete process.env.KIMI_CODE_BASE_URL;
   try {
-    assert.throws(() => usagesToken(home), /run `kimi login`/);
     fs.mkdirSync(path.join(home, "credentials"));
-    const f = path.join(home, "credentials", "kimi-code.json");
-    fs.writeFileSync(f, JSON.stringify({ access_token: SECRET, refresh_token: "r", expires_at: Math.floor(Date.now() / 1000) + 900 }));
-    assert.equal(usagesToken(home), SECRET);
-    fs.writeFileSync(f, JSON.stringify({ access_token: SECRET, expires_at: Math.floor(Date.now() / 1000) - 10 }));
-    assert.throws(() => usagesToken(home), (e) => /expired: run `kimi`/.test(e.message) && !e.message.includes(SECRET));
+    fs.writeFileSync(path.join(home, "credentials", "kimi-code.json"), JSON.stringify({ access_token: SECRET, expires_at: Math.floor(Date.now() / 1000) + 900 }));
+    process.env.KIMI_HOME = home;
+    assert.throws(() => usagesToken(), (e) => /export KIMI_CODE_API_KEY/.test(e.message) && !e.message.includes(SECRET));
     process.env.KIMI_CODE_API_KEY = "env-key";
-    assert.equal(usagesToken(home), "env-key");
-    delete process.env.KIMI_CODE_API_KEY;
-    process.env.KIMI_CODE_BASE_URL = "http://127.0.0.1:1";
-    assert.throws(() => usagesToken(home), /export KIMI_CODE_API_KEY/);
+    assert.equal(usagesToken(), "env-key");
   } finally {
-    for (const [k, v] of [["KIMI_CODE_API_KEY", keep.k], ["KIMI_CODE_BASE_URL", keep.b]]) v == null ? delete process.env[k] : (process.env[k] = v);
+    delete process.env.KIMI_HOME;
+    keep == null ? delete process.env.KIMI_CODE_API_KEY : (process.env.KIMI_CODE_API_KEY = keep);
   }
 });
 

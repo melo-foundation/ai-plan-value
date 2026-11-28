@@ -23,8 +23,8 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 15 | Kimi Pro | Any CLI / API | borrowed from K3.1 Pro (1 account, Oct); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 16 | Kimi Ultra | Any CLI / API | borrowed from K3.1 Pro (1 account, Nov); 1 of 2 models low confidence | Kimi K3 | [Kit: API plans (manual)](api-plan/README.md) |
 | 17 | Google AI Pro | Gemini CLI / Web | sources disagree on Gemini 3.8 Flash; 3 of 5 models borrowed; Gemini 4 Carbon from Gemini 4 Neon (Fei + Priors, Nov); Gemini 3.8 Flash: 3 accounts, Sept; 1 of 5 models older than 60 days | Gemini 3.8 Flash | [Kit: Gemini CLI, meter typed by hand](harness/README.md) |
-| 18 | Droid Pro | Factory Droid CLI | 1 tweet, Sept; low confidence; older than 60 days | Claude Opus 5.5 | No kit yet |
-| 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | No kit yet |
+| 18 | Droid Pro | Factory Droid CLI | 1 tweet, Sept; low confidence; older than 60 days | Claude Opus 5.5 | [Kit: Factory Droid, meter typed by hand](harness/README.md) |
+| 19 | Droid Max | Factory Droid CLI | 23 of 24 models borrowed; GPT-6 Astra from Claude Opus 5.5 (1 account, Sept); 13 of 24 models low confidence | GPT-6 Astra | [Kit: Factory Droid, meter typed by hand](harness/README.md) |
 | 20 | Cursor Ultra (Fast) | Cursor IDE | 1 screenshot, Sept; low confidence; older than 60 days | Grok 4.6 | No kit yet |
 | 21 | SuperGrok Lite | Grok Web / App | 1 account, July; low confidence; older than 60 days | Grok 4.6 | [Kit: Grok Build, meter typed by hand](harness/README.md) |
 | 22 | Command Code GOAT | Command Code CLI | no measurement, official quota table only; 3 of 30 models borrowed; Gemini 4 Carbon from Gemini 3.8 Flash; 4 of 30 models low confidence | Claude Sonnet 5.5 | No kit yet |
@@ -67,7 +67,7 @@ Pick a plan you pay for, measure the model in **Measure first**, and send the re
 | 59 | Cursor Ultra | Cursor IDE | 1 account, Sept; older than 60 days | Grok 4.6 | No kit yet |
 | 60 | Qwen Token Plan Standard | Any CLI / API | Qwen4 Max: Priors, 1 user, Nov; 1 of 2 models low confidence | Qwen4 Max | [Kit: API plans (automatic)](api-plan/README.md) |
 | 61 | ChatGPT Pro 500 | Codex / Web | GPT-6 Astra: Priors, Sept; 1 of 8 models low confidence; 4 of 8 models older than 60 days | GPT-6 Astra | [Kit: Codex](codex/README.md) |
-| 62 | Mistral Vibe Pro | Le Chat / Vibe | DeepSeek V4.1 Flash 1017: Priors, 1 user, Nov; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | No kit yet |
+| 62 | Mistral Vibe Pro | Le Chat / Vibe | DeepSeek V4.1 Flash 1017: Priors, 1 user, Nov; 1 of 6 models low confidence | DeepSeek V4.1 Flash 1017 | [Kit: Mistral Vibe, meter typed by hand](harness/README.md) |
 | 63 | Devin Pro | Devin Agent | Claude Haiku 5.5: 1 account, Oct; 1 of 5 models low confidence | Claude Haiku 5.5 | No kit yet |
 | 64 | OpenCode Go Plus | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | No kit yet |
 | 65 | OpenCode Go Teams | OpenCode / API | Grok 4.7: Priors, Sept; 1 of 19 models low confidence; 3 of 19 models older than 60 days | Grok 4.7 | No kit yet |
