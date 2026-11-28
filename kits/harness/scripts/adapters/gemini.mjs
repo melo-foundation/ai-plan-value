@@ -213,6 +213,5 @@ export default {
       },
     },
   },
-  pacing: { targetPp: 25, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+25 pp of one day's requests for the model" },
+  pacing: { every: 5 },
 };

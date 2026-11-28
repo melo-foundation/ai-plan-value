@@ -27,7 +27,8 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ADAPTERS, getAdapter } from "./adapters/index.mjs";
-import { analyse, RUN_SCHEMA, secretHits } from "./lib/analyse.mjs";
+import { acuTasks, analyse, priceTasks, RUN_SCHEMA, secretHits } from "./lib/analyse.mjs";
+import { DEFAULT_MAX_PCT, DEFAULT_PRECISION, MIN_STOP_STEPS, stopCheck } from "./lib/stop.mjs";
 import { askReading, lineReader } from "./lib/manual.mjs";
 import { DEFAULT_SITE, feeFor, loadSite, priceFor, siteMultiple } from "./lib/site.mjs";
 import { hhmm, nowIso, otherProcesses, parseArgs, redact, sleep, splitJsonStream, sq, whichBin } from "./lib/util.mjs";
@@ -35,13 +36,14 @@ import { TASKS_A, taskB, WORKLOAD_VERSION, workloadHash, B_ROWS } from "../../co
 import * as Smoke from "../../lib/smoke.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
-export const KIT_VERSION = "1.0.0";
+export const KIT_VERSION = "1.1.0";
 const KIT_DIR = path.resolve(path.dirname(__filename), "..");
 // HARNESS_QUOTA_SCRATCH (tests): runs, results and work dirs go under it.
 const SCRATCH = process.env.HARNESS_QUOTA_SCRATCH ? path.resolve(process.env.HARNESS_QUOTA_SCRATCH) : null;
 const RESULTS_DIR = SCRATCH ? path.join(SCRATCH, "results") : path.join(KIT_DIR, "results");
 const RUNS_DIR = path.join(RESULTS_DIR, "runs");
 const WORK_BASE = SCRATCH ? path.join(SCRATCH, "work") : path.join(os.homedir(), ".cache", "harness-quota-runs");
+const CEILING_PCT = 85;
 const MODEL_SLUG = /^[a-z0-9][a-z0-9.-]*$/i;
 
 const log = (...a) => console.log(...a);
@@ -224,14 +226,17 @@ async function cmdRun(a) {
   if (!["A", "B"].includes(arm)) fail("--arm A | B");
   const autoRequested = !!a["auto-meter"];
   if (autoRequested && !ad.meter.auto) fail(`${ad.name} has no automatic meter: run without --auto-meter`);
+  if (a["target-pp"] != null) fail("--target-pp is gone: the run stops at --precision (default 0.1) or --max-pct points (default 5)");
   const every = Number(a.every ?? ad.pacing.every);
-  const targetPp = Number(a["target-pp"] ?? ad.pacing.targetPp);
-  const maxPct = Number(a["max-pct"] ?? ad.pacing.maxPct);
+  const precision = Number(a.precision ?? DEFAULT_PRECISION);
+  const maxPct = Number(a["max-pct"] ?? DEFAULT_MAX_PCT);
+  const ceilingPct = Number(a["ceiling-pct"] ?? CEILING_PCT);
   const idleMin = Number(a["idle-min"] ?? 5);
   const timeoutMs = Number(a["task-timeout-min"] ?? 25) * 60000;
   const maxTasks = Number(a["max-tasks"] ?? 200);
   const meterTimeoutMs = Number(a["meter-timeout-s"] ?? 90) * 1000;
-  for (const [k, v] of Object.entries({ every, "target-pp": targetPp, "max-pct": maxPct, "idle-min": idleMin, "task-timeout-min": timeoutMs, "max-tasks": maxTasks })) if (!(v >= 0) || (k !== "idle-min" && !(v > 0))) fail(`--${k}: a positive number`);
+  if (!(precision > 0 && precision < 1)) fail("--precision: a fraction between 0 and 1, e.g. 0.1");
+  for (const [k, v] of Object.entries({ every, "max-pct": maxPct, "ceiling-pct": ceilingPct, "idle-min": idleMin, "task-timeout-min": timeoutMs, "max-tasks": maxTasks })) if (!(v >= 0) || (k !== "idle-min" && !(v > 0))) fail(`--${k}: a positive number`);
   const tag = typeof a.tag === "string" ? a.tag : `${new Date().toISOString().slice(0, 10)}-${ad.id}-${arm}`;
   if (!/^[\w.-]+$/.test(tag)) fail("--tag: letters, digits, . _ - only");
   const runDir = path.join(RUNS_DIR, tag);
@@ -244,6 +249,9 @@ async function cmdRun(a) {
     }
     return taskB(n);
   };
+  // the precision test also uses a finer window when the automatic meter reads one
+  const fineWindow = autoRequested && ad.meter.fineWindow && ad.meter.fineWindow !== window ? ad.meter.fineWindow : null;
+  const stopLine = `±${Math.round(precision * 100)}% of the estimate with ${MIN_STOP_STEPS}+ meter steps${fineWindow ? ` (${fineWindow} or ${window} meter)` : ""}, or +${maxPct} pp of the ${window} meter · ceiling ${ceilingPct}%`;
   const meterWhere = ad.meter.manual.where + (ad.meter.manual.url ? ` (${ad.meter.manual.url})` : "");
 
   if (a["dry-run"]) {
@@ -252,10 +260,11 @@ async function cmdRun(a) {
     log(`prices     ${s.siteModelId} $${s.price.input} / $${s.price.cachedInput} / $${s.price.output} per 1M (input / cached / output), as of ${s.price.asOf}`);
     log(`fee        ${s.fee ? `$${s.fee.usd}/month` : "unknown"} · site ${s.siteRef ? `${s.siteRef.value}×` : "none"}`);
     log(`meter      ${autoRequested ? `auto: ${ad.meter.auto.route}; manual if it fails` : `manual: ${meterWhere}`} · ${ad.meter.unit} · window ${window}`);
-    log(`pacing     target +${targetPp} pp · stop at ${maxPct}% · ${autoRequested ? "reading after every task" : `reading every ${every} tasks`} · idle check ${idleMin} min before and after`);
+    log(`stop       ${stopLine}`);
+    log(`pacing     ${autoRequested ? "reading after every task" : `reading every ${every} tasks`} · idle check ${idleMin} min before and after`);
     log(`work dir   ${workRoot}`);
     log(`run dir    ${runDir}`);
-    log(`workload   v${WORKLOAD_VERSION} ${workloadHash()}${arm === "B" ? ` · ${B_ROWS} CSV rows per prompt` : ` · ${TASKS_A.length} tasks, repeated until the target`}`);
+    log(`workload   v${WORKLOAD_VERSION} ${workloadHash()}${arm === "B" ? ` · ${B_ROWS} CSV rows per prompt` : ` · ${TASKS_A.length} tasks, repeated until the stop`}`);
     for (let n = 0; n < 3; n++) {
       const t = taskAt(n);
       const dir = path.join(workRoot, t.id);
@@ -268,7 +277,7 @@ async function cmdRun(a) {
       const env = Object.entries(c.env || {}).map(([k, v]) => `${k}=${sq(v)}`).join(" ");
       log(`  cd ${sq(c.cwd || dir)} && ${env ? env + " " : ""}${bin} ${c.args.map(sq).join(" ")}`);
     }
-    log(`\n… then more tasks until the meter has moved ${targetPp} pp. No calls made.`);
+    log(`\n… then more tasks until ${stopLine.split(" · ")[0]}. No calls made.`);
     return;
   }
 
@@ -298,8 +307,8 @@ async function cmdRun(a) {
     arm,
     workload: { version: WORKLOAD_VERSION, hash: workloadHash(), arm, ...(ad.workloadNote ? { note: ad.workloadNote } : {}) },
     meter: { mode, autoRoute: autoRequested ? ad.meter.auto.route : null, unit: ad.meter.unit, window, windowsPerMonth: ad.meter.windows[window].perMonth, note: ad.meter.note, every },
-    targetPp,
-    maxPct,
+    stopRule: { precision, maxPct, minSteps: MIN_STOP_STEPS, window, fineWindow, reached: false, halfWidth: null, steps: 0, usedPp: 0, stopWindow: null },
+    ceilingPct,
     root: workRoot,
     startedAt: nowIso(),
     endedAt: null,
@@ -312,7 +321,8 @@ async function cmdRun(a) {
     stopReason: null,
   };
   saveManifest(runDir, m);
-  log(`run ${tag} · ${ad.name} ${version} · ${plan} · ${model}${effort ? ` ${effort}` : ""} · target +${targetPp} pp of the ${window} meter`);
+  log(`run ${tag} · ${ad.name} ${version} · ${plan} · ${model}${effort ? ` ${effort}` : ""} · ${window} meter`);
+  log(`stop     ${stopLine}`);
   log(`work dir ${workRoot}`);
   log(`run dir  ${runDir}`);
   log(`meter    ${mode === "auto" ? `auto (${ad.meter.auto.route})` : `manual: ${meterWhere}`}`);
@@ -327,6 +337,7 @@ async function cmdRun(a) {
 
   const io = lineReader();
   let tasksDone = 0;
+  let fineOn = !!fineWindow;
   /** One meter reading; returns the reading, null (skipped) or { stop: true }. */
   const read = async (label) => {
     let r = null;
@@ -349,7 +360,18 @@ async function cmdRun(a) {
       }
       r = { pct: res.pct, resetsAt: null, extraUsed: res.extraUsed ?? null };
     }
+    let fine = null;
+    if (mode === "auto" && fineOn) {
+      try {
+        const f = await ad.meter.auto.read({ bin, model, dir: workRoot, timeoutMs: meterTimeoutMs, window: fineWindow, a, inputs });
+        if (Number.isFinite(f.pct)) fine = { pct: f.pct, resetsAt: f.resetsAt ?? null };
+      } catch (e) {
+        log(`${fineWindow} meter failed: ${redact(e.message)}; precision test on the ${window} meter only`);
+        fineOn = false;
+      }
+    }
     const rec = { ts: nowIso(), pct: r.pct, tasksDone, resetsAt: r.resetsAt ?? null, mode, label };
+    if (fine) rec.fine = fine;
     if (r.periodType) rec.periodType = r.periodType;
     if (r.extraUsed != null) rec.extraUsed = r.extraUsed;
     if (r.plan && !m.detectedPlan) m.detectedPlan = r.plan;
@@ -382,14 +404,21 @@ async function cmdRun(a) {
   }
   const start = m.readings[m.readings.length - 1];
   if (!start) fail("no meter reading before the first task");
-  if (start.pct + targetPp > maxPct) {
-    m.stopReason = `meter at ${start.pct}%: +${targetPp} pp would pass ${maxPct}%`;
+  if (start.pct + maxPct > ceilingPct) {
+    m.stopReason = `meter at ${start.pct}%: +${maxPct} pp would pass ${ceilingPct}%`;
     saveManifest(runDir, m);
-    fail(`${m.stopReason}; run after the ${window} reset or pass a smaller --target-pp`);
+    fail(`${m.stopReason}; run after the ${window} reset or pass a smaller --max-pct`);
   }
+  const startIdx = m.readings.length - 1;
+  /** The stopping rule on the readings since the start; records the state in the manifest. */
+  const checkStop = () => {
+    const cum = ad.costUnit === "acu" ? acuTasks(m.tasks).cum : priceTasks(m.tasks, s.price, model).cum;
+    const st = stopCheck({ readings: m.readings.slice(startIdx), cum, precision, maxPct, window, fineWindow: fineOn ? fineWindow : null });
+    Object.assign(m.stopRule, { reached: st.reached, halfWidth: st.halfWidth, steps: st.steps, usedPp: st.usedPp, stopWindow: st.window });
+    return st;
+  };
 
   let lastPct = start.pct;
-  let movedPp = 0;
   let sinceReading = 0;
   let chunk = mode === "auto" ? 1 : every;
   let failures = 0;
@@ -455,29 +484,32 @@ async function cmdRun(a) {
       break;
     }
     if (!rd) continue;
-    if (rd.pct >= lastPct) movedPp += rd.pct - lastPct;
     lastPct = rd.pct;
     sinceReading = 0;
+    const st = checkStop();
+    saveManifest(runDir, m);
+    const movedPp = st.usedPp;
     const perTask = movedPp / tasksDone;
     const mins = (Date.now() - loopStart) / 60000;
-    log(`  +${Math.round(movedPp * 100) / 100}/${targetPp} pp${movedPp > 0 ? ` · ~${Math.max(0, Math.round(((targetPp - movedPp) / movedPp) * mins))} min left` : ""}`);
-    if (movedPp >= targetPp) {
-      m.stopReason = "target reached";
+    const hw = st.halfWidth == null ? "no interval yet" : `±${Math.round(st.halfWidth * 1000) / 10}%`;
+    log(`  +${Math.round(movedPp * 100) / 100}/${maxPct} pp · ${hw} (${st.steps} steps, ${st.window})${!st.stop && movedPp > 0 ? ` · cap in ~${Math.max(0, Math.round(((maxPct - movedPp) / movedPp) * mins))} min` : ""}`);
+    if (st.stop) {
+      m.stopReason = st.reason;
       break;
     }
-    if (rd.pct >= maxPct) {
+    if (rd.pct >= ceilingPct) {
       m.stopReason = `meter at ${rd.pct}%`;
       break;
     }
     if (mode === "manual") {
       chunk = every;
       if (perTask > 0) {
-        const room = Math.floor((maxPct - lastPct) / perTask);
+        const room = Math.floor((ceilingPct - lastPct) / perTask);
         if (room < 1) {
-          m.stopReason = `next task could pass ${maxPct}%`;
+          m.stopReason = `next task could pass ${ceilingPct}%`;
           break;
         }
-        chunk = Math.max(1, Math.min(every, room, Math.ceil((targetPp - movedPp) / perTask)));
+        chunk = Math.max(1, Math.min(every, room, Math.ceil((maxPct - movedPp) / perTask)));
       }
     } else chunk = 1;
   }
@@ -486,6 +518,7 @@ async function cmdRun(a) {
   if (sinceReading > 0 || m.readings[endIdx]?.tasksDone !== tasksDone) {
     const fin = await read(`final reading after task ${tasksDone}`);
     endIdx = fin && !fin.stop ? m.readings.length - 1 : null;
+    if (endIdx != null) checkStop();
   }
   if (!interrupted && endIdx != null && m.stopReason !== "stopped at a reading") await idleCheck("after", endIdx);
   return finish();
@@ -495,6 +528,7 @@ async function cmdRun(a) {
     m.endedAt = nowIso();
     saveManifest(runDir, m);
     log(`\nstopped: ${m.stopReason}`);
+    if (m.stopRule && !m.stopRule.reached && m.tasks.length) log(`low precision: ${m.stopRule.halfWidth == null ? "no 95% interval" : `±${Math.round(m.stopRule.halfWidth * 1000) / 10}%`} at the stop; target ±${Math.round(precision * 100)}%`);
     analyseAndWrite({ run: tag, site: a.site });
   }
 }
@@ -737,8 +771,9 @@ run options
   --effort            reasoning effort (harnesses that take one)
   --auto-meter        read the meter through the harness's undocumented route; manual if it fails
   --every             manual readings every N tasks (default 5)
-  --target-pp         meter points to use (default per harness)
-  --max-pct           stop at this meter % (default 85)
+  --precision         stop when the 95% interval of $/pp is within ± this fraction (default 0.1)
+  --max-pct           stop after this many meter points since the start (default 5)
+  --ceiling-pct       never pass this meter % (default 85)
   --window            meter window (default per harness)
   --idle-min          idle check length, minutes (default 5)
   --task-timeout-min  per task (default 25)

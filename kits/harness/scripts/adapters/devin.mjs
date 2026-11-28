@@ -162,6 +162,5 @@ export default {
     },
     auto: null,
   },
-  pacing: { targetPp: 10, maxPct: 85, every: 5 },
-  typical: { minutes: "2–5 h (unverified)", meter: "+10 pp of one day (Pro) or week (Max) (unverified)" },
+  pacing: { every: 5 },
 };

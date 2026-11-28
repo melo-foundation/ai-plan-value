@@ -44,14 +44,18 @@
  *                 throws Error with a one-line reason; the kit then falls back to manual
  *     }
  *   }
- *   pacing        { targetPp, maxPct, every }      defaults for --target-pp, --max-pct, --every
- *   typical       { minutes: "1–3 h", meter: "+25 pp of one day" }   README / dry-run text
+ *   pacing        { every }                        default for --every
+ *
+ * Every adapter stops on the same rule (lib/stop.mjs): ±--precision of the fitted $/pp, or
+ * +--max-pct points of the plan's window since the start.
  *
  * Optional (muse.mjs, cursor.mjs, devin.mjs):
  *   plans[i]      { plan, usd, notOnSite: true, source }  plan not on the site yet: fee from here
  *   inputs        [{ key, values? | type: "number", required? }]  extra --<key> flags; recorded in
  *                 the result as inputs; passed to command() and meter.manual.ask()
  *   meter.windowFor(plan) → window id               per-plan default window
+ *   meter.fineWindow  window id                     a finer window auto.read() can also read
+ *                                                  (e.g. "5h"); the precision stop test uses it
  *   meter.manual.ask(io, label, { plan, inputs }) → { pct, extraUsed? } | { skip } | { stop }
  *                                                  custom manual prompt (e.g. dashboard $ → %)
  *   bin: null, version(null, a), runTask({ task, dir, io, timeoutMs, a, … }) → { exit, acus?,

@@ -149,7 +149,7 @@ test("devin --devin-api without DEVIN_API_KEY / DEVIN_ORG_ID fails with what to 
 
 test("muse, manual meter: per-task tokens from run.usage, contributor recorded, fee from kit.json", async () => {
   const s = setup("muse-manual", "muse", "muse", 20.3);
-  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "off", "--bin", s.bin, "--tag", "um", "--every", "2", "--target-pp", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.5" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "off", "--bin", s.bin, "--tag", "um", "--every", "2", "--max-pct", "12", ...common], { env: { ...s.env, FAKE_BETA: "0.5" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   const res = s.result("um");
   assert.equal(res.inputs.contributor, "off");
@@ -167,23 +167,23 @@ test("muse, manual meter: per-task tokens from run.usage, contributor recorded, 
 
 test("muse, --auto-meter through muse usage --json; per-call records; tier mismatch flagged", async () => {
   const s = setup("muse-auto", "muse", "muse", 20.3);
-  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "on", "--bin", s.bin, "--tag", "ua", "--auto-meter", "--target-pp", "6", ...common], { env: { ...s.env, FAKE_BETA: "0.5", FAKE_PER_CALL: "1" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "on", "--bin", s.bin, "--tag", "ua", "--auto-meter", "--max-pct", "6", ...common], { env: { ...s.env, FAKE_BETA: "0.5", FAKE_PER_CALL: "1" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   assert.equal(r.prompts.length, 0, r.prompts.join("\n"));
   const res = s.result("ua");
   assert.equal(res.meter.mode, "auto");
   assert.ok(!codes(res).includes("tokens_per_task"));
-  assert.ok(within(res.fit.usdPerPp.est, 0.5, 0.05), String(res.fit.usdPerPp.est));
+  assert.ok(within(res.fit.usdPerPp.est, 0.5, 0.1) && res.fit.usdPerPp.ci95[0] <= 0.5 && 0.5 <= res.fit.usdPerPp.ci95[1], JSON.stringify(res.fit.usdPerPp));
   assert.equal(res.verdict, "clean", JSON.stringify(res.flags));
   const s2 = setup("muse-tier", "muse", "muse", 30);
-  const r2 = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "on", "--bin", s2.bin, "--tag", "ut", "--auto-meter", "--target-pp", "3", ...common], { env: { ...s2.env, FAKE_TIER: "Muse Code Everyday Usage" }, meter: s2.meter });
+  const r2 = await drive(["run", "--harness", "muse", "--plan", "Muse Code Power Usage", "--contributor", "on", "--bin", s2.bin, "--tag", "ut", "--auto-meter", "--max-pct", "3", ...common], { env: { ...s2.env, FAKE_TIER: "Muse Code Everyday Usage" }, meter: s2.meter });
   assert.equal(r2.code, 0, r2.stderr);
   assert.ok(codes(s2.result("ut")).includes("plan_mismatch"));
 });
 
 test("muse, --auto-meter with no allowance falls back to manual", async () => {
   const s = setup("muse-noallow", "muse", "muse", 20.3);
-  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Everyday Usage", "--contributor", "on", "--bin", s.bin, "--tag", "un", "--auto-meter", "--every", "2", "--target-pp", "4", ...common], { env: { ...s.env, FAKE_NO_ALLOWANCE: "1" }, meter: s.meter });
+  const r = await drive(["run", "--harness", "muse", "--plan", "Muse Code Everyday Usage", "--contributor", "on", "--bin", s.bin, "--tag", "un", "--auto-meter", "--every", "2", "--max-pct", "4", ...common], { env: { ...s.env, FAKE_NO_ALLOWANCE: "1" }, meter: s.meter });
   assert.equal(r.code, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /auto meter failed: muse usage: no Muse Code allowance on this login; switching to manual/);
   assert.ok(codes(s.result("un")).includes("meter_mode_switched"));
@@ -195,7 +195,7 @@ test("cursor, manual dashboard $: converted to % of --included-usd; on-demand mo
   const s = setup("cursor-manual", "cursor", "agent", 10);
   const included = 400;
   const dollars = (used) => ((Math.floor(used * 100) / 100) * included) / 100; // dashboard shows cents
-  const r = await drive(["run", "--harness", "cursor", "--plan", "Cursor Pro+", "--included-usd", String(included), "--bin", s.bin, "--tag", "cm", "--every", "2", "--target-pp", "4", ...common], {
+  const r = await drive(["run", "--harness", "cursor", "--plan", "Cursor Pro+", "--included-usd", String(included), "--bin", s.bin, "--tag", "cm", "--every", "2", "--max-pct", "4", ...common], {
     env: { ...s.env, FAKE_BETA: "0.5" },
     meter: s.meter,
     answer: (used, line) => (/on-demand/.test(line) ? "0" : `$${dollars(used).toFixed(2)}`),
@@ -215,7 +215,7 @@ test("cursor, manual dashboard $: converted to % of --included-usd; on-demand mo
 
   const s2 = setup("cursor-od", "cursor", "agent", 10);
   let od = 0;
-  const r2 = await drive(["run", "--harness", "cursor", "--plan", "Cursor Pro", "--included-usd", "100", "--bin", s2.bin, "--tag", "co", "--every", "2", "--target-pp", "4", ...common], {
+  const r2 = await drive(["run", "--harness", "cursor", "--plan", "Cursor Pro", "--included-usd", "100", "--bin", s2.bin, "--tag", "co", "--every", "2", "--max-pct", "4", ...common], {
     env: { ...s2.env, FAKE_BETA: "2" },
     meter: s2.meter,
     answer: (used, line) => (/on-demand/.test(line) ? String((od += 1.5)) : String(Math.floor(used))),
@@ -229,7 +229,7 @@ test("cursor, manual dashboard $: converted to % of --included-usd; on-demand mo
 test("devin, paste mode: prompts printed, ACUs typed per task, ACU/pp fitted, $ at --acu-usd, no API-$ subsidy", async () => {
   const s = setup("devin-paste", null, null, 12);
   const acuPerPp = 2;
-  const r = await drive(["run", "--harness", "devin", "--plan", "Devin Max", "--acu-usd", "2.25", "--tag", "dp", "--every", "2", "--target-pp", "10", ...common], {
+  const r = await drive(["run", "--harness", "devin", "--plan", "Devin Max", "--acu-usd", "2.25", "--tag", "dp", "--every", "2", "--max-pct", "10", ...common], {
     env: s.env,
     meter: s.meter,
     answer: (used, line, n) => {
@@ -295,7 +295,7 @@ test("devin, --devin-api against a fake API: sessions started, acus_consumed rea
   const { port } = server.address();
   try {
     const env = { ...s.env, DEVIN_API_KEY: API_KEY, DEVIN_ORG_ID: "org-test", DEVIN_API_BASE: `http://127.0.0.1:${port}`, DEVIN_POLL_S: "0.01" };
-    const r = await drive(["run", "--harness", "devin", "--plan", "Devin Pro", "--devin-api", "--tag", "da", "--every", "2", "--target-pp", "12", ...common], { env, meter: s.meter });
+    const r = await drive(["run", "--harness", "devin", "--plan", "Devin Pro", "--devin-api", "--tag", "da", "--every", "2", "--max-pct", "12", ...common], { env, meter: s.meter });
     assert.equal(r.code, 0, r.stderr + r.stdout);
     assert.equal(badAuth, 0);
     assert.ok(!r.stdout.includes(API_KEY) && !r.stderr.includes(API_KEY), "key printed");

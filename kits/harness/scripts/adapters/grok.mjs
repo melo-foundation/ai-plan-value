@@ -199,6 +199,5 @@ export default {
       },
     },
   },
-  pacing: { targetPp: 10, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+10 pp of the weekly pool" },
+  pacing: { every: 5 },
 };

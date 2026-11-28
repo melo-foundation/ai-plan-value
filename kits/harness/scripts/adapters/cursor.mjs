@@ -121,6 +121,5 @@ export default {
     },
     auto: null,
   },
-  pacing: { targetPp: 10, maxPct: 85, every: 5 },
-  typical: { minutes: "1–3 h (unverified)", meter: "+10 pp of the month's included usage (unverified)" },
+  pacing: { every: 5 },
 };
