@@ -406,7 +406,7 @@
               <tr><td>AA Intelligence task</td><td>One task from <a href="https://artificialanalysis.ai/models#price-cost" target="_blank" rel="noopener noreferrer">Artificial Analysis</a>'s general benchmark (reasoning, knowledge, coding), run on the bare model</td></tr>
               <tr><td>AA Coding Agent task</td><td>One coding task run inside the plan's own agent, such as Claude Code or Codex (<a href="https://artificialanalysis.ai/agents/coding-agents" target="_blank" rel="noopener noreferrer">AA Coding Agents</a>)</td></tr>
               <tr><td>CursorBench task</td><td>One task from <a href="https://cursor.com/cursorbench" target="_blank" rel="noopener noreferrer">Cursor's coding benchmark</a></td></tr>
-              <tr><td>T3 Code turn</td><td>One real back-and-forth turn, averaged over 30 days of <a href="https://t3.codes" target="_blank" rel="noopener noreferrer">T3 Code</a> users. Turn length differs between agents, so compare models within one agent.</td></tr>
+              <tr><td>T3 Code turn</td><td>One real back-and-forth turn, averaged over 30 days of <a href="https://t3.codes" target="_blank" rel="noopener noreferrer">T3 Code</a> users. Turn length varies by agent, so compare within one agent.</td></tr>
               <tr><td>1M tokens</td><td>A million tokens at list price, 3 parts input to 1 part output</td></tr>
             </tbody>
           </table>
@@ -427,7 +427,7 @@
               <tr><td class="tier-glyph">◌</td><td>Speculative</td><td>A rough guess, such as assuming a new model behaves like the old one. Hidden by default.</td><td id="relCount-speculative">—</td></tr>
             </tbody>
           </table>
-          <p><code>†</code> next to a circle: the plan's subsidy was worked out from a related plan or model. <code>~</code> before a score: estimated from the model's measured reasoning levels, usually within 1–3 points. Every cost is approximate; the circle shows how far off it could be.</p>
+          <p><code>†</code> next to a circle: the plan's subsidy was worked out from a related plan or model. <code>~</code> before a score: estimated from the model's measured reasoning levels, usually within 1–3 points.</p>
           <details class="method-details">
             <summary>How the trust levels are calculated</summary>
             <div class="method-formulas">
@@ -469,14 +469,9 @@
 
         <div class="settings-section">
           <div class="method-sources"><b>Sources:</b> <a href="https://artificialanalysis.ai/" target="_blank" rel="noopener noreferrer">Artificial Analysis</a> · <a href="https://github.com/Fei2411/real-api-pricing" target="_blank" rel="noopener noreferrer">Real API Pricing</a> · <a href="https://github.com/adamholter/priors" target="_blank" rel="noopener noreferrer">Priors</a> · <a href="https://github.com/features/copilot/plans" target="_blank" rel="noopener noreferrer">GitHub Copilot</a> · <a href="https://ollama.com/pricing" target="_blank" rel="noopener noreferrer">Ollama Cloud</a> · <a href="https://kilo.ai/pricing" target="_blank" rel="noopener noreferrer">Kilo Pass</a> · <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouter</a> · <a href="https://arcprize.org/leaderboard" target="_blank" rel="noopener noreferrer">ARC Prize</a> · <a href="https://cursor.com/cursorbench" target="_blank" rel="noopener noreferrer">CursorBench</a></div>
-          <p class="dialog-note">Intelligence Index scores, cost per task, token prices and speed for each reasoning level come from the Artificial Analysis API. Per-test scores and subscription subsidies come from Priors and Real API Pricing.</p>
-          <p class="dialog-note" id="methodOwnMeasurement">We measure ChatGPT Plus with GPT-6.2 Sol ourselves. Single questions with heavy reasoning use up the limit faster per API dollar than agentic coding, so the AA Intelligence task view uses the lower figure.</p>
-          <p class="dialog-note" id="methodKit">Have some spare inference this week? Consider contributing by using our <a href="https://github.com/melo-foundation/ai-plan-value/tree/main/kits" target="_blank" rel="noopener noreferrer">subsidy measuring kit</a>.</p>
+          <p class="dialog-note">Scores, costs, prices and speed come from the Artificial Analysis API; per-test scores and subsidies from Priors and Real API Pricing, <span id="methodOwnMeasurement">except ChatGPT Plus with GPT-6.2 Sol, which we measured ourselves</span>. Refreshed every 6 hours. <span id="methodKit">Have some spare inference this week? Consider contributing by using our <a href="https://github.com/melo-foundation/ai-plan-value/tree/main/kits" target="_blank" rel="noopener noreferrer">subsidy measuring kit</a>.</span></p>
         </div>
 
-        <p class="dialog-note method-foot">
-          Hidden by default: legacy and off-peak plans, Low and Speculative rows. Refreshed every 6 hours.
-        </p>
       </div>
     </dialog>
 

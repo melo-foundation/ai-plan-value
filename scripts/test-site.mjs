@@ -2751,7 +2751,7 @@ test("Own measurement: public JSON carries no identifying fields", () => {
 
 test("Methodology names our ChatGPT Plus measurement and links the kit", () => {
   const dlg = html.match(/<dialog id="methodDialog"[\s\S]*?<\/dialog>/)?.[0] || "";
-  assert.ok(/ChatGPT Plus with GPT-6\.2 Sol ourselves/.test(dlg), "Methodology lacks the measurement sentence");
+  assert.ok(/ChatGPT Plus with GPT-6\.2 Sol, which we measured ourselves/.test(dlg), "Methodology lacks the measurement sentence");
   assert.ok(
     dlg.includes('Have some spare inference this week? Consider contributing by using our <a href="https://github.com/melo-foundation/ai-plan-value/tree/main/kits" target="_blank" rel="noopener noreferrer">subsidy measuring kit</a>.'),
     "Methodology lacks the kit line"
